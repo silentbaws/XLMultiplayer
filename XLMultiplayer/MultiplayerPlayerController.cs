@@ -179,7 +179,7 @@ namespace XLMultiplayer {
 			debugWriter.WriteLine("Created New Board");
 			foreach (MonoBehaviour m in this.board.GetComponentsInChildren<MonoBehaviour>()) {
 				m.enabled = false;
-				debugWriter.WriteLine("Removing script from additional skater");
+				debugWriter.WriteLine("Removing script from additional board");
 				UnityEngine.Object.DestroyImmediate(m);
 			}
 

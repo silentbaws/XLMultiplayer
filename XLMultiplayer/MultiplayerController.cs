@@ -199,8 +199,8 @@ namespace XLMultiplayer {
 
 		private byte tickRate = 32;
 
-		private MultiplayerPlayerController ourController;
-		private List<MultiplayerPlayerController> otherControllers = new List<MultiplayerPlayerController>();
+		public MultiplayerPlayerController ourController;
+		public List<MultiplayerPlayerController> otherControllers = new List<MultiplayerPlayerController>();
 
 		private int hostId;
 		private int connectionId;

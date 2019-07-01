@@ -10,6 +10,7 @@ namespace XLMultiplayer
 		public static UnityModManager.ModEntry modEntry;
 
 		public static MultiplayerMenu menu;
+		public static MultiplayerStatusMenu statusMenu;
 
 		static void Load(UnityModManager.ModEntry modEntry) {
 			Main.modEntry = modEntry;
@@ -24,9 +25,12 @@ namespace XLMultiplayer
 
 			if (enabled) {
 				menu = new GameObject().AddComponent<MultiplayerMenu>();
+				statusMenu = new GameObject().AddComponent<MultiplayerStatusMenu>();
 				UnityEngine.Object.DontDestroyOnLoad(menu.gameObject);
+				UnityEngine.Object.DontDestroyOnLoad(statusMenu.gameObject);
 			} else {
-				UnityEngine.Object.Destroy(menu);
+				UnityEngine.Object.Destroy(menu.gameObject);
+				UnityEngine.Object.Destroy(statusMenu.gameObject);
 			}
 
 			return true;

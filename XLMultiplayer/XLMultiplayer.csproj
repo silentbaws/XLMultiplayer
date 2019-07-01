@@ -372,6 +372,7 @@
     <Compile Include="MultiplayerMenu.cs" />
     <Compile Include="MultiplayerController.cs" />
     <Compile Include="MultiplayerPlayerController.cs" />
+    <Compile Include="MultiplayerStatusMenu.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

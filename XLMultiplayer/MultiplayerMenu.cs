@@ -8,6 +8,9 @@ namespace XLMultiplayer {
 	// Token: 0x0200005D RID: 93
 	public class MultiplayerMenu : MonoBehaviour {
 
+		private void Start() {
+		}
+
 		private void Update() {
 			if (Input.GetKeyDown(KeyCode.P)) {
 				this.multiplayerMenuOpen = !this.multiplayerMenuOpen;
@@ -178,6 +181,6 @@ namespace XLMultiplayer {
 		// Token: 0x04000462 RID: 1122
 		private GameObject multiplayerManagerObject;
 
-		private MultiplayerController multiplayerManager;
+		public MultiplayerController multiplayerManager;
 	}
 }

@@ -1,2 +1,0 @@
-Reversed stances don't work in multiplayer
-Different maps can't see all players past 2
