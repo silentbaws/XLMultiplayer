@@ -16,9 +16,10 @@ namespace XLMultiplayer {
 		private Image connectedImage;
 
 		private List<MultiplayerPlayerController> connectedPlayers;
-		private MultiplayerPlayerController yourPlayer;
 
 		private bool showStatus = true;
+		private string playerNames;
+		private int numPlayers = 0;
 
 		private IEnumerator WaitForRequest(WWW www, bool loadConnectTexture) {
 			yield return www;
@@ -94,20 +95,18 @@ namespace XLMultiplayer {
 			}
 			if (connectedPlayers == null && Main.menu.multiplayerManager != null)
 				connectedPlayers = Main.menu.multiplayerManager.otherControllers;
-			if (yourPlayer == null && Main.menu.multiplayerManager != null)
-				yourPlayer = Main.menu.multiplayerManager.ourController;
+			if (Main.menu.multiplayerManager.ourController == null && Main.menu.multiplayerManager != null)
+				Main.menu.multiplayerManager.ourController = Main.menu.multiplayerManager.ourController;
+			playerNames = Main.menu.multiplayerManager.ourController.username + "(YOU)\n";
+			numPlayers = 0;
+			foreach (MultiplayerPlayerController player in connectedPlayers) {
+				playerNames += player.username + "\n";
+				numPlayers++;
+			}
 		}
 
 		public void OnGUI() {
-			if (showStatus) {
-				string playerNames = yourPlayer.username + "(YOU)\n";
-				int numPlayers = 0;
-
-				foreach (MultiplayerPlayerController player in connectedPlayers) {
-					playerNames += player.username + "\n";
-					numPlayers++;
-				}
-
+			if (showStatus && Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) {
 				Rect rect = new Rect(Screen.width - Screen.width * 0.2f, Screen.width * 0.1f, Screen.width * 0.2f, (numPlayers + 1) * 25f);
 
 				GUI.contentColor = Color.black;

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
-using Unity.Jobs;
-using Unity.Collections;
 using System.Text;
 
 namespace XLMultiplayer {
@@ -39,7 +37,8 @@ namespace XLMultiplayer {
 				ConnectionConfig connectionConfig = new ConnectionConfig();
 				connectionConfig.PacketSize = 1400;
 				this.reliableChannel = connectionConfig.AddChannel(QosType.Reliable);
-				HostTopology topology = new HostTopology(connectionConfig, 2);
+				this.unreliableChannel = connectionConfig.AddChannel(QosType.UnreliableSequenced);
+				HostTopology topology = new HostTopology(connectionConfig, 1);
 				this.hostId = NetworkTransport.AddHost(topology);
 				if (this.hostId < 0) {
 					this.debugWriter.WriteLine("Failed socket creation for client");
@@ -53,6 +52,7 @@ namespace XLMultiplayer {
 					this.debugWriter.WriteLine((NetworkError)this.error);
 					return;
 				}
+
 				this.ourController = new MultiplayerPlayerController(debugWriter);
 				this.ourController.ConstructForPlayer();
 				this.ourController.username = user;
@@ -78,7 +78,8 @@ namespace XLMultiplayer {
 				switch (networkEvent) {
 					case NetworkEventType.ConnectEvent:
 						debugWriter.WriteLine("Successfully connected to server");
-						this.SendBytes(2, Encoding.ASCII.GetBytes(this.ourController.username));
+						this.SendBytes(2, Encoding.ASCII.GetBytes(this.ourController.username), this.reliableChannel);
+						this.ourController.EncodeTextures();
 						InvokeRepeating("SendUpdate", 0.5f, 1.0f / (float)tickRate);
 						break;
 					case NetworkEventType.DataEvent:
@@ -116,11 +117,11 @@ namespace XLMultiplayer {
 		}
 
 		private void SendPlayerPosition() {
-			this.SendBytes(0, this.ourController.PackTransforms());
+			this.SendBytes(0, this.ourController.PackTransforms(), this.unreliableChannel);
 		}
 
 		private void SendPlayerAnimator() {
-			this.SendBytes(1, this.ourController.PackAnimator());
+			this.SendBytes(1, this.ourController.PackAnimator(), this.unreliableChannel);
 		}
 
 		public void KillConnection() {
@@ -182,12 +183,12 @@ namespace XLMultiplayer {
 		public void OnApplicationQuit() {
 		}
 
-		private void SendBytes(byte opCode, byte[] msg) {
+		private void SendBytes(byte opCode, byte[] msg, byte channel) {
 			if (this.connectionId != 0) {
 				byte[] buffer = new byte[msg.Length + 1];
 				buffer[0] = opCode;
 				Array.Copy(msg, 0, buffer, 1, msg.Length);
-				NetworkTransport.Send(this.hostId, this.connectionId, (int)this.reliableChannel, buffer, buffer.Length, out this.error);
+				NetworkTransport.Send(this.hostId, this.connectionId, (int)channel, buffer, buffer.Length, out this.error);
 				if (this.error != 0) {
 					this.debugWriter.WriteLine((NetworkError)this.error);
 				}
@@ -204,6 +205,7 @@ namespace XLMultiplayer {
 
 		private int hostId;
 		private int connectionId;
+		private byte unreliableChannel;
 		private byte reliableChannel;
 		private byte error;
 

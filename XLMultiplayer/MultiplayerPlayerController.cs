@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using UnityEngine.UI;
+using System.Threading;
 
 namespace XLMultiplayer {
-	public class MultiplayerPlayerController {
+	public class MultiplayerPlayerController : MonoBehaviour {
 		public GameObject player { get; private set; }
 		public GameObject skater { get; private set; }
 		public GameObject board { get; private set; }
@@ -37,6 +37,58 @@ namespace XLMultiplayer {
 		private StreamWriter debugWriter;
 
 		public int playerID;
+
+		string[] SkateboardMaterials = new string[] { "GripTape", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
+		string[] TeeShirt = new string[] { "Cory_fixed_Karam:cory_001:shirt_geo" };
+		string[] PantsMaterials = new string[] { "Cory_fixed_Karam:cory_001:pants_geo", "Cory_fixed_Karam:cory_001:lashes_geo" };
+		string[] Shoes = new string[] { "Cory_fixed_Karam:cory_001:shoes_geo" };
+		string[] Hat = new string[] { "Cory_fixed_Karam:cory_001:hat_geo" };
+
+		public const string MainTextureName = "Texture2D_4128E5C7";
+
+		Texture tShirtTexture;
+		Texture pantsTexture;
+		Texture shoesTexture;
+		Texture hatTexture;
+		Texture skateboardTexture;
+
+		byte[] tShirtBytes;
+		byte[] pantsBytes;
+		byte[] shoesBytes;
+		byte[] hatBytes;
+		byte[] skateboardBytes;
+
+		bool copiedTextures = false;
+		bool sentTextures = false;
+
+		public void EncodeTextures() {
+			tShirtBytes = ConvertTexture(tShirtTexture).EncodeToPNG();
+			pantsBytes = ConvertTexture(pantsTexture).EncodeToPNG();
+			shoesBytes = ConvertTexture(shoesTexture).EncodeToPNG();
+			hatBytes = ConvertTexture(hatTexture).EncodeToPNG();
+			skateboardBytes = ConvertTexture(skateboardTexture).EncodeToPNG();
+
+			copiedTextures = true;
+		}
+
+		private Texture2D ConvertTexture(Texture t) {
+			Texture2D texture2D = new Texture2D(t.width, t.height, TextureFormat.RGBA32, false);
+
+			RenderTexture currentRT = RenderTexture.active;
+
+			RenderTexture renderTexture = new RenderTexture(t.width, t.height, 32);
+			Graphics.Blit(t, renderTexture);
+
+			RenderTexture.active = renderTexture;
+			texture2D.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
+			texture2D.Apply();
+
+			Color[] pixels = texture2D.GetPixels();
+
+			RenderTexture.active = currentRT;
+
+			return texture2D;
+		}
 
 		public MultiplayerPlayerController(StreamWriter writer) {
 			this.debugWriter = writer;
@@ -73,6 +125,20 @@ namespace XLMultiplayer {
 				} else if (componentsInChildren[i].gameObject.name.Equals("Skateboard")) {
 					this.board = componentsInChildren[i].gameObject;
 					this.debugWriter.WriteLine("Found Board");
+					foreach(Transform t in componentsInChildren[i].GetComponentsInChildren<Transform>()) {
+						if (t.name.Equals(SkateboardMaterials[0])) {
+							skateboardTexture = t.GetComponent<Renderer>().material.GetTexture(MainTextureName);
+							break;
+						}
+					}
+				} else if (componentsInChildren[i].name.Equals(PantsMaterials[0])) {
+					pantsTexture = componentsInChildren[i].GetComponent<Renderer>().material.GetTexture(MainTextureName);
+				} else if (componentsInChildren[i].name.Equals(TeeShirt[0])) {
+					tShirtTexture = componentsInChildren[i].GetComponent<Renderer>().material.GetTexture(MainTextureName);
+				} else if (componentsInChildren[i].name.Equals(Shoes[0])) {
+					shoesTexture = componentsInChildren[i].GetComponent<Renderer>().material.GetTexture(MainTextureName);
+				} else if (componentsInChildren[i].name.Equals(Hat[0])) {
+					hatTexture = componentsInChildren[i].GetComponent<Renderer>().material.GetTexture(MainTextureName);
 				}
 			}
 
@@ -351,9 +417,6 @@ namespace XLMultiplayer {
 			byte[] steezeFloats = new byte[this.animSteezeFloats * 4];
 			byte[] steezeInts = new byte[this.animSteezeInts * 4];
 
-			//Array to hold all paramater types in order
-			byte[] packed = new byte[bools.Length + floats.Length + ints.Length + steezeBools.Length + steezeFloats.Length + steezeInts.Length];
-
 			//Pack all individual paramater arrays
 			int currentInt = 0;
 			int currentBool = 0;
@@ -392,6 +455,13 @@ namespace XLMultiplayer {
 					currentInt++;
 				}
 			}
+
+			AnimatorStateInfo state = this.animator.GetCurrentAnimatorStateInfo(0);
+			int nameHash = state.fullPathHash;
+			float currentTime = state.normalizedTime;
+
+			//Array to hold all paramater types in order
+			byte[] packed = new byte[bools.Length + floats.Length + ints.Length + steezeBools.Length + steezeFloats.Length + steezeInts.Length];
 
 			//Copy all paramaters into packed array in order
 			Array.Copy(bools, packed, bools.Length);
