@@ -38,6 +38,7 @@ namespace XLMultiplayer {
 				connectionConfig.PacketSize = 1400;
 				this.reliableChannel = connectionConfig.AddChannel(QosType.Reliable);
 				this.unreliableChannel = connectionConfig.AddChannel(QosType.UnreliableSequenced);
+				this.reliableSequencedChannel = connectionConfig.AddChannel(QosType.ReliableSequenced);
 				HostTopology topology = new HostTopology(connectionConfig, 1);
 				this.hostId = NetworkTransport.AddHost(topology);
 				if (this.hostId < 0) {
@@ -58,11 +59,6 @@ namespace XLMultiplayer {
 				this.ourController.username = user;
 				this.runningClient = true;
 			}
-		}
-
-		public void KillServer() {
-			this.runningServer = false;
-			NetworkTransport.Shutdown();
 		}
 
 		private void UpdateClient() {
@@ -92,6 +88,17 @@ namespace XLMultiplayer {
 				}
 				networkEvent = NetworkTransport.Receive(out hId, out conId, out chanId, buffer, 1024, out bufSize, out this.error);
 			}
+
+			//if (!this.ourController.sentTextures && this.ourController.copiedTextures && !this.ourController.pantsMP.packing) {
+			//	byte[][] packed = this.ourController.pantsMP.PackTexture();
+			//	debugWriter.WriteLine("Started unpacking " + packed.Length.ToString());
+			//	for (int i = 0; i < packed.Length; i++) {
+			//		byte[] unpack = new byte[packed[i].Length - 2];
+			//		Array.Copy(packed[i], 2, unpack, 0, packed[i].Length - 2);
+			//		this.ourController.pantsMP.UnpackTexture(unpack);
+			//	}
+			//	this.ourController.sentTextures = true;
+			//}
 		}
 
 		private void AddPlayer(int playerID) {
@@ -207,6 +214,7 @@ namespace XLMultiplayer {
 		private int connectionId;
 		private byte unreliableChannel;
 		private byte reliableChannel;
+		private byte reliableSequencedChannel;
 		private byte error;
 
 		private StreamWriter debugWriter;

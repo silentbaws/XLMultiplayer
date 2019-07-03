@@ -5,7 +5,93 @@ using UnityEngine;
 using System.Threading;
 
 namespace XLMultiplayer {
-	public class MultiplayerPlayerController : MonoBehaviour {
+	public enum MPTextureType : byte {
+		Shirt = 0,
+		Pants = 1,
+		Shoes = 2, 
+		Hat = 3,
+		Board = 4
+	}
+
+	public class MultiplayerTexture {
+		public byte[] bytes = null;
+		public MPTextureType textureType;
+		public Vector2 size;
+
+		int copiedBytes = 0;
+		public bool unpacked = false;
+		public bool packing = false;
+
+		Texture2D texture;
+
+		StreamWriter debugWriter;
+
+		public MultiplayerTexture(byte[] b, Vector2 s, MPTextureType t, StreamWriter sw) {
+			bytes = b;
+			size = s;
+			textureType = t;
+			debugWriter = sw;
+		}
+
+		public MultiplayerTexture(StreamWriter sw) {
+			this.debugWriter = sw;
+		}
+
+		public byte[][] PackTexture() {
+			packing = true;
+			debugWriter.WriteLine("Starting to pack textures {0} with {1} bytes", textureType, bytes.Length);
+			int FREEDATA = 1018;
+			int offset = 2;
+			byte[][] packed = new byte[(int)Mathf.Ceil((bytes.Length + 8) / 1018f)][];
+			debugWriter.WriteLine("created arrays");
+
+			for (int i = 0; i < Mathf.Ceil(bytes.Length / 1018f); i++) {
+				packed[i] = new byte[bytes.Length - (i * FREEDATA) < FREEDATA ? bytes.Length - (i * FREEDATA) + 6 : 1020];
+
+				if (i == 0) {
+					FREEDATA = 1006;
+					offset = 14;
+				} else {
+					FREEDATA = 1018;
+					offset = 2;
+				}
+
+				packed[i][0] = 3;
+				packed[i][1] = (byte)textureType;
+				if (i == 0) {
+					Array.Copy(BitConverter.GetBytes(bytes.Length), 0, packed[i], 2, 4);
+					Array.Copy(BitConverter.GetBytes(size.x), 0, packed[i], 6, 4);
+					Array.Copy(BitConverter.GetBytes(size.y), 0, packed[i], 10, 4);
+				}
+				Array.Copy(bytes, i == 0 ? 0 : i * 1018 - 12, packed[i], offset, bytes.Length - (i * FREEDATA) < FREEDATA ? bytes.Length - (i * FREEDATA) + 12 : FREEDATA);
+			}
+			debugWriter.WriteLine("Finished packing");
+
+			return packed;
+		}
+
+		public void UnpackTexture(byte[] array) {
+			if(bytes == null) {
+				debugWriter.WriteLine("Started unpacking {0}", textureType);
+				size = new Vector2(BitConverter.ToSingle(array, 4), BitConverter.ToSingle(array, 8));
+				bytes = new byte[BitConverter.ToInt32(array, 0)];
+				Array.Copy(array, 12, bytes, 0, array.Length - 12);
+				copiedBytes = array.Length - 4;
+			} else {
+				Array.Copy(array, 0, bytes, copiedBytes, array.Length);
+				copiedBytes += array.Length;
+			}
+
+			if (copiedBytes == bytes.Length) {
+				unpacked = true;
+				debugWriter.WriteLine("Unpacked {0}", textureType);
+				texture = new Texture2D((int)size.x, (int)size.y);
+				texture.LoadImage(bytes);
+			}
+		}
+	}
+
+	public class MultiplayerPlayerController {
 		public GameObject player { get; private set; }
 		public GameObject skater { get; private set; }
 		public GameObject board { get; private set; }
@@ -52,27 +138,31 @@ namespace XLMultiplayer {
 		Texture hatTexture;
 		Texture skateboardTexture;
 
-		byte[] tShirtBytes;
-		byte[] pantsBytes;
-		byte[] shoesBytes;
-		byte[] hatBytes;
-		byte[] skateboardBytes;
+		public MultiplayerTexture shirtMP;
+		public MultiplayerTexture pantsMP;
+		public MultiplayerTexture shoesMP;
+		public MultiplayerTexture hatMP;
+		public MultiplayerTexture boardMP;
 
-		bool copiedTextures = false;
-		bool sentTextures = false;
+		public bool copiedTextures = false;
+		public bool sentTextures = false;
+		public bool startedEncoding = false;
 
 		public void EncodeTextures() {
-			tShirtBytes = ConvertTexture(tShirtTexture).EncodeToPNG();
-			pantsBytes = ConvertTexture(pantsTexture).EncodeToPNG();
-			shoesBytes = ConvertTexture(shoesTexture).EncodeToPNG();
-			hatBytes = ConvertTexture(hatTexture).EncodeToPNG();
-			skateboardBytes = ConvertTexture(skateboardTexture).EncodeToPNG();
+			if (!startedEncoding) {
+				startedEncoding = true;
+				shirtMP = new MultiplayerTexture(ConvertTexture(tShirtTexture).EncodeToPNG(), new Vector2(tShirtTexture.width, tShirtTexture.height), MPTextureType.Shirt, debugWriter);
+				pantsMP = new MultiplayerTexture(ConvertTexture(pantsTexture).EncodeToPNG(), new Vector2(pantsTexture.width, pantsTexture.height), MPTextureType.Pants, debugWriter);
+				shoesMP = new MultiplayerTexture(ConvertTexture(shoesTexture).EncodeToPNG(), new Vector2(shoesTexture.width, shoesTexture.height), MPTextureType.Shoes, debugWriter);
+				hatMP = new MultiplayerTexture(ConvertTexture(hatTexture).EncodeToPNG(), new Vector2(hatTexture.width, hatTexture.height), MPTextureType.Hat, debugWriter);
+				boardMP = new MultiplayerTexture(ConvertTexture(skateboardTexture).EncodeToPNG(), new Vector2(skateboardTexture.width, skateboardTexture.height), MPTextureType.Board, debugWriter);
 
-			copiedTextures = true;
+				copiedTextures = true;
+			}
 		}
 
 		private Texture2D ConvertTexture(Texture t) {
-			Texture2D texture2D = new Texture2D(t.width, t.height, TextureFormat.RGBA32, false);
+			Texture2D texture2D = new Texture2D(t.width, t.height, TextureFormat.RGB24, false);
 
 			RenderTexture currentRT = RenderTexture.active;
 
