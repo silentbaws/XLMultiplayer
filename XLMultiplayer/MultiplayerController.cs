@@ -119,6 +119,7 @@ namespace XLMultiplayer {
 				}
 
 				if(textureSendWatch.ElapsedMilliseconds > 5000) {
+					debugWriter.WriteLine("Connection to file server timed out");
 					KillConnection();
 				}
 			}
@@ -126,16 +127,39 @@ namespace XLMultiplayer {
 			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\";
 
 			byte[] prebuffer = new byte[13];
-			Array.Copy(this.ourController.pantsMP.bytes.Length, )
-			fileTransfer.connection.SendFile(path + "Pants.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length + 9), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)MPTextureType.Pants;
+			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.x), 0, prebuffer, 5, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.y), 0, prebuffer, 9, 4);
+			fileTransfer.connection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
-			fileTransfer.connection.SendFile(path + "Shirt.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+			prebuffer = new byte[13];
+			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.bytes.Length + 9), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)MPTextureType.Shirt;
+			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.x), 0, prebuffer, 5, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.y), 0, prebuffer, 9, 4);
+			fileTransfer.connection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
-			fileTransfer.connection.SendFile(path + "Shoes.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+			prebuffer = new byte[13];
+			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.bytes.Length + 9), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)MPTextureType.Shoes;
+			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.x), 0, prebuffer, 5, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.y), 0, prebuffer, 9, 4);
+			fileTransfer.connection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
-			fileTransfer.connection.SendFile(path + "Board.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+			prebuffer = new byte[13];
+			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.bytes.Length + 9), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)MPTextureType.Board;
+			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.x), 0, prebuffer, 5, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.y), 0, prebuffer, 9, 4);
+			fileTransfer.connection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
-			fileTransfer.connection.SendFile(path + "Hat.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+			prebuffer = new byte[13];
+			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.bytes.Length + 9), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)MPTextureType.Hat;
+			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.x), 0, prebuffer, 5, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.y), 0, prebuffer, 9, 4);
+			fileTransfer.connection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 		}
 
 		private void AddPlayer(int playerID) {
@@ -283,7 +307,6 @@ namespace XLMultiplayer {
 
 		public FileTransferClient(string ipAdr, int port, MultiplayerController controller) {
 			this.controller = controller;
-			controller.debugWriter.WriteLine("Begin connection");
 			ip = IPAddress.Parse(ipAdr);
 			ipEndPoint = new IPEndPoint(ip, port);
 
@@ -293,7 +316,6 @@ namespace XLMultiplayer {
 		}
 
 		private void ConnectCallback(IAsyncResult ar) {
-			controller.debugWriter.WriteLine("Connect callback");
 			connection = (Socket)ar.AsyncState;
 			connection.EndConnect(ar);
 		}
