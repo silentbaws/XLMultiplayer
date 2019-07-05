@@ -4,9 +4,17 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
 using System.Text;
+using System.Net;
+using System.Net.Sockets;
+using System.Diagnostics;
 
 namespace XLMultiplayer {
 	public class MultiplayerController : MonoBehaviour {
+		FileTransferClient fileTransfer;
+		private string IP;
+		private int PORT;
+		private Stopwatch textureSendWatch;
+
 		private void Start() {
 		}
 
@@ -36,6 +44,11 @@ namespace XLMultiplayer {
 				NetworkTransport.Init();
 				ConnectionConfig connectionConfig = new ConnectionConfig();
 				connectionConfig.PacketSize = 1400;
+				connectionConfig.InitialBandwidth = 15360000;
+				connectionConfig.SendDelay = 10;
+				connectionConfig.ResendTimeout = 600;
+				connectionConfig.MaxSentMessageQueueSize = 300;
+				connectionConfig.AcksType = ConnectionAcksType.Acks128;
 				this.reliableChannel = connectionConfig.AddChannel(QosType.Reliable);
 				this.unreliableChannel = connectionConfig.AddChannel(QosType.UnreliableSequenced);
 				this.reliableSequencedChannel = connectionConfig.AddChannel(QosType.ReliableSequenced);
@@ -58,6 +71,9 @@ namespace XLMultiplayer {
 				this.ourController.ConstructForPlayer();
 				this.ourController.username = user;
 				this.runningClient = true;
+
+				this.IP = serverIP;
+				this.PORT = port;
 			}
 		}
 
@@ -76,6 +92,8 @@ namespace XLMultiplayer {
 						debugWriter.WriteLine("Successfully connected to server");
 						this.SendBytes(2, Encoding.ASCII.GetBytes(this.ourController.username), this.reliableChannel);
 						this.ourController.EncodeTextures();
+						fileTransfer = new FileTransferClient(this.IP, this.PORT+1, this);
+						SendTextures();
 						InvokeRepeating("SendUpdate", 0.5f, 1.0f / (float)tickRate);
 						break;
 					case NetworkEventType.DataEvent:
@@ -88,17 +106,36 @@ namespace XLMultiplayer {
 				}
 				networkEvent = NetworkTransport.Receive(out hId, out conId, out chanId, buffer, 1024, out bufSize, out this.error);
 			}
+		}
 
-			//if (!this.ourController.sentTextures && this.ourController.copiedTextures && !this.ourController.pantsMP.packing) {
-			//	byte[][] packed = this.ourController.pantsMP.PackTexture();
-			//	debugWriter.WriteLine("Started unpacking " + packed.Length.ToString());
-			//	for (int i = 0; i < packed.Length; i++) {
-			//		byte[] unpack = new byte[packed[i].Length - 2];
-			//		Array.Copy(packed[i], 2, unpack, 0, packed[i].Length - 2);
-			//		this.ourController.pantsMP.UnpackTexture(unpack);
-			//	}
-			//	this.ourController.sentTextures = true;
-			//}
+		public void ReceiveTextures(byte[] buffer) {
+
+		}
+
+		private void SendTextures() {
+			while (!fileTransfer.connection.Connected) {
+				if(textureSendWatch == null) {
+					textureSendWatch = new Stopwatch();
+				}
+
+				if(textureSendWatch.ElapsedMilliseconds > 5000) {
+					KillConnection();
+				}
+			}
+
+			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\";
+
+			byte[] prebuffer = new byte[13];
+			Array.Copy(this.ourController.pantsMP.bytes.Length, )
+			fileTransfer.connection.SendFile(path + "Pants.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+
+			fileTransfer.connection.SendFile(path + "Shirt.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+
+			fileTransfer.connection.SendFile(path + "Shoes.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+
+			fileTransfer.connection.SendFile(path + "Board.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
+
+			fileTransfer.connection.SendFile(path + "Hat.png", BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length), null, TransmitFileOptions.UseSystemThread);
 		}
 
 		private void AddPlayer(int playerID) {
@@ -134,12 +171,24 @@ namespace XLMultiplayer {
 		public void KillConnection() {
 			this.runningClient = false;
 			CancelInvoke("SendUpdate");
+			CancelInvoke("SendTextures");
+			fileTransfer.CloseConnection();
+			this.sendingTextures = false;
+			this.textureSendWatch = null;
 			List<int> players = new List<int>();
 			foreach (MultiplayerPlayerController connection in otherControllers) {
 				players.Add(connection.playerID);
 			}
 			foreach (int i in players) {
 				RemovePlayer(i);
+			}
+			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp";
+			if (Directory.Exists(path)) {
+				string[] files = Directory.GetFiles(path);
+				foreach(string file in files) {
+					File.Delete(file);
+				}
+				Directory.Delete(path);
 			}
 			NetworkTransport.Disconnect(this.hostId, this.connectionId, out this.error);
 			NetworkTransport.Shutdown();
@@ -185,9 +234,11 @@ namespace XLMultiplayer {
 		}
 
 		public void OnDestroy() {
+			KillConnection();
 		}
 
 		public void OnApplicationQuit() {
+			KillConnection();
 		}
 
 		private void SendBytes(byte opCode, byte[] msg, byte channel) {
@@ -205,6 +256,8 @@ namespace XLMultiplayer {
 		public bool runningServer = false;
 		public bool runningClient = false;
 
+		private bool sendingTextures;
+
 		private byte tickRate = 32;
 
 		public MultiplayerPlayerController ourController;
@@ -217,6 +270,37 @@ namespace XLMultiplayer {
 		private byte reliableSequencedChannel;
 		private byte error;
 
-		private StreamWriter debugWriter;
+		public StreamWriter debugWriter;
+	}
+
+	public class FileTransferClient {
+		IPAddress ip;
+		IPEndPoint ipEndPoint;
+
+		public Socket connection;
+
+		MultiplayerController controller;
+
+		public FileTransferClient(string ipAdr, int port, MultiplayerController controller) {
+			this.controller = controller;
+			controller.debugWriter.WriteLine("Begin connection");
+			ip = IPAddress.Parse(ipAdr);
+			ipEndPoint = new IPEndPoint(ip, port);
+
+			connection = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+
+			connection.BeginConnect(ipEndPoint, new AsyncCallback(ConnectCallback), connection);
+		}
+
+		private void ConnectCallback(IAsyncResult ar) {
+			controller.debugWriter.WriteLine("Connect callback");
+			connection = (Socket)ar.AsyncState;
+			connection.EndConnect(ar);
+		}
+		
+		public void CloseConnection() {
+			connection.Shutdown(SocketShutdown.Both);
+			connection.Close();
+		}
 	}
 }

@@ -17,10 +17,8 @@ namespace XLMultiplayer {
 		public byte[] bytes = null;
 		public MPTextureType textureType;
 		public Vector2 size;
-
-		int copiedBytes = 0;
+		
 		public bool unpacked = false;
-		public bool packing = false;
 
 		Texture2D texture;
 
@@ -31,63 +29,16 @@ namespace XLMultiplayer {
 			size = s;
 			textureType = t;
 			debugWriter = sw;
+			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp";
+			if (!Directory.Exists(path)) {
+				Directory.CreateDirectory(path);
+			}
+			File.WriteAllBytes(path + "\\" + t.ToString() + ".png", b);
 		}
 
-		public MultiplayerTexture(StreamWriter sw) {
+		public MultiplayerTexture(StreamWriter sw, MPTextureType t) {
 			this.debugWriter = sw;
-		}
-
-		public byte[][] PackTexture() {
-			packing = true;
-			debugWriter.WriteLine("Starting to pack textures {0} with {1} bytes", textureType, bytes.Length);
-			int FREEDATA = 1018;
-			int offset = 2;
-			byte[][] packed = new byte[(int)Mathf.Ceil((bytes.Length + 8) / 1018f)][];
-			debugWriter.WriteLine("created arrays");
-
-			for (int i = 0; i < Mathf.Ceil(bytes.Length / 1018f); i++) {
-				packed[i] = new byte[bytes.Length - (i * FREEDATA) < FREEDATA ? bytes.Length - (i * FREEDATA) + 6 : 1020];
-
-				if (i == 0) {
-					FREEDATA = 1006;
-					offset = 14;
-				} else {
-					FREEDATA = 1018;
-					offset = 2;
-				}
-
-				packed[i][0] = 3;
-				packed[i][1] = (byte)textureType;
-				if (i == 0) {
-					Array.Copy(BitConverter.GetBytes(bytes.Length), 0, packed[i], 2, 4);
-					Array.Copy(BitConverter.GetBytes(size.x), 0, packed[i], 6, 4);
-					Array.Copy(BitConverter.GetBytes(size.y), 0, packed[i], 10, 4);
-				}
-				Array.Copy(bytes, i == 0 ? 0 : i * 1018 - 12, packed[i], offset, bytes.Length - (i * FREEDATA) < FREEDATA ? bytes.Length - (i * FREEDATA) + 12 : FREEDATA);
-			}
-			debugWriter.WriteLine("Finished packing");
-
-			return packed;
-		}
-
-		public void UnpackTexture(byte[] array) {
-			if(bytes == null) {
-				debugWriter.WriteLine("Started unpacking {0}", textureType);
-				size = new Vector2(BitConverter.ToSingle(array, 4), BitConverter.ToSingle(array, 8));
-				bytes = new byte[BitConverter.ToInt32(array, 0)];
-				Array.Copy(array, 12, bytes, 0, array.Length - 12);
-				copiedBytes = array.Length - 4;
-			} else {
-				Array.Copy(array, 0, bytes, copiedBytes, array.Length);
-				copiedBytes += array.Length;
-			}
-
-			if (copiedBytes == bytes.Length) {
-				unpacked = true;
-				debugWriter.WriteLine("Unpacked {0}", textureType);
-				texture = new Texture2D((int)size.x, (int)size.y);
-				texture.LoadImage(bytes);
-			}
+			textureType = t;
 		}
 	}
 
@@ -145,7 +96,6 @@ namespace XLMultiplayer {
 		public MultiplayerTexture boardMP;
 
 		public bool copiedTextures = false;
-		public bool sentTextures = false;
 		public bool startedEncoding = false;
 
 		public void EncodeTextures() {
@@ -178,6 +128,56 @@ namespace XLMultiplayer {
 			RenderTexture.active = currentRT;
 
 			return texture2D;
+		}
+
+		public void SetPlayerTexture(Texture t, MPTextureType texType) {
+			switch (texType) {
+				case MPTextureType.Pants:
+					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
+						foreach (string s in PantsMaterials) {
+							if (tex.name.Equals(s)) {
+								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
+							}
+						}
+					}
+					break;
+				case MPTextureType.Shirt:
+					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
+						foreach (string s in TeeShirt) {
+							if (tex.name.Equals(s)) {
+								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
+							}
+						}
+					}
+					break;
+				case MPTextureType.Shoes:
+					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
+						foreach (string s in Shoes) {
+							if (tex.name.Equals(s)) {
+								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
+							}
+						}
+					}
+					break;
+				case MPTextureType.Hat:
+					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
+						foreach (string s in Hat) {
+							if (tex.name.Equals(s)) {
+								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
+							}
+						}
+					}
+					break;
+				case MPTextureType.Board:
+					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
+						foreach (string s in SkateboardMaterials) {
+							if (tex.name.Equals(s)) {
+								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
+							}
+						}
+					}
+					break;
+			}
 		}
 
 		public MultiplayerPlayerController(StreamWriter writer) {
@@ -395,6 +395,12 @@ namespace XLMultiplayer {
 			this.usernameText.font = Resources.FindObjectsOfTypeAll<Font>()[0];
 			this.usernameText.color = Color.black;
 			this.usernameText.alignment = TextAlignment.Center;
+
+			this.shirtMP = new MultiplayerTexture(this.debugWriter, MPTextureType.Shirt);
+			this.pantsMP = new MultiplayerTexture(this.debugWriter, MPTextureType.Pants);
+			this.hatMP = new MultiplayerTexture(this.debugWriter, MPTextureType.Hat);
+			this.shoesMP = new MultiplayerTexture(this.debugWriter, MPTextureType.Shoes);
+			this.boardMP = new MultiplayerTexture(this.debugWriter, MPTextureType.Board);
 		}
 
 		public byte[] PackTransforms() {
