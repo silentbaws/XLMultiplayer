@@ -149,6 +149,7 @@ public class Server : MonoBehaviour
 		}
 
 		fileServer = new FileServer(7778);
+
 		StartCoroutine(SendAnnounce());
 	}
 
