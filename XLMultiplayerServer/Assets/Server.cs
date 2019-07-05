@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -105,6 +107,13 @@ public class Server : MonoBehaviour
 
 	private FileServer fileServer;
 
+	private readonly HttpClient client = new HttpClient();
+	private readonly string version = "0.0.1";
+	private readonly string main_server = "https://sxl-server-announcer.herokuapp.com/v1";
+
+	private string server_name = "my server"; // need to load from settings file
+	private string map = "my map"; // good luck with this one
+
 	public static void WriteLine(string value){
 		Console.WriteLine(value);
 		Debug.Log(value);
@@ -140,6 +149,25 @@ public class Server : MonoBehaviour
 		}
 
 		fileServer = new FileServer(7778);
+
+		StartCoroutine(SendAnnounce());
+	}
+
+	private IEnumerator SendAnnounce() {
+		while (true) {
+			yield return new WaitForSeconds(5);
+			WWWForm form = new WWWForm();
+			form.AddField("name", server_name);
+			form.AddField("n_players", "" + connections.Count);
+			form.AddField("map", map);
+			form.AddField("version", version);
+			using (UnityWebRequest www = UnityWebRequest.Post(main_server, form)) {
+				yield return www.SendWebRequest();
+				if (www.isNetworkError || www.isHttpError) {
+					WriteLine("Failed announcement to main server: " + www.error + ": " + www.downloadHandler.text);
+				}
+			}
+		}
 	}
 
 	private void Update()
