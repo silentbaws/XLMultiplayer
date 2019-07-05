@@ -106,6 +106,19 @@ namespace XLMultiplayer {
 				}
 				networkEvent = NetworkTransport.Receive(out hId, out conId, out chanId, buffer, 1024, out bufSize, out this.error);
 			}
+
+			foreach(MultiplayerPlayerController player in otherControllers) {
+				if (player.pantsMP.loaded == false && player.pantsMP.saved)
+					player.pantsMP.LoadFromFileMainThread(player);
+				if (player.shirtMP.loaded == false && player.shirtMP.saved)
+					player.shirtMP.LoadFromFileMainThread(player);
+				if (player.shoesMP.loaded == false && player.shoesMP.saved)
+					player.shoesMP.LoadFromFileMainThread(player);
+				if (player.boardMP.loaded == false && player.boardMP.saved)
+					player.boardMP.LoadFromFileMainThread(player);
+				if (player.hatMP.loaded == false && player.hatMP.saved)
+					player.hatMP.LoadFromFileMainThread(player);
+			}
 		}
 
 		public void ReceiveTextures(byte[] buffer) {
@@ -195,7 +208,6 @@ namespace XLMultiplayer {
 		public void KillConnection() {
 			this.runningClient = false;
 			CancelInvoke("SendUpdate");
-			CancelInvoke("SendTextures");
 			fileTransfer.CloseConnection();
 			this.sendingTextures = false;
 			this.textureSendWatch = null;
@@ -206,10 +218,18 @@ namespace XLMultiplayer {
 			foreach (int i in players) {
 				RemovePlayer(i);
 			}
-			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp";
+			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing";
 			if (Directory.Exists(path)) {
 				string[] files = Directory.GetFiles(path);
-				foreach(string file in files) {
+				foreach (string file in files) {
+					File.Delete(file);
+				}
+				Directory.Delete(path);
+			}
+			path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp";
+			if (Directory.Exists(path)) {
+				string[] files = Directory.GetFiles(path);
+				foreach (string file in files) {
 					File.Delete(file);
 				}
 				Directory.Delete(path);
@@ -305,6 +325,8 @@ namespace XLMultiplayer {
 
 		MultiplayerController controller;
 
+		byte[] buffer;
+
 		public FileTransferClient(string ipAdr, int port, MultiplayerController controller) {
 			this.controller = controller;
 			ip = IPAddress.Parse(ipAdr);
@@ -318,6 +340,53 @@ namespace XLMultiplayer {
 		private void ConnectCallback(IAsyncResult ar) {
 			connection = (Socket)ar.AsyncState;
 			connection.EndConnect(ar);
+			BeginReceiving();
+		}
+
+		private void BeginReceiving() {
+			buffer = new byte[4];
+			connection.BeginReceive(buffer, 0, buffer.Length, SocketFlags.None, ReceiveCallback, null);
+		}
+
+		private void ReceiveCallback(IAsyncResult ar) {
+			try {
+				if (connection.EndReceive(ar) > 1) {
+					buffer = new byte[BitConverter.ToInt32(buffer, 0)];
+					connection.Receive(buffer, buffer.Length, SocketFlags.None);
+
+					foreach (MultiplayerPlayerController player in controller.otherControllers) {
+						if (player.playerID == (int)buffer[0]) {
+							switch ((MPTextureType)buffer[1]) {
+								case MPTextureType.Pants:
+									player.pantsMP.SaveTexture(player.playerID, buffer);
+									break;
+								case MPTextureType.Shirt:
+									player.shirtMP.SaveTexture(player.playerID, buffer);
+									break;
+								case MPTextureType.Shoes:
+									player.shoesMP.SaveTexture(player.playerID, buffer);
+									break;
+								case MPTextureType.Board:
+									player.boardMP.SaveTexture(player.playerID, buffer);
+									break;
+								case MPTextureType.Hat:
+									player.hatMP.SaveTexture(player.playerID, buffer);
+									break;
+							}
+						}
+					}
+
+					BeginReceiving();
+				} else {
+					CloseConnection();
+				}
+			} catch (Exception e) {
+				if (connection.Connected) {
+					BeginReceiving();
+				} else {
+					CloseConnection();
+				}
+			}
 		}
 		
 		public void CloseConnection() {

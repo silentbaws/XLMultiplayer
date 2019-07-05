@@ -17,12 +17,14 @@ namespace XLMultiplayer {
 		public byte[] bytes = null;
 		public MPTextureType textureType;
 		public Vector2 size;
-		
-		public bool unpacked = false;
 
 		Texture2D texture;
 
 		StreamWriter debugWriter;
+
+		string file;
+		public bool loaded = false;
+		public bool saved = false;
 
 		public MultiplayerTexture(byte[] b, Vector2 s, MPTextureType t, StreamWriter sw) {
 			bytes = b;
@@ -39,6 +41,28 @@ namespace XLMultiplayer {
 		public MultiplayerTexture(StreamWriter sw, MPTextureType t) {
 			this.debugWriter = sw;
 			textureType = t;
+		}
+
+		public void LoadFromFileMainThread(MultiplayerPlayerController controller) {
+			byte[] data = File.ReadAllBytes(file);
+			texture = new Texture2D((int)size.x, (int)size.y);
+			texture.LoadImage(data);
+			controller.SetPlayerTexture(texture, textureType);
+			loaded = true;
+		}
+
+		public void SaveTexture(int connectionId, byte[] buffer) {
+			size = new Vector2(BitConverter.ToSingle(buffer, 2), BitConverter.ToSingle(buffer, 6));
+			byte[] file = new byte[buffer.Length - 10];
+			Array.Copy(buffer, 10, file, 0, file.Length);
+
+			if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing"))
+				Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing");
+
+			File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png", file);
+
+			this.file = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png";
+			saved = true;
 		}
 	}
 
@@ -133,10 +157,10 @@ namespace XLMultiplayer {
 		public void SetPlayerTexture(Texture t, MPTextureType texType) {
 			switch (texType) {
 				case MPTextureType.Pants:
-					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
+					foreach (Transform transform in this.skater.GetComponentsInChildren<Transform>()) {
 						foreach (string s in PantsMaterials) {
-							if (tex.name.Equals(s)) {
-								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
+							if (transform.name.Equals(s)) {
+								transform.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
 							}
 						}
 					}
@@ -169,7 +193,7 @@ namespace XLMultiplayer {
 					}
 					break;
 				case MPTextureType.Board:
-					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
+					foreach (Transform tex in this.board.GetComponentsInChildren<Transform>()) {
 						foreach (string s in SkateboardMaterials) {
 							if (tex.name.Equals(s)) {
 								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
