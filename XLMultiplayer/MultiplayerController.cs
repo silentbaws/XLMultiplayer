@@ -15,6 +15,8 @@ namespace XLMultiplayer {
 		private int PORT;
 		private Stopwatch textureSendWatch;
 
+		public List<MultiplayerTexture> textureQueue = new List<MultiplayerTexture>;
+
 		private void Start() {
 		}
 
@@ -92,7 +94,7 @@ namespace XLMultiplayer {
 						debugWriter.WriteLine("Successfully connected to server");
 						this.SendBytes(2, Encoding.ASCII.GetBytes(this.ourController.username), this.reliableChannel);
 						this.ourController.EncodeTextures();
-						fileTransfer = new FileTransferClient(this.IP, this.PORT+1, this);
+						fileTransfer = new FileTransferClient(this.IP, this.PORT + 1, this);
 						SendTextures();
 						InvokeRepeating("SendUpdate", 0.5f, 1.0f / (float)tickRate);
 						break;
@@ -121,19 +123,17 @@ namespace XLMultiplayer {
 			}
 		}
 
-		public void ReceiveTextures(byte[] buffer) {
-
-		}
-
 		private void SendTextures() {
-			while (!fileTransfer.connection.Connected) {
-				if(textureSendWatch == null) {
+			while (!fileTransfer.connection.Connected || !this.ourController.pantsMP.saved || !this.ourController.shirtMP.saved || !this.ourController.shoesMP.saved || !this.ourController.boardMP.saved || !this.ourController.hatMP.saved) {
+				if (textureSendWatch == null) {
 					textureSendWatch = new Stopwatch();
+					textureSendWatch.Start();
 				}
 
-				if(textureSendWatch.ElapsedMilliseconds > 5000) {
-					debugWriter.WriteLine("Connection to file server timed out");
+				if (textureSendWatch.ElapsedMilliseconds > 5000) {
+					debugWriter.WriteLine("Connection to file server timed out or textures failed saving");
 					KillConnection();
+					return;
 				}
 			}
 
@@ -144,35 +144,35 @@ namespace XLMultiplayer {
 			prebuffer[4] = (byte)MPTextureType.Pants;
 			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.x), 0, prebuffer, 5, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			fileTransfer.connection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 
 			prebuffer = new byte[13];
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.bytes.Length + 9), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)MPTextureType.Shirt;
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.x), 0, prebuffer, 5, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			fileTransfer.connection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 
 			prebuffer = new byte[13];
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.bytes.Length + 9), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)MPTextureType.Shoes;
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.x), 0, prebuffer, 5, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			fileTransfer.connection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 
 			prebuffer = new byte[13];
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.bytes.Length + 9), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)MPTextureType.Board;
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.x), 0, prebuffer, 5, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			fileTransfer.connection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 
 			prebuffer = new byte[13];
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.bytes.Length + 9), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)MPTextureType.Hat;
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.x), 0, prebuffer, 5, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			fileTransfer.connection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 		}
 
 		private void AddPlayer(int playerID) {
@@ -192,8 +192,8 @@ namespace XLMultiplayer {
 			}
 			if (index != -1) {
 				MultiplayerPlayerController controller = otherControllers[index];
-				Destroy(controller.player);
 				otherControllers.RemoveAt(index);
+				Destroy(controller.player);
 			}
 		}
 
@@ -206,17 +206,20 @@ namespace XLMultiplayer {
 		}
 
 		public void KillConnection() {
-			this.runningClient = false;
-			CancelInvoke("SendUpdate");
-			fileTransfer.CloseConnection();
-			this.sendingTextures = false;
-			this.textureSendWatch = null;
-			List<int> players = new List<int>();
-			foreach (MultiplayerPlayerController connection in otherControllers) {
-				players.Add(connection.playerID);
+			if (IsInvoking("SendUpdate"))
+				CancelInvoke("SendUpdate");
+			if (fileTransfer != null) {
+				fileTransfer.CloseConnection();
 			}
-			foreach (int i in players) {
-				RemovePlayer(i);
+			this.textureSendWatch = null;
+			if (otherControllers.Count > 0) {
+				List<int> players = new List<int>();
+				foreach (MultiplayerPlayerController connection in otherControllers) {
+					players.Add(connection.playerID);
+				}
+				foreach (int i in players) {
+					RemovePlayer(i);
+				}
 			}
 			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing";
 			if (Directory.Exists(path)) {
@@ -236,6 +239,9 @@ namespace XLMultiplayer {
 			}
 			NetworkTransport.Disconnect(this.hostId, this.connectionId, out this.error);
 			NetworkTransport.Shutdown();
+			this.runningClient = false;
+			GC.Collect();
+			GC.WaitForPendingFinalizers();
 		}
 
 		private void ProcessMessage(byte[] buffer, int bufferSize) {
@@ -300,8 +306,6 @@ namespace XLMultiplayer {
 		public bool runningServer = false;
 		public bool runningClient = false;
 
-		private bool sendingTextures;
-
 		private byte tickRate = 32;
 
 		public MultiplayerPlayerController ourController;
@@ -318,14 +322,18 @@ namespace XLMultiplayer {
 	}
 
 	public class FileTransferClient {
+		public class StateObject {
+			public Socket workSocket = null;
+			public byte[] buffer;
+			public int readBytes = 0;
+		}
+
 		IPAddress ip;
 		IPEndPoint ipEndPoint;
 
 		public Socket connection;
 
 		MultiplayerController controller;
-
-		byte[] buffer;
 
 		public FileTransferClient(string ipAdr, int port, MultiplayerController controller) {
 			this.controller = controller;
@@ -344,39 +352,62 @@ namespace XLMultiplayer {
 		}
 
 		private void BeginReceiving() {
-			buffer = new byte[4];
-			connection.BeginReceive(buffer, 0, buffer.Length, SocketFlags.None, ReceiveCallback, null);
+			StateObject state = new StateObject();
+			state.workSocket = connection;
+			state.buffer = new byte[4];
+			state.readBytes = 0;
+			connection.BeginReceive(state.buffer, 0, state.buffer.Length, SocketFlags.None, ReceiveCallback, state);
 		}
 
-		private void ReceiveCallback(IAsyncResult ar) {
+		public void ReceiveCallback(IAsyncResult ar) {
 			try {
-				if (connection.EndReceive(ar) > 1) {
-					buffer = new byte[BitConverter.ToInt32(buffer, 0)];
-					connection.Receive(buffer, buffer.Length, SocketFlags.None);
+				StateObject state = (StateObject)ar.AsyncState;
+				Socket handler = state.workSocket;
+				int bytesRead = handler.EndReceive(ar);
 
-					foreach (MultiplayerPlayerController player in controller.otherControllers) {
-						if (player.playerID == (int)buffer[0]) {
-							switch ((MPTextureType)buffer[1]) {
-								case MPTextureType.Pants:
-									player.pantsMP.SaveTexture(player.playerID, buffer);
-									break;
-								case MPTextureType.Shirt:
-									player.shirtMP.SaveTexture(player.playerID, buffer);
-									break;
-								case MPTextureType.Shoes:
-									player.shoesMP.SaveTexture(player.playerID, buffer);
-									break;
-								case MPTextureType.Board:
-									player.boardMP.SaveTexture(player.playerID, buffer);
-									break;
-								case MPTextureType.Hat:
-									player.hatMP.SaveTexture(player.playerID, buffer);
-									break;
+				if (bytesRead > 0) {
+					state.readBytes += bytesRead;
+					if (state.readBytes < 4) {
+						handler.BeginReceive(state.buffer, state.readBytes, state.buffer.Length - state.readBytes, SocketFlags.None, ReceiveCallback, state);
+					} else {
+						if (state.readBytes == 4) {
+							controller.debugWriter.WriteLine("Getting shit");
+							state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
+						}
+
+						if (state.readBytes - 4 == state.buffer.Length) {
+							controller.debugWriter.WriteLine("Got shit");
+							controller.debugWriter.WriteLine(state.buffer[0].ToString());
+							foreach (MultiplayerPlayerController player in controller.otherControllers) {
+								controller.debugWriter.WriteLine(player.playerID.ToString());
+								controller.debugWriter.WriteLine(((byte)player.playerID).ToString());
+								if ((byte)player.playerID == state.buffer[0]) {
+									controller.debugWriter.WriteLine("Got shits player");
+									switch ((MPTextureType)state.buffer[1]) {
+										case MPTextureType.Pants:
+											player.pantsMP.SaveTexture(player.playerID, state.buffer);
+											break;
+										case MPTextureType.Shirt:
+											player.shirtMP.SaveTexture(player.playerID, state.buffer);
+											break;
+										case MPTextureType.Shoes:
+											player.shoesMP.SaveTexture(player.playerID, state.buffer);
+											break;
+										case MPTextureType.Board:
+											player.boardMP.SaveTexture(player.playerID, state.buffer);
+											break;
+										case MPTextureType.Hat:
+											player.hatMP.SaveTexture(player.playerID, state.buffer);
+											break;
+									}
+								}
 							}
+
+							BeginReceiving();
+						} else {
+							handler.BeginReceive(state.buffer, state.readBytes - 4, state.buffer.Length - state.readBytes + 4, SocketFlags.None, ReceiveCallback, state);
 						}
 					}
-
-					BeginReceiving();
 				} else {
 					CloseConnection();
 				}
@@ -388,7 +419,7 @@ namespace XLMultiplayer {
 				}
 			}
 		}
-		
+
 		public void CloseConnection() {
 			connection.Shutdown(SocketShutdown.Both);
 			connection.Close();

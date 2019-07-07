@@ -36,6 +36,7 @@ namespace XLMultiplayer {
 				Directory.CreateDirectory(path);
 			}
 			File.WriteAllBytes(path + "\\" + t.ToString() + ".png", b);
+			saved = true;
 		}
 
 		public MultiplayerTexture(StreamWriter sw, MPTextureType t) {
@@ -44,6 +45,7 @@ namespace XLMultiplayer {
 		}
 
 		public void LoadFromFileMainThread(MultiplayerPlayerController controller) {
+			debugWriter.WriteLine("LOADING TEXTURE FROM MAIN THREAD");
 			byte[] data = File.ReadAllBytes(file);
 			texture = new Texture2D((int)size.x, (int)size.y);
 			texture.LoadImage(data);
@@ -52,6 +54,7 @@ namespace XLMultiplayer {
 		}
 
 		public void SaveTexture(int connectionId, byte[] buffer) {
+			debugWriter.WriteLine("SAVING NEW TEXTURE");
 			size = new Vector2(BitConverter.ToSingle(buffer, 2), BitConverter.ToSingle(buffer, 6));
 			byte[] file = new byte[buffer.Length - 10];
 			Array.Copy(buffer, 10, file, 0, file.Length);
@@ -63,6 +66,7 @@ namespace XLMultiplayer {
 
 			this.file = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png";
 			saved = true;
+			debugWriter.WriteLine("SAVED NEW TEXTURE");
 		}
 	}
 

@@ -1,13 +1,15 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.Networking.Types;
+
 
 public enum MPTextureType : byte {
 	Shirt = 0,
@@ -105,6 +107,13 @@ public class Server : MonoBehaviour
 
 	private FileServer fileServer;
 
+	private readonly HttpClient client = new HttpClient();
+	private readonly string version = "0.0.1";
+	private readonly string main_server = "https://sxl-server-announcer.herokuapp.com/v1";
+
+	private string server_name = "my server"; // need to load from settings file
+	private string map = "my map"; // good luck with this one
+
 	public static void WriteLine(string value){
 		Console.WriteLine(value);
 		Debug.Log(value);
@@ -140,6 +149,24 @@ public class Server : MonoBehaviour
 		}
 
 		fileServer = new FileServer(7778);
+		StartCoroutine(SendAnnounce());
+	}
+
+	private IEnumerator SendAnnounce() {
+		while (true) {
+			yield return new WaitForSeconds(5);
+			WWWForm form = new WWWForm();
+			form.AddField("name", server_name);
+			form.AddField("n_players", "" + connections.Count);
+			form.AddField("map", map);
+			form.AddField("version", version);
+			using (UnityWebRequest www = UnityWebRequest.Post(main_server, form)) {
+				yield return www.SendWebRequest();
+				if (www.isNetworkError || www.isHttpError) {
+					WriteLine("Failed announcement to main server: " + www.error + ": " + www.downloadHandler.text);
+				}
+			}
+		}
 	}
 
 	private void Update()
@@ -215,30 +242,48 @@ public class Server : MonoBehaviour
 						}
 					}
 					SendToAll(new byte[] { 255 }, 1, conId, this.reliableChannel);
+					GC.Collect();
+					GC.WaitForPendingFinalizers();
 					break;
 			}
 			networkEvent = NetworkTransport.Receive(out hId, out conId, out chanId, buffer, 1024, out bufSize, out error);
 		}
 
-		foreach(Player player in connections) {
+		foreach(FileServer.Client client in FileServer.clients) {
+			if (client.newConnection && client.socket.Connected) {
+				foreach (Player player in connections) {
+					if(player.connectionID != client.connectionId && player.packedAll) {
+						WriteLine("Sending old textures to new player " + client.connectionId.ToString() + " from " + player.connectionID.ToString());
+						client.socket.SendFile(player.Pants.GetTexturePath(player.connectionID), player.Pants.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+						client.socket.SendFile(player.Shirt.GetTexturePath(player.connectionID), player.Shirt.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+						client.socket.SendFile(player.Shoes.GetTexturePath(player.connectionID), player.Shoes.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+						client.socket.SendFile(player.Board.GetTexturePath(player.connectionID), player.Board.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+						client.socket.SendFile(player.Hat.GetTexturePath(player.connectionID), player.Hat.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+					}
+					client.newConnection = false;
+				}
+			}
+		}
+
+		foreach (Player player in connections) {
 			if(!player.packedAll)
 				if (player.Hat.finishedCopy && player.Board.finishedCopy && player.Shoes.finishedCopy && player.Shirt.finishedCopy && player.Pants.finishedCopy)
 					player.packedAll = true;
-			if (player.packedAll && !player.sentAll) {
-				if(connections.Count > 1) {
-					foreach(FileServer.Client client in FileServer.clients) {
-						if(client.connectionId != player.connectionID) {
-							WriteLine("Sending Textures");
-							client.socket.SendFile(player.Pants.GetTexturePath(player.connectionID), player.Pants.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseSystemThread);
-							client.socket.SendFile(player.Shirt.GetTexturePath(player.connectionID), player.Shirt.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseSystemThread);
-							client.socket.SendFile(player.Shoes.GetTexturePath(player.connectionID), player.Shoes.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseSystemThread);
-							client.socket.SendFile(player.Board.GetTexturePath(player.connectionID), player.Board.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseSystemThread);
-							client.socket.SendFile(player.Hat.GetTexturePath(player.connectionID), player.Hat.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseSystemThread);
-						}
-					}
-				}
-				player.sentAll = true;
-			}
+		//	if (player.packedAll && !player.sentAll) {
+		//		if(FileServer.clients.Count > 1) {
+		//			foreach(FileServer.Client client in FileServer.clients) {
+		//				if(client.connectionId != player.connectionID) {
+		//					WriteLine("Sending Textures");
+		//					client.socket.SendFile(player.Pants.GetTexturePath(player.connectionID), player.Pants.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+		//					client.socket.SendFile(player.Shirt.GetTexturePath(player.connectionID), player.Shirt.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+		//					client.socket.SendFile(player.Shoes.GetTexturePath(player.connectionID), player.Shoes.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+		//					client.socket.SendFile(player.Board.GetTexturePath(player.connectionID), player.Board.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+		//					client.socket.SendFile(player.Hat.GetTexturePath(player.connectionID), player.Hat.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+		//				}
+		//			}
+		//		}
+		//		player.sentAll = true;
+		//	}
 		}
 	}
 
@@ -264,21 +309,38 @@ public class Server : MonoBehaviour
 
 		public static List<Client> clients = new List<Client>();
 
+		public class StateObject {
+			public Socket workSocket = null;
+			public byte[] buffer;
+			public int readBytes = 0;
+		}
+
 		public class Client {
 			public Socket socket { get; set; }
 			public ReceivePacket Receive { get; set; }
 			public int connectionId;
+			public bool newConnection = true;
 
 			public Client(Socket socket, int connectionId) {
 				Receive = new ReceivePacket(socket, this, connectionId);
-				Receive.StartReceiving();
 				this.socket = socket;
 				this.connectionId = connectionId;
+				Receive.StartReceiving();
+
+				//foreach(Player p in Server.connections) {
+				//	if (connectionId != p.connectionID && p.packedAll) {
+				//		Server.WriteLine("Sending new player texture from " + p.connectionID.ToString());
+				//		socket.SendFile(p.Pants.GetTexturePath(p.connectionID), p.Pants.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+				//		socket.SendFile(p.Shirt.GetTexturePath(p.connectionID), p.Shirt.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+				//		socket.SendFile(p.Shoes.GetTexturePath(p.connectionID), p.Shoes.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+				//		socket.SendFile(p.Board.GetTexturePath(p.connectionID), p.Board.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+				//		socket.SendFile(p.Hat.GetTexturePath(p.connectionID), p.Hat.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+				//	}
+				//}
 			}
 		}
 
 		public class ReceivePacket {
-			private byte[] buffer;
 			private Socket receiveSocket;
 			private Client client;
 			private Player player;
@@ -295,37 +357,53 @@ public class Server : MonoBehaviour
 			}
 
 			public void StartReceiving() {
-				buffer = new byte[4];
-				receiveSocket.BeginReceive(buffer, 0, buffer.Length, SocketFlags.None, ReceiveCallback, null);
+				StateObject state = new StateObject();
+				state.workSocket = receiveSocket;
+				state.buffer = new byte[4];
+				state.readBytes = 0;
+				receiveSocket.BeginReceive(state.buffer, 0, state.buffer.Length, SocketFlags.None, ReceiveCallback, state);
 			}
 
 			public void ReceiveCallback(IAsyncResult ar) {
 				try {
-					if(receiveSocket.EndReceive(ar) > 1) {
-						Server.WriteLine("Begin receive callback");
-						buffer = new byte[BitConverter.ToInt32(buffer, 0)];
-						
-						receiveSocket.Receive(buffer, buffer.Length, SocketFlags.None);
+					StateObject state = (StateObject)ar.AsyncState;
+					Socket handler = state.workSocket;
+					int bytesRead = handler.EndReceive(ar);
 
-						switch ((MPTextureType)buffer[0]) {
-							case MPTextureType.Pants:
-								player.Pants.SaveTexture(player.connectionID, buffer);
-								break;
-							case MPTextureType.Shirt:
-								player.Shirt.SaveTexture(player.connectionID, buffer);
-								break;
-							case MPTextureType.Shoes:
-								player.Shoes.SaveTexture(player.connectionID, buffer);
-								break;
-							case MPTextureType.Board:
-								player.Board.SaveTexture(player.connectionID, buffer);
-								break;
-							case MPTextureType.Hat:
-								player.Hat.SaveTexture(player.connectionID, buffer);
-								break;
+					if (bytesRead > 0) {
+						state.readBytes += bytesRead;
+						Server.WriteLine("read " + state.readBytes.ToString() + " bytes of " + state.buffer.Length.ToString());
+						if (state.readBytes < 4) {
+							handler.BeginReceive(state.buffer, state.readBytes, state.buffer.Length - state.readBytes, SocketFlags.None, ReceiveCallback, state);
+						} else {
+							if (state.readBytes == 4) {
+								state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
+							}
+
+							if (state.readBytes - 4 == state.buffer.Length) {
+								switch ((MPTextureType)state.buffer[0]) {
+									case MPTextureType.Pants:
+										player.Pants.SaveTexture(player.connectionID, state.buffer);
+										break;
+									case MPTextureType.Shirt:
+										player.Shirt.SaveTexture(player.connectionID, state.buffer);
+										break;
+									case MPTextureType.Shoes:
+										player.Shoes.SaveTexture(player.connectionID, state.buffer);
+										break;
+									case MPTextureType.Board:
+										player.Board.SaveTexture(player.connectionID, state.buffer);
+										break;
+									case MPTextureType.Hat:
+										player.Hat.SaveTexture(player.connectionID, state.buffer);
+										break;
+								}
+
+								StartReceiving();
+							} else { 
+								handler.BeginReceive(state.buffer, state.readBytes - 4, state.buffer.Length - state.readBytes + 4, SocketFlags.None, ReceiveCallback, state);
+							}
 						}
-
-						StartReceiving();
 					} else {
 						Disconnect();
 					}
@@ -339,9 +417,11 @@ public class Server : MonoBehaviour
 			}
 
 			private void Disconnect() {
-				receiveSocket.Disconnect(false);
-				FileServer.clients.Remove(client);
-				Server.WriteLine("Disconnect from " + client.connectionId.ToString() + " on file transfer server");
+				if (receiveSocket.Connected)
+					receiveSocket.Disconnect(true);
+				if (clients.Contains(client))
+					clients.Remove(client);
+				WriteLine("Disconnect from " + client.connectionId.ToString() + " on file transfer server");
 			}
 		}
 
@@ -368,7 +448,6 @@ public class Server : MonoBehaviour
 				Socket acceptedSocket = listener.EndAccept(ar);
 				int connectionId = -1;
 				foreach (Player player in Server.connections) {
-					Server.WriteLine(player.IP);
 					if (IPAddress.Parse(player.IP).MapToIPv6().ToString() == ((IPEndPoint)acceptedSocket.RemoteEndPoint).Address.MapToIPv6().ToString()) {
 						connectionId = player.connectionID;
 						Server.WriteLine("Connection " + player.connectionID.ToString() + " has joined the file transfer server");
@@ -379,7 +458,7 @@ public class Server : MonoBehaviour
 					clients.Add(new Client(acceptedSocket, connectionId));
 				} else {
 					Server.WriteLine("Disconnected " + ((IPEndPoint)acceptedSocket.RemoteEndPoint).Address.ToString() + " from file transfer server");
-					acceptedSocket.Disconnect(false);
+					acceptedSocket.Disconnect(true);
 				}
 				listener.BeginAccept(AcceptCallback, listener);
 			} catch(Exception e) {

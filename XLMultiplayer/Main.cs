@@ -29,6 +29,7 @@ namespace XLMultiplayer
 				UnityEngine.Object.DontDestroyOnLoad(menu.gameObject);
 				UnityEngine.Object.DontDestroyOnLoad(statusMenu.gameObject);
 			} else {
+				menu.EndMultiplayer();
 				UnityEngine.Object.Destroy(menu.gameObject);
 				UnityEngine.Object.Destroy(statusMenu.gameObject);
 			}

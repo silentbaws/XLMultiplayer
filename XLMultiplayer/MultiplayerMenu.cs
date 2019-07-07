@@ -179,7 +179,7 @@ namespace XLMultiplayer {
 		private Image multiplayerMenuConnectButtonImage;
 
 		// Token: 0x04000462 RID: 1122
-		private GameObject multiplayerManagerObject;
+		public GameObject multiplayerManagerObject;
 
 		public MultiplayerController multiplayerManager;
 	}
