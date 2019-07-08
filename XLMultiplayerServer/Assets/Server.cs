@@ -270,21 +270,21 @@ public class Server : MonoBehaviour
 			if(!player.packedAll)
 				if (player.Hat.finishedCopy && player.Board.finishedCopy && player.Shoes.finishedCopy && player.Shirt.finishedCopy && player.Pants.finishedCopy)
 					player.packedAll = true;
-		//	if (player.packedAll && !player.sentAll) {
-		//		if(FileServer.clients.Count > 1) {
-		//			foreach(FileServer.Client client in FileServer.clients) {
-		//				if(client.connectionId != player.connectionID) {
-		//					WriteLine("Sending Textures");
-		//					client.socket.SendFile(player.Pants.GetTexturePath(player.connectionID), player.Pants.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-		//					client.socket.SendFile(player.Shirt.GetTexturePath(player.connectionID), player.Shirt.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-		//					client.socket.SendFile(player.Shoes.GetTexturePath(player.connectionID), player.Shoes.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-		//					client.socket.SendFile(player.Board.GetTexturePath(player.connectionID), player.Board.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-		//					client.socket.SendFile(player.Hat.GetTexturePath(player.connectionID), player.Hat.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-		//				}
-		//			}
-		//		}
-		//		player.sentAll = true;
-		//	}
+			if (player.packedAll && !player.sentAll) {
+				if (FileServer.clients.Count > 1) {
+					foreach (FileServer.Client client in FileServer.clients) {
+						if (client.connectionId != player.connectionID) {
+							WriteLine("Sending Textures");
+							client.socket.SendFile(player.Pants.GetTexturePath(player.connectionID), player.Pants.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+							client.socket.SendFile(player.Shirt.GetTexturePath(player.connectionID), player.Shirt.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+							client.socket.SendFile(player.Shoes.GetTexturePath(player.connectionID), player.Shoes.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+							client.socket.SendFile(player.Board.GetTexturePath(player.connectionID), player.Board.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+							client.socket.SendFile(player.Hat.GetTexturePath(player.connectionID), player.Hat.GetPreBuffer(player.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
+						}
+					}
+				}
+				player.sentAll = true;
+			}
 		}
 	}
 
@@ -327,17 +327,6 @@ public class Server : MonoBehaviour
 				this.socket = socket;
 				this.connectionId = connectionId;
 				Receive.StartReceiving();
-
-				//foreach(Player p in Server.connections) {
-				//	if (connectionId != p.connectionID && p.packedAll) {
-				//		Server.WriteLine("Sending new player texture from " + p.connectionID.ToString());
-				//		socket.SendFile(p.Pants.GetTexturePath(p.connectionID), p.Pants.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-				//		socket.SendFile(p.Shirt.GetTexturePath(p.connectionID), p.Shirt.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-				//		socket.SendFile(p.Shoes.GetTexturePath(p.connectionID), p.Shoes.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-				//		socket.SendFile(p.Board.GetTexturePath(p.connectionID), p.Board.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-				//		socket.SendFile(p.Hat.GetTexturePath(p.connectionID), p.Hat.GetPreBuffer(p.connectionID), null, TransmitFileOptions.UseDefaultWorkerThread);
-				//	}
-				//}
 			}
 		}
 

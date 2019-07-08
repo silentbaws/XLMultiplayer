@@ -9,13 +9,31 @@ using System.Net.Sockets;
 using System.Diagnostics;
 
 namespace XLMultiplayer {
+	public class MultiplayerSkinBuffer {
+		public byte[] buffer;
+		public int connectionId;
+		public MPTextureType textureType;
+		private Stopwatch timer;
+
+		public MultiplayerSkinBuffer(byte[] buffer, int connectionId, MPTextureType textureType) {
+			this.buffer = buffer;
+			this.connectionId = connectionId;
+			this.textureType = textureType;
+			timer = new Stopwatch();
+		}
+
+		public long ElapsedTime() {
+			return timer.ElapsedMilliseconds;
+		}
+	}
+
 	public class MultiplayerController : MonoBehaviour {
 		FileTransferClient fileTransfer;
 		private string IP;
 		private int PORT;
 		private Stopwatch textureSendWatch;
 
-		public List<MultiplayerTexture> textureQueue = new List<MultiplayerTexture>;
+		public List<MultiplayerSkinBuffer> textureQueue = new List<MultiplayerSkinBuffer>();
 
 		private void Start() {
 		}
@@ -107,6 +125,37 @@ namespace XLMultiplayer {
 						break;
 				}
 				networkEvent = NetworkTransport.Receive(out hId, out conId, out chanId, buffer, 1024, out bufSize, out this.error);
+			}
+
+			foreach(MultiplayerSkinBuffer bufferedSkin in textureQueue) {
+				foreach(MultiplayerPlayerController player in otherControllers) {
+					if(player.playerID == bufferedSkin.connectionId) {
+						switch (bufferedSkin.textureType) {
+							case MPTextureType.Pants:
+								player.pantsMP.SaveTexture(bufferedSkin.connectionId, bufferedSkin.buffer);
+								break;
+							case MPTextureType.Shirt:
+								player.shirtMP.SaveTexture(bufferedSkin.connectionId, bufferedSkin.buffer);
+								break;
+							case MPTextureType.Shoes:
+								player.shoesMP.SaveTexture(bufferedSkin.connectionId, bufferedSkin.buffer);
+								break;
+							case MPTextureType.Board:
+								player.boardMP.SaveTexture(bufferedSkin.connectionId, bufferedSkin.buffer);
+								break;
+							case MPTextureType.Hat:
+								player.hatMP.SaveTexture(bufferedSkin.connectionId, bufferedSkin.buffer);
+								break;
+						}
+
+						textureQueue.Remove(bufferedSkin);
+						debugWriter.WriteLine("Saved texture in queue");
+					}
+				}
+				if(bufferedSkin.ElapsedTime() > 10000) {
+					textureQueue.Remove(bufferedSkin);
+					debugWriter.WriteLine("Texture in queue expired");
+				}
 			}
 
 			foreach(MultiplayerPlayerController player in otherControllers) {
@@ -378,30 +427,8 @@ namespace XLMultiplayer {
 						if (state.readBytes - 4 == state.buffer.Length) {
 							controller.debugWriter.WriteLine("Got shit");
 							controller.debugWriter.WriteLine(state.buffer[0].ToString());
-							foreach (MultiplayerPlayerController player in controller.otherControllers) {
-								controller.debugWriter.WriteLine(player.playerID.ToString());
-								controller.debugWriter.WriteLine(((byte)player.playerID).ToString());
-								if ((byte)player.playerID == state.buffer[0]) {
-									controller.debugWriter.WriteLine("Got shits player");
-									switch ((MPTextureType)state.buffer[1]) {
-										case MPTextureType.Pants:
-											player.pantsMP.SaveTexture(player.playerID, state.buffer);
-											break;
-										case MPTextureType.Shirt:
-											player.shirtMP.SaveTexture(player.playerID, state.buffer);
-											break;
-										case MPTextureType.Shoes:
-											player.shoesMP.SaveTexture(player.playerID, state.buffer);
-											break;
-										case MPTextureType.Board:
-											player.boardMP.SaveTexture(player.playerID, state.buffer);
-											break;
-										case MPTextureType.Hat:
-											player.hatMP.SaveTexture(player.playerID, state.buffer);
-											break;
-									}
-								}
-							}
+
+							controller.textureQueue.Add(new MultiplayerSkinBuffer(state.buffer, (int)state.buffer[0], (MPTextureType)state.buffer[1]));
 
 							BeginReceiving();
 						} else {
