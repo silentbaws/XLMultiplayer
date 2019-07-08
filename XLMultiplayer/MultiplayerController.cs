@@ -106,7 +106,7 @@ namespace XLMultiplayer {
 			NetworkEventType networkEvent = NetworkTransport.Receive(out hId, out conId, out chanId, buffer, 1024, out bufSize, out this.error);
 			while (networkEvent != NetworkEventType.Nothing) {
 				if (this.error != (int)NetworkError.Ok)
-					debugWriter.WriteLine("Error recieving message {0}", this.error);
+					debugWriter.WriteLine("Error recieving message {0}", (NetworkError)this.error);
 				switch (networkEvent) {
 					case NetworkEventType.ConnectEvent:
 						debugWriter.WriteLine("Successfully connected to server");
@@ -149,7 +149,7 @@ namespace XLMultiplayer {
 						}
 
 						textureQueue.Remove(bufferedSkin);
-						debugWriter.WriteLine("Saved texture in queue");
+						debugWriter.WriteLine("Removed texture from queue");
 					}
 				}
 				if(bufferedSkin.ElapsedTime() > 10000) {
@@ -347,7 +347,7 @@ namespace XLMultiplayer {
 				Array.Copy(msg, 0, buffer, 1, msg.Length);
 				NetworkTransport.Send(this.hostId, this.connectionId, (int)channel, buffer, buffer.Length, out this.error);
 				if (this.error != 0) {
-					this.debugWriter.WriteLine((NetworkError)this.error);
+					this.debugWriter.WriteLine("Error sending message with opcode {0}, {1}", opCode, (NetworkError)this.error);
 				}
 			}
 		}
@@ -420,12 +420,12 @@ namespace XLMultiplayer {
 						handler.BeginReceive(state.buffer, state.readBytes, state.buffer.Length - state.readBytes, SocketFlags.None, ReceiveCallback, state);
 					} else {
 						if (state.readBytes == 4) {
-							controller.debugWriter.WriteLine("Getting shit");
+							controller.debugWriter.WriteLine("Got texture buffer size");
 							state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
 						}
 
 						if (state.readBytes - 4 == state.buffer.Length) {
-							controller.debugWriter.WriteLine("Got shit");
+							controller.debugWriter.WriteLine("Filled texture buffer");
 							controller.debugWriter.WriteLine(state.buffer[0].ToString());
 
 							controller.textureQueue.Add(new MultiplayerSkinBuffer(state.buffer, (int)state.buffer[0], (MPTextureType)state.buffer[1]));
