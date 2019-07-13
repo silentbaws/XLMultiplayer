@@ -5,10 +5,6 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 
-//TODO: Add connect/disconnect events on tcp
-//TODO: Add username events on tcp
-//TODO: Add Stay alive event to udp/tcp
-
 namespace XLMultiplayer {
 	public class NetworkClient {
 		public class StateObject {
@@ -79,38 +75,44 @@ namespace XLMultiplayer {
 		}
 
 		public void SendReliable(byte[] buffer) {
-			tcpConnection.SendTo(buffer, ipEndPoint);
+			try {
+				tcpConnection.SendTo(buffer, ipEndPoint);
+			} catch (Exception e) { }
 		}
 
 		public void SendAlive() {
-			byte[] buffer = new byte[9];
-			buffer[0] = (byte)OpCode.StillAlive;
-			Array.Copy(BitConverter.GetBytes(elapsedTime.ElapsedMilliseconds), 0, buffer, 1, 8);
+			try {
+				byte[] buffer = new byte[9];
+				buffer[0] = (byte)OpCode.StillAlive;
+				Array.Copy(BitConverter.GetBytes(elapsedTime.ElapsedMilliseconds), 0, buffer, 1, 8);
 
-			if(sentAlive == 0) {
-				lastAlive = elapsedTime.ElapsedMilliseconds;
-			}
-			sentAlive++;
+				if(sentAlive == 0) {
+					lastAlive = elapsedTime.ElapsedMilliseconds;
+				}
+				sentAlive++;
 
-			udpConnection.Send(buffer, buffer.Length);
+				udpConnection.Send(buffer, buffer.Length);
+			} catch (Exception e) { }
 		}
 
 		public void SendUnreliable(byte[] buffer) {
-			//Rearrange message before sending
-			//Size of packet, opcode, packet sequence, rest of information
-			byte[] packetSequence = BitConverter.GetBytes(buffer[0] == (byte)OpCode.Position ? positionPackets : animationPackets);
-			byte[] packet = new byte[buffer.Length + packetSequence.Length];
-			packet[0] = buffer[0];
-			Array.Copy(packetSequence, 0, packet, 1, 4);
-			Array.Copy(buffer, 1, packet, 5, buffer.Length - 1);
+			try { 
+				//Rearrange message before sending
+				//Size of packet, opcode, packet sequence, rest of information
+				byte[] packetSequence = BitConverter.GetBytes(buffer[0] == (byte)OpCode.Position ? positionPackets : animationPackets);
+				byte[] packet = new byte[buffer.Length + packetSequence.Length];
+				packet[0] = buffer[0];
+				Array.Copy(packetSequence, 0, packet, 1, 4);
+				Array.Copy(buffer, 1, packet, 5, buffer.Length - 1);
 
-			udpConnection.Send(packet, packet.Length);
+				udpConnection.Send(packet, packet.Length);
 
-			if(buffer[0] == (byte)OpCode.Position) {
-				positionPackets++;
-			} else {
-				animationPackets++;
-			}
+				if(buffer[0] == (byte)OpCode.Position) {
+					positionPackets++;
+				} else {
+					animationPackets++;
+				}
+			} catch (Exception e) { }
 		}
 
 		private void BeginReceivingUDP() {
@@ -179,8 +181,8 @@ namespace XLMultiplayer {
 								controller.textureQueue.Add(new MultiplayerSkinBuffer(state.buffer, (int)state.buffer[1], (MPTextureType)state.buffer[2]));
 							}else if (state.buffer[0] == (byte)OpCode.Connect) {
 								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
-							}else if(state.buffer[0] == (byte)OpCode.Username) {
-								debugWriter.WriteLine("Adding username to queue");
+							}else if(state.buffer[0] == (byte)OpCode.Settings) {
+								debugWriter.WriteLine("Adding player settings to queue");
 								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
 							}else if(state.buffer[0] == (byte)OpCode.Disconnect) {
 								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
@@ -212,6 +214,7 @@ namespace XLMultiplayer {
 			if (udpConnection != null) {
 				udpConnection.Close();
 			}
+			bufferObjects.Clear();
 		}
 	}
 }

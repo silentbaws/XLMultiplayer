@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using System.Threading;
+using UnityModManagerNet;
 
 namespace XLMultiplayer {
 	public enum MPTextureType : byte {
@@ -93,6 +94,14 @@ namespace XLMultiplayer {
 		public string[] animSteezeFloatNames { get; private set; }
 		public string[] animSteezeIntNames { get; private set; }
 
+		//Transform mixamoHips;
+		//Transform[] allBones;
+		//readonly string[] keyBones = new string[] { "mixamorig_LeftUpLeg", "mixamorig_LeftFoot",
+		//											"mixamorig_RightUpLeg", "mixamorig_RightFoot",
+		//											"mixamorig_Spine", "mixamorig_LeftShoulder",
+		//											"mixamorig_LeftShoulder", "mixamorig_LeftForeArm",
+		//											"mixamorig_RightShoulder", "mixamorig_RightForeArm"};
+
 		public string username = "IT ALL BROKE";
 
 		private GameObject usernameObject;
@@ -104,12 +113,11 @@ namespace XLMultiplayer {
 
 		private int currentAnimationPacket = -1;
 		private int currentPositionPacket = -1;
-
-		string[] SkateboardMaterials = new string[] { "GripTape", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
-		string[] TeeShirt = new string[] { "Cory_fixed_Karam:cory_001:shirt_geo" };
-		string[] PantsMaterials = new string[] { "Cory_fixed_Karam:cory_001:pants_geo", "Cory_fixed_Karam:cory_001:lashes_geo" };
-		string[] Shoes = new string[] { "Cory_fixed_Karam:cory_001:shoes_geo" };
-		string[] Hat = new string[] { "Cory_fixed_Karam:cory_001:hat_geo" };
+		readonly string[] SkateboardMaterials = new string[] { "GripTape", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
+		readonly string[] TeeShirt = new string[] { "Cory_fixed_Karam:cory_001:shirt_geo" };
+		readonly string[] PantsMaterials = new string[] { "Cory_fixed_Karam:cory_001:pants_geo", "Cory_fixed_Karam:cory_001:lashes_geo" };
+		readonly string[] Shoes = new string[] { "Cory_fixed_Karam:cory_001:shoes_geo" };
+		readonly string[] Hat = new string[] { "Cory_fixed_Karam:cory_001:hat_geo" };
 
 		public const string MainTextureName = "Texture2D_4128E5C7";
 
@@ -131,31 +139,41 @@ namespace XLMultiplayer {
 		public void EncodeTextures() {
 			if (!startedEncoding) {
 				startedEncoding = true;
-				shirtMP = new MultiplayerTexture(ConvertTexture(tShirtTexture).EncodeToPNG(), new Vector2(tShirtTexture.width, tShirtTexture.height), MPTextureType.Shirt, debugWriter);
-				pantsMP = new MultiplayerTexture(ConvertTexture(pantsTexture).EncodeToPNG(), new Vector2(pantsTexture.width, pantsTexture.height), MPTextureType.Pants, debugWriter);
-				shoesMP = new MultiplayerTexture(ConvertTexture(shoesTexture).EncodeToPNG(), new Vector2(shoesTexture.width, shoesTexture.height), MPTextureType.Shoes, debugWriter);
-				hatMP = new MultiplayerTexture(ConvertTexture(hatTexture).EncodeToPNG(), new Vector2(hatTexture.width, hatTexture.height), MPTextureType.Hat, debugWriter);
-				boardMP = new MultiplayerTexture(ConvertTexture(skateboardTexture).EncodeToPNG(), new Vector2(skateboardTexture.width, skateboardTexture.height), MPTextureType.Board, debugWriter);
+				shirtMP = new MultiplayerTexture(ConvertTexture(tShirtTexture, MPTextureType.Shirt).EncodeToPNG(), new Vector2(tShirtTexture.width, tShirtTexture.height), MPTextureType.Shirt, debugWriter);
+				pantsMP = new MultiplayerTexture(ConvertTexture(pantsTexture, MPTextureType.Pants).EncodeToPNG(), new Vector2(pantsTexture.width, pantsTexture.height), MPTextureType.Pants, debugWriter);
+				shoesMP = new MultiplayerTexture(ConvertTexture(shoesTexture, MPTextureType.Shoes).EncodeToPNG(), new Vector2(shoesTexture.width, shoesTexture.height), MPTextureType.Shoes, debugWriter);
+				hatMP = new MultiplayerTexture(ConvertTexture(hatTexture, MPTextureType.Hat).EncodeToPNG(), new Vector2(hatTexture.width, hatTexture.height), MPTextureType.Hat, debugWriter);
+				boardMP = new MultiplayerTexture(ConvertTexture(skateboardTexture, MPTextureType.Board).EncodeToPNG(), new Vector2(skateboardTexture.width, skateboardTexture.height), MPTextureType.Board, debugWriter);
 
 				copiedTextures = true;
 			}
 		}
 
-		private Texture2D ConvertTexture(Texture t) {
-			Texture2D texture2D = new Texture2D(t.width, t.height, TextureFormat.RGB24, false);
+		private Texture2D ConvertTexture(Texture t, MPTextureType texType) {
+			Texture2D texture2D = null;
+			if (t.width <= 4096 && t.height <= 4096) {
+				texture2D = new Texture2D(t.width, t.height, TextureFormat.RGB24, false);
 
-			RenderTexture currentRT = RenderTexture.active;
+				RenderTexture currentRT = RenderTexture.active;
 
-			RenderTexture renderTexture = new RenderTexture(t.width, t.height, 32);
-			Graphics.Blit(t, renderTexture);
+				RenderTexture renderTexture = new RenderTexture(t.width, t.height, 32);
+				Graphics.Blit(t, renderTexture);
 
-			RenderTexture.active = renderTexture;
-			texture2D.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
-			texture2D.Apply();
+				RenderTexture.active = renderTexture;
+				texture2D.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
+				texture2D.Apply();
 
-			Color[] pixels = texture2D.GetPixels();
+				if (texture2D.width > 2048 || texture2D.height > 2048)
+					TextureScale.Bilinear(texture2D, 2048, 2048);
 
-			RenderTexture.active = currentRT;
+				Color[] pixels = texture2D.GetPixels();
+
+				RenderTexture.active = currentRT;
+			} else {
+				texture2D = new Texture2D(1024, 1024);
+				byte[] textureData = File.ReadAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Clothing\\Default" + texType.ToString() + ".png");
+				texture2D.LoadImage(textureData);
+			}
 
 			return texture2D;
 		}
@@ -213,6 +231,50 @@ namespace XLMultiplayer {
 		public MultiplayerPlayerController(StreamWriter writer) {
 			this.debugWriter = writer;
 		}
+
+		//private void FillBonesArray() {
+		//	//Get all bones
+		//	this.mixamoHips = this.skater.transform.Find("Skater").Find("Reference").Find("mixamorig_Hips");
+		//	List<Transform> bones = new List<Transform>();
+		//	bones.Add(mixamoHips);
+		//	foreach (Transform T in mixamoHips.Find(keyBones[0]).GetComponentsInChildren<Transform>()) {
+		//		bones.Add(T);
+		//		if (T.name.Equals(keyBones[1])) {
+		//			break;
+		//		}
+		//	}
+		//	foreach (Transform T in mixamoHips.Find(keyBones[2]).GetComponentsInChildren<Transform>()) {
+		//		bones.Add(T);
+		//		if (T.name.Equals(keyBones[3])) {
+		//			break;
+		//		}
+		//	}
+		//	foreach (Transform T in mixamoHips.Find(keyBones[4]).GetComponentsInChildren<Transform>()) {
+		//		bones.Add(T);
+		//		if (T.name.Equals(keyBones[5])) {
+		//			break;
+		//		}
+		//	}
+		//	Transform newKey = bones[bones.Count - 1];
+		//	foreach (Transform T in newKey.parent.Find(keyBones[6]).GetComponentsInChildren<Transform>()) {
+		//		bones.Add(T);
+		//		if (T.name.Equals(keyBones[7])) {
+		//			break;
+		//		}
+		//	}
+		//	debugWriter.WriteLine(newKey.Find(keyBones[8]) == null);
+		//	foreach (Transform T in newKey.parent.Find(keyBones[8]).GetComponentsInChildren<Transform>()) {
+		//		bones.Add(T);
+		//		if (T.name.Equals(keyBones[9])) {
+		//			break;
+		//		}
+		//	}
+		//	bones.Remove(newKey);
+		//	this.allBones = bones.ToArray();
+		//	foreach (Transform T in bones) {
+		//		debugWriter.WriteLine(T.name);
+		//	}
+		//}
 
 		public void ConstructForPlayer() {
 			//Write the master prefab hierarchy to make sure everything is in place
@@ -276,6 +338,8 @@ namespace XLMultiplayer {
 				this.debugWriter.WriteLine("Failed to find an animator {0}, {1}, {2}", ourSkaterAnimators[0] == null, ourSkaterAnimators[1] == null, ourSkaterAnimators[2] == null);
 				return;
 			}
+
+			//FillBonesArray();
 
 			//Set our animator and steeze animator
 			this.animator = ourSkaterAnimators[0];
@@ -358,9 +422,8 @@ namespace XLMultiplayer {
 			//Copy board from the source and reparent/rename it for the new player and remove all scripts
 			//All scripts in the game use PlayerController.Instance and end up breaking the original character if left in
 			//I'm also too lazy to convert every script to be multiplayer compatible hence why client state is just being copied
-			this.board = UnityEngine.Object.Instantiate<GameObject>(source.board);
+			this.board = UnityEngine.Object.Instantiate<GameObject>(source.board, this.player.transform, false);
 			this.board.name = "New Player Board";
-			this.board.transform.SetParent(this.player.transform, false);
 			this.board.transform.localPosition = Vector3.zero;
 			debugWriter.WriteLine("Created New Board");
 			foreach (MonoBehaviour m in this.board.GetComponentsInChildren<MonoBehaviour>()) {
@@ -370,9 +433,8 @@ namespace XLMultiplayer {
 			}
 
 			//Copy the source players skater for our new player
-			this.skater = UnityEngine.Object.Instantiate<GameObject>(source.skater);
+			this.skater = UnityEngine.Object.Instantiate<GameObject>(source.skater, this.player.transform, false);
 			this.skater.name = "New Player Skater";
-			this.skater.transform.SetParent(this.player.transform, false);
 			this.skater.transform.localPosition = Vector3.zero;
 			debugWriter.WriteLine("Created New Skater");
 			foreach (MonoBehaviour m in this.skater.GetComponentsInChildren<MonoBehaviour>()) {
@@ -388,6 +450,8 @@ namespace XLMultiplayer {
 				m.enabled = true;
 			}
 			Time.timeScale = 1.0f;
+
+			//FillBonesArray();
 
 			this.animBools = source.animBools;
 			this.animFloats = source.animFloats;
@@ -438,15 +502,8 @@ namespace XLMultiplayer {
 			Rigidbody[] R = new Rigidbody[] { this.board.GetComponent<Rigidbody>(), this.board.GetComponent<Rigidbody>(), this.board.GetComponentsInChildren<Rigidbody>()[1], this.board.GetComponentsInChildren<Rigidbody>()[2] };
 
 			byte[] packed = new byte[T.Length * 28 + R.Length * 40];
-			for (int i = 0; i < T.Length; i++) {
-				Array.Copy(BitConverter.GetBytes(T[i].position.x), 0, packed, i * 28, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].position.y), 0, packed, i * 28 + 4, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].position.z), 0, packed, i * 28 + 8, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.x), 0, packed, i * 28 + 12, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.y), 0, packed, i * 28 + 16, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.z), 0, packed, i * 28 + 20, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.w), 0, packed, i * 28 + 24, 4);
-			}
+			byte[] TPacked = this.PackTransformArray(T);
+			Array.Copy(TPacked, 0, packed, 0, TPacked.Length);
 
 			for (int i = 0; i < R.Length; i++) {
 				Array.Copy(BitConverter.GetBytes(R[i].position.x), 0, packed, T.Length * 28 + i * 40, 4);
@@ -465,7 +522,6 @@ namespace XLMultiplayer {
 		}
 
 		public void UnpackTransforms(byte[] recBuffer) {
-			//TODO: Make sure packet sequece works?
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
 
 			byte[] buffer = new byte[recBuffer.Length - 4];
@@ -525,9 +581,9 @@ namespace XLMultiplayer {
 			this.board.transform.rotation = quaternions[1];
 			this.skater.transform.position = vectors[2];
 			this.skater.transform.rotation = quaternions[2];
-			this.skater.GetComponent<Rigidbody>().position = vectors[3];
-			this.skater.GetComponent<Rigidbody>().velocity = vectors[4];
-			this.skater.GetComponent<Rigidbody>().rotation = quaternions[3];
+			//this.skater.GetComponent<Rigidbody>().position = vectors[3];
+			//this.skater.GetComponent<Rigidbody>().velocity = vectors[4];
+			//this.skater.GetComponent<Rigidbody>().rotation = quaternions[3];
 			Rigidbody[] boardBodies = this.board.GetComponentsInChildren<Rigidbody>();
 			boardBodies[0].position = vectors[5];
 			boardBodies[0].velocity = vectors[6];
@@ -542,6 +598,20 @@ namespace XLMultiplayer {
 			this.usernameText.text = this.username;
 			this.usernameObject.transform.position = this.player.transform.position + this.player.transform.up;
 			this.usernameObject.transform.LookAt(Camera.main.transform);
+		}
+
+		public byte[] PackTransformArray(Transform[] T) {
+			byte[] packed = new byte[T.Length * 28];
+			for (int i = 0; i < T.Length; i++) {
+				Array.Copy(BitConverter.GetBytes(T[i].position.x), 0, packed, i * 28, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].position.y), 0, packed, i * 28 + 4, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].position.z), 0, packed, i * 28 + 8, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].rotation.x), 0, packed, i * 28 + 12, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].rotation.y), 0, packed, i * 28 + 16, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].rotation.z), 0, packed, i * 28 + 20, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].rotation.w), 0, packed, i * 28 + 24, 4);
+			}
+			return packed;
 		}
 
 		public byte[] PackAnimator() {
@@ -592,13 +662,11 @@ namespace XLMultiplayer {
 					currentInt++;
 				}
 			}
-
-			AnimatorStateInfo state = this.animator.GetCurrentAnimatorStateInfo(0);
-			int nameHash = state.fullPathHash;
-			float currentTime = state.normalizedTime;
+			
+			//byte[] packedTransforms = this.PackTransformArray(allBones);
 
 			//Array to hold all paramater types in order
-			byte[] packed = new byte[bools.Length + floats.Length + ints.Length + steezeBools.Length + steezeFloats.Length + steezeInts.Length];
+			byte[] packed = new byte[bools.Length + floats.Length + ints.Length + steezeBools.Length + steezeFloats.Length + steezeInts.Length /*+ packedTransforms.Length*/];
 
 			//Copy all paramaters into packed array in order
 			Array.Copy(bools, packed, bools.Length);
@@ -610,6 +678,8 @@ namespace XLMultiplayer {
 			Array.Copy(steezeBools, 0, packed, steezeOffset, steezeBools.Length);
 			Array.Copy(steezeFloats, 0, packed, steezeOffset + steezeBools.Length, steezeFloats.Length);
 			Array.Copy(steezeInts, 0, packed, steezeOffset + steezeBools.Length + steezeInts.Length, steezeInts.Length);
+
+			//Array.Copy(packedTransforms, 0, packed, steezeOffset + steezeBools.Length + steezeInts.Length + steezeInts.Length, packedTransforms.Length);
 
 			return packed;
 		}
@@ -648,6 +718,8 @@ namespace XLMultiplayer {
 			int steezeFloatOffset = steezeOffset + (int)Math.Ceiling((double)animSteezeBools / 8);
 			int steezeIntOffset = steezeFloatOffset + this.animSteezeFloats * 4;
 
+			int endAnim = steezeIntOffset + 4 * this.animSteezeInts;
+
 			bool[] steezeBools = new bool[animSteezeBools];
 			float[] steezeFloats = new float[animSteezeFloats];
 			int[] steezeInts = new int[animSteezeInts];
@@ -663,6 +735,24 @@ namespace XLMultiplayer {
 			for (int i = 0; i < this.animSteezeInts; i++) {
 				steezeInts[i] = BitConverter.ToInt32(buffer, i * 4 + steezeIntOffset);
 			}
+
+			//List<Vector3> vectors = new List<Vector3>();
+			//List<Quaternion> quaternions = new List<Quaternion>();
+
+			//for (int i = 0; i < this.allBones.Length; i++) {
+			//	Vector3 readVector = new Vector3();
+			//	readVector.x = BitConverter.ToSingle(buffer, i * 28 + endAnim);
+			//	readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4 + endAnim);
+			//	readVector.z = BitConverter.ToSingle(buffer, i * 28 + 8 + endAnim);
+			//	Quaternion readQuaternion = new Quaternion();
+			//	readQuaternion.x = BitConverter.ToSingle(buffer, i * 28 + 12 + endAnim);
+			//	readQuaternion.y = BitConverter.ToSingle(buffer, i * 28 + 16 + endAnim);
+			//	readQuaternion.z = BitConverter.ToSingle(buffer, i * 28 + 20 + endAnim);
+			//	readQuaternion.w = BitConverter.ToSingle(buffer, i * 28 + 24 + endAnim);
+
+			//	vectors.Add(readVector);
+			//	quaternions.Add(readQuaternion);
+			//}
 
 			SetAnimator(bools, floats, ints, steezeBools, steezeFloats, steezeInts);
 		}

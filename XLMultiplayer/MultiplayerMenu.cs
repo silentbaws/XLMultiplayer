@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -49,9 +50,9 @@ namespace XLMultiplayer {
 			this.multiplayerMenu.AddComponent<GraphicRaycaster>();
 
 			CanvasScaler scaler = this.multiplayerMenu.AddComponent<CanvasScaler>();
-			scaler.scaleFactor = 10.0f;
+			scaler.scaleFactor = 10f;
 			scaler.referenceResolution = new Vector2(1920, 1080);
-			scaler.referencePixelsPerUnit = 10;
+			scaler.referencePixelsPerUnit = 100;
 			scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
 
 			this.multiplayerMenuCanvas.renderMode = RenderMode.ScreenSpaceCamera;
@@ -71,14 +72,34 @@ namespace XLMultiplayer {
 			this.multiplayerMenuText.font = Resources.FindObjectsOfTypeAll<Font>()[0];
 			this.multiplayerMenuText.fontSize = 35;
 			this.multiplayerMenuText.alignment = TextAnchor.MiddleCenter;
-			
+
+			this.multiplayerMenuPaypalObject = new GameObject();
+			this.multiplayerMenuPaypalObject.transform.SetParent(this.multiplayerMenuCanvas.transform, false);
+			this.multiplayerMenuPaypalButtonImage = this.multiplayerMenuPaypalObject.AddComponent<Image>();
+			this.multiplayerMenuPaypalButtonImage.transform.SetParent(this.multiplayerMenu.transform, false);
+			this.multiplayerMenuPaypalButtonImage.rectTransform.sizeDelta = new Vector2(180, 50);
+			this.multiplayerMenuPaypalButtonImage.rectTransform.anchorMin = new Vector2(0.05f, 0.75f);
+			this.multiplayerMenuPaypalButtonImage.rectTransform.anchorMax = new Vector2(0.25f, 0.85f);
+			Texture2D paypalTexture = new Texture2D(720, 200, TextureFormat.RGBA32, false);
+			paypalTexture.LoadImage(File.ReadAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Paypal.png"));
+			paypalTexture.filterMode = FilterMode.Point;
+			this.multiplayerMenuPaypalButtonImage.sprite = Sprite.Create(paypalTexture, new Rect(0, 0, 720, 200), Vector2.zero, 100);
+			this.multiplayerMenuPaypalButtonImage.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
+			this.multiplayerMenuPaypalButtonImage.color = Color.white;
+			this.multiplayerMenuPaypalButton = this.multiplayerMenuPaypalObject.AddComponent<Button>();
+			this.multiplayerMenuPaypalButton.targetGraphic = this.multiplayerMenuPaypalButtonImage;
+
+			this.multiplayerMenuPaypalButton.onClick.AddListener(() => {
+				Application.OpenURL("https://www.paypal.me/silentbaws");
+			});
+
 			this.multiplayerMenuConnectObject = new GameObject();
 			this.multiplayerMenuConnectObject.transform.SetParent(this.multiplayerMenuCanvas.transform, false);
 			this.multiplayerMenuConnectButtonImage = this.multiplayerMenuConnectObject.AddComponent<Image>();
 			this.multiplayerMenuConnectButtonImage.transform.SetParent(this.multiplayerMenu.transform, false);
 			this.multiplayerMenuConnectButtonImage.rectTransform.sizeDelta = new Vector2(180f, 50f);
-			this.multiplayerMenuConnectButtonImage.rectTransform.anchorMin = new Vector2(0.05f, 0.75f);
-			this.multiplayerMenuConnectButtonImage.rectTransform.anchorMax = new Vector2(0.25f, 0.85f);
+			this.multiplayerMenuConnectButtonImage.rectTransform.anchorMin = new Vector2(0.05f, 0.6f);
+			this.multiplayerMenuConnectButtonImage.rectTransform.anchorMax = new Vector2(0.25f, 0.7f);
 			this.multiplayerMenuConnectButtonImage.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
 			this.multiplayerMenuConnectButtonImage.color = Color.white;
 			this.multiplayerMenuConnectButton = this.multiplayerMenuConnectObject.AddComponent<Button>();
@@ -103,8 +124,8 @@ namespace XLMultiplayer {
 			this.multiplayerMenuConnectText.text = this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient ? "Connect To Server" : "Disconnect";
 			this.multiplayerMenuConnectText.transform.SetParent(this.multiplayerMenuCanvas.transform, false);
 			this.multiplayerMenuConnectText.rectTransform.sizeDelta = Vector2.zero;
-			this.multiplayerMenuConnectText.rectTransform.anchorMin = new Vector2(0.05f, 0.75f);
-			this.multiplayerMenuConnectText.rectTransform.anchorMax = new Vector2(0.25f, 0.85f);
+			this.multiplayerMenuConnectText.rectTransform.anchorMin = new Vector2(0.05f, 0.6f);
+			this.multiplayerMenuConnectText.rectTransform.anchorMax = new Vector2(0.25f, 0.7f);
 			this.multiplayerMenuConnectText.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
 			this.multiplayerMenuConnectText.color = Color.black;
 			this.multiplayerMenuConnectText.font = Resources.FindObjectsOfTypeAll<Font>()[0];
@@ -135,11 +156,11 @@ namespace XLMultiplayer {
 				Vector3[] vectors = new Vector3[4];
 				this.multiplayerMenuConnectButtonImage.rectTransform.GetWorldCorners(vectors);
 				float screenScale = Screen.height / 1080f;
-				Rect rect = new Rect(vectors[0].x, 1080 * screenScale - vectors[0].y, (vectors[2].x - vectors[0].x) * 0.6f, 25f);
-				Rect rect2 = new Rect(vectors[0].x + (vectors[2].x - vectors[0].x) * 0.65f, 1080 * screenScale - vectors[0].y, (vectors[2].x - vectors[0].x) * 0.35f, 25f);
+				Rect rect = new Rect(vectors[0].x, 1080 * screenScale - vectors[0].y + 5, (vectors[2].x - vectors[0].x) * 0.6f, 25f);
+				Rect rect2 = new Rect(rect.width + rect.x + 5, 1080 * screenScale - vectors[0].y + 5, vectors[2].x - rect.width - rect.x - 5, 25f);
 				ipAddress = GUI.TextField(rect, ipAddress, 16);
-				port = GUI.TextField(rect2, port, 16);
-				Rect rect3 = new Rect(rect.x, rect.y + rect.height, rect.width, rect.height);
+				port = GUI.TextField(rect2, port, 4);
+				Rect rect3 = new Rect(rect.x, rect.y + rect.height + 5, rect.width, rect.height);
 				username = GUI.TextField(rect3, username, 16);
 			}
 		}
@@ -158,6 +179,10 @@ namespace XLMultiplayer {
 
 		// Token: 0x0400045A RID: 1114
 		private GameObject multiplayerMenuTextObject;
+
+		private GameObject multiplayerMenuPaypalObject;
+		private Button multiplayerMenuPaypalButton;
+		private Image multiplayerMenuPaypalButtonImage;
 
 		// Token: 0x0400045B RID: 1115
 		private Text multiplayerMenuText;

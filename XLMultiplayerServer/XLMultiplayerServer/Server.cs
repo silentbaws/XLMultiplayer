@@ -10,7 +10,7 @@ using System.Threading;
 
 public enum OpCode : byte {
 	Connect = 0,
-	Username = 1,
+	Settings = 1,
 	Position = 2,
 	Animation = 3,
 	Texture = 4,
@@ -29,6 +29,8 @@ public enum MPTextureType : byte {
 public class Player {
 	public int connectionID;
 	public string username;
+
+	public bool isGoofy;
 
 	public MultiplayerSkin Pants, Shirt, Hat, Shoes, Board;
 
@@ -195,10 +197,11 @@ public class Server {
 					this.SendReliable(buffer);
 
 					byte[] username = ASCIIEncoding.ASCII.GetBytes(players[client.connectionId].username);
-					buffer = new byte[username.Length + 5];
-					buffer[0] = (byte)OpCode.Username;
-					Array.Copy(username, 0, buffer, 1, username.Length);
-					Array.Copy(BitConverter.GetBytes(client.connectionId), 0, buffer, username.Length + 1, 4);
+					buffer = new byte[username.Length + 6];
+					buffer[0] = (byte)OpCode.Settings;
+					buffer[1] = players[client.connectionId].isGoofy ? (byte)1 : (byte)0;
+					Array.Copy(username, 0, buffer, 2, username.Length);
+					Array.Copy(BitConverter.GetBytes(client.connectionId), 0, buffer, buffer.Length - 4, 4);
 
 					this.SendReliable(buffer);
 				}
@@ -254,12 +257,14 @@ public class Server {
 		}
 
 		public void StartReceiving() {
-			StateObject state = new StateObject();
-			state.workSocket = receiveSocket;
-			state.buffer = new byte[4];
-			state.readBytes = 0;
+			try {
+				StateObject state = new StateObject();
+				state.workSocket = receiveSocket;
+				state.buffer = new byte[4];
+				state.readBytes = 0;
 
-			receiveSocket.BeginReceiveFrom(state.buffer, 0, state.buffer.Length, SocketFlags.None, ref remoteEndPoint, ReceiveCallback, state);
+				receiveSocket.BeginReceiveFrom(state.buffer, 0, state.buffer.Length, SocketFlags.None, ref remoteEndPoint, ReceiveCallback, state);
+			} catch (Exception e) { };
 		}
 
 		public void ReceiveCallback(IAsyncResult ar) {
@@ -300,8 +305,9 @@ public class Server {
 											break;
 									}
 									break;
-								case OpCode.Username:
-									players[client.connectionId].username = ASCIIEncoding.ASCII.GetString(state.buffer, 1, state.buffer.Length - 1);
+								case OpCode.Settings:
+									players[client.connectionId].isGoofy = state.buffer[1] == 1;
+									players[client.connectionId].username = ASCIIEncoding.ASCII.GetString(state.buffer, 2, state.buffer.Length - 2);
 									Console.WriteLine("Received username {0} from {1}", players[client.connectionId].username, client.connectionId);
 									SendToAllTCP(state.buffer, client.connectionId);
 									break;
@@ -425,7 +431,9 @@ public class Server {
 	}
 
 	private void BeginReceivingUDP() {
-		udpClient.BeginReceive(ReceiveCallbackUDP, udpClient);
+		try { 
+			udpClient.BeginReceive(ReceiveCallbackUDP, udpClient);
+		} catch (Exception e) { };
 	}
 
 	public void ReceiveCallbackUDP(IAsyncResult ar) {
@@ -437,7 +445,7 @@ public class Server {
 
 			foreach (Client client in clients) {
 				if (client != null) {
-					if ((client.udpRemoteEndPoint == null && client.remoteEndPoint != null && tempEndPoint.Address.Equals(client.remoteEndPoint.Address)) || client.udpRemoteEndPoint.Equals(tempEndPoint)) {
+					if (tempEndPoint != null && ((client.udpRemoteEndPoint == null && client.remoteEndPoint != null && tempEndPoint.Address.Equals(client.remoteEndPoint.Address)) || client.udpRemoteEndPoint.Equals(tempEndPoint))) {
 						switch ((OpCode)buffer[0]) {
 							case OpCode.StillAlive:
 								udpClient.Send(buffer, buffer.Length, tempEndPoint);
@@ -487,9 +495,21 @@ public class Server {
 		monitorAlive.Start();
 		monitorAlive.IsBackground = true;
 		while (true) {
+			int i = 0;
+			foreach(Client client in clients) {
+				if(client != null) {
+					if(client.reliableSocket == null || client.aliveWatch == null || client.lastAlive - client.aliveWatch.ElapsedMilliseconds > 5000 || client.timedOut || client.ReceiveTCP == null) {
+						if (client.ReceiveTCP != null)
+							client.ReceiveTCP.Disconnect(false);
+						else
+							clients[i] = null;
+					}
+				}
+				i++;
+			}
+
 			foreach (Client client in clients) {
 				if (client != null && client.newConnection && client.reliableSocket.Connected) {
-					Console.WriteLine("LLL");
 					foreach (Player player in players) {
 						if (player != null && player.connectionID != client.connectionId && player.packedAll && player != null && client.reliableSocket != null) {
 							Console.WriteLine("SENDING TEXTURES");
@@ -509,7 +529,6 @@ public class Server {
 			foreach (Player player in players) {
 				if (player != null) {
 					if (!player.packedAll) {
-						//Console.WriteLine("{0}, {1}, {2}, {3}, {4}", player.Hat.finishedCopy, player.Board.finishedCopy, player.Shoes.finishedCopy, player.Shirt.finishedCopy, player.Pants.finishedCopy);
 						if (player.Hat.finishedCopy && player.Board.finishedCopy && player.Shoes.finishedCopy && player.Shirt.finishedCopy && player.Pants.finishedCopy) {
 							player.packedAll = true;
 							Console.WriteLine("Packed all for player {0}", player.connectionID);

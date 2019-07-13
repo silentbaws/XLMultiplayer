@@ -6,12 +6,13 @@ using System.Text;
 using System.Net.Sockets;
 using System.Diagnostics;
 using System.Threading;
-using System.Collections;
+using Harmony12;
+using RootMotion.FinalIK;
 
 namespace XLMultiplayer {
 	public enum OpCode : byte{
 		Connect = 0,
-		Username = 1,
+		Settings = 1,
 		Position = 2,
 		Animation = 3,
 		Texture = 4,
@@ -56,11 +57,20 @@ namespace XLMultiplayer {
 
 		public bool isConnected = false;
 
+		public static RuntimeAnimatorController goofyAnim = Traverse.Create(SettingsManager.Instance).Field("_goofyAnim").GetValue<RuntimeAnimatorController>();
+		public static RuntimeAnimatorController regularAnim = Traverse.Create(SettingsManager.Instance).Field("_regularAnim").GetValue<RuntimeAnimatorController>();
+		public static RuntimeAnimatorController goofySteezeAnim = Traverse.Create(SettingsManager.Instance).Field("_goofySteezeAnim").GetValue<RuntimeAnimatorController>();
+		public static RuntimeAnimatorController regularSteezeAnim = Traverse.Create(SettingsManager.Instance).Field("_regularSteezeAnim").GetValue<RuntimeAnimatorController>();
+
 		private void Start() {
 		}
 
 		private void Update() {
 			this.UpdateClient();
+
+			if(client != null && !client.tcpConnection.Connected && client.elapsedTime.ElapsedMilliseconds > 5000) {
+				KillConnection();
+			}
 		}
 
 		private void SendUpdate() {
@@ -90,6 +100,14 @@ namespace XLMultiplayer {
 
 				client = new NetworkClient(serverIP, port, this);
 				client.debugWriter = debugWriter;
+
+				//FullBodyBipedIK biped = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>();
+				//debugWriter.WriteLine(biped.references.root.name);
+				//Transform parent = biped.references.root.parent;
+				//while (parent != null) {
+				//	debugWriter.WriteLine(parent.name);
+				//	parent = parent.parent;
+				//}
 			}
 		}
 
@@ -243,10 +261,11 @@ namespace XLMultiplayer {
 			if (IsInvoking("SendUpdate"))
 				CancelInvoke("SendUpdate");
 			this.isConnected = false;
-			if (aliveThread.IsAlive)
+			if (aliveThread != null && aliveThread.IsAlive)
 				aliveThread.Abort();
 			if (client != null) {
-				client.tcpConnection.Disconnect(false);
+				if(client.tcpConnection != null && client.tcpConnection.Connected)
+					client.tcpConnection.Disconnect(false);
 			}
 			this.textureSendWatch = null;
 			if (otherControllers.Count > 0) {
@@ -300,11 +319,13 @@ namespace XLMultiplayer {
 							controller.UnpackAnimator(newBuffer);
 					}
 					break;
-				case OpCode.Username:
-					debugWriter.WriteLine("Processing username from {0}", playerID);
+				case OpCode.Settings:
+					debugWriter.WriteLine("Processing settings from {0}", playerID);
 					foreach (MultiplayerPlayerController controller in otherControllers) {
 						if (controller.playerID == playerID) {
-							controller.username = Encoding.ASCII.GetString(newBuffer, 0, bufferSize - 5);
+							controller.animator.runtimeAnimatorController = newBuffer[0] == 1 ? goofyAnim : regularAnim;
+							controller.steezeAnimator.runtimeAnimatorController = newBuffer[0] == 1 ? goofySteezeAnim : regularSteezeAnim;
+							controller.username = Encoding.ASCII.GetString(newBuffer, 1, newBuffer.Length - 1);
 							debugWriter.WriteLine(controller.username);
 						}
 					}
@@ -315,7 +336,11 @@ namespace XLMultiplayer {
 						this.AddPlayer(playerID);
 					} else {
 						debugWriter.WriteLine("Successfully connected to server");
-						this.SendBytes(OpCode.Username, Encoding.ASCII.GetBytes(this.ourController.username), true);
+						byte[] usernameBytes = Encoding.ASCII.GetBytes(this.ourController.username);
+						byte[] settingsBytes = new byte[usernameBytes.Length + 1];
+						settingsBytes[0] = SettingsManager.Instance.stance == SettingsManager.Stance.Goofy ? (byte)1 : (byte)0;
+						Array.Copy(usernameBytes, 0, settingsBytes, 1, usernameBytes.Length);
+						this.SendBytes(OpCode.Settings, settingsBytes, true);
 						this.isConnected = true;
 						aliveThread = new Thread(new ThreadStart(this.SendAlive));
 						aliveThread.Start();
