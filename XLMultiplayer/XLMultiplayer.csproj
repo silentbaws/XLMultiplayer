@@ -373,6 +373,7 @@
     <Compile Include="MultiplayerController.cs" />
     <Compile Include="MultiplayerPlayerController.cs" />
     <Compile Include="MultiplayerStatusMenu.cs" />
+    <Compile Include="NetworkClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

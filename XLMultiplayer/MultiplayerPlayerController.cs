@@ -30,7 +30,6 @@ namespace XLMultiplayer {
 			bytes = b;
 			size = s;
 			textureType = t;
-			debugWriter = sw;
 			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp";
 			if (!Directory.Exists(path)) {
 				Directory.CreateDirectory(path);
@@ -55,9 +54,9 @@ namespace XLMultiplayer {
 
 		public void SaveTexture(int connectionId, byte[] buffer) {
 			debugWriter.WriteLine("Saving texture in queue");
-			size = new Vector2(BitConverter.ToSingle(buffer, 2), BitConverter.ToSingle(buffer, 6));
-			byte[] file = new byte[buffer.Length - 10];
-			Array.Copy(buffer, 10, file, 0, file.Length);
+			size = new Vector2(BitConverter.ToSingle(buffer, 3), BitConverter.ToSingle(buffer, 7));
+			byte[] file = new byte[buffer.Length - 11];
+			Array.Copy(buffer, 11, file, 0, file.Length);
 
 			if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing"))
 				Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing");
@@ -102,6 +101,9 @@ namespace XLMultiplayer {
 		private StreamWriter debugWriter;
 
 		public int playerID;
+
+		private int currentAnimationPacket = -1;
+		private int currentPositionPacket = -1;
 
 		string[] SkateboardMaterials = new string[] { "GripTape", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
 		string[] TeeShirt = new string[] { "Cory_fixed_Karam:cory_001:shirt_geo" };
@@ -462,7 +464,18 @@ namespace XLMultiplayer {
 			return packed;
 		}
 
-		public void UnpackTransforms(byte[] buffer) {
+		public void UnpackTransforms(byte[] recBuffer) {
+			//TODO: Make sure packet sequece works?
+			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
+
+			byte[] buffer = new byte[recBuffer.Length - 4];
+			if (receivedPacketSequence < currentPositionPacket) {
+				return;
+			} else {
+				currentPositionPacket = receivedPacketSequence;
+				Array.Copy(recBuffer, 4, buffer, 0, recBuffer.Length - 4);
+			}
+
 			List<Vector3> vectors = new List<Vector3>();
 			List<Quaternion> quaternions = new List<Quaternion>();
 
@@ -601,7 +614,17 @@ namespace XLMultiplayer {
 			return packed;
 		}
 
-		public void UnpackAnimator(byte[] buffer) {
+		public void UnpackAnimator(byte[] recBuffer) {
+			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
+
+			byte[] buffer = new byte[recBuffer.Length - 4];
+			if(receivedPacketSequence < currentAnimationPacket) {
+				return;
+			} else {
+				Array.Copy(recBuffer, 4, buffer, 0, recBuffer.Length - 4);
+				currentAnimationPacket = receivedPacketSequence;
+			}
+
 			bool[] bools = new bool[animBools];
 			float[] floats = new float[animFloats];
 			int[] ints = new int[animInts];

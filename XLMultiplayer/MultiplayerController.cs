@@ -2,13 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using UnityEngine.Networking;
 using System.Text;
-using System.Net;
 using System.Net.Sockets;
 using System.Diagnostics;
+using System.Threading;
+using System.Collections;
 
 namespace XLMultiplayer {
+	public enum OpCode : byte{
+		Connect = 0,
+		Username = 1,
+		Position = 2,
+		Animation = 3,
+		Texture = 4,
+		StillAlive = 254,
+		Disconnect = 255
+	}
+
 	public class MultiplayerSkinBuffer {
 		public byte[] buffer;
 		public int connectionId;
@@ -28,12 +38,23 @@ namespace XLMultiplayer {
 	}
 
 	public class MultiplayerController : MonoBehaviour {
-		FileTransferClient fileTransfer;
-		private string IP;
-		private int PORT;
+		public bool runningClient = false;
+
+		private byte tickRate = 32;
+
+		public MultiplayerPlayerController ourController;
+		public List<MultiplayerPlayerController> otherControllers = new List<MultiplayerPlayerController>();
+
+		public StreamWriter debugWriter;
+
+		public NetworkClient client;
 		private Stopwatch textureSendWatch;
 
 		public List<MultiplayerSkinBuffer> textureQueue = new List<MultiplayerSkinBuffer>();
+
+		public Thread aliveThread;
+
+		public bool isConnected = false;
 
 		private void Start() {
 		}
@@ -48,7 +69,7 @@ namespace XLMultiplayer {
 		}
 
 		public void ConnectToServer(string serverIP, int port, string user) {
-			if (!this.runningClient && !this.runningServer) {
+			if (!this.runningClient) {
 				int i = 0;
 				while (this.debugWriter == null) {
 					string filename = "Multiplayer Debug Client" + (i == 0 ? "" : " " + i.ToString()) + ".txt";
@@ -61,70 +82,24 @@ namespace XLMultiplayer {
 				}
 				this.debugWriter.AutoFlush = true;
 				this.debugWriter.WriteLine("Attempting to connect to server ip {0} on port {1}", serverIP, port.ToString());
-				NetworkTransport.Init();
-				ConnectionConfig connectionConfig = new ConnectionConfig();
-				connectionConfig.PacketSize = 1400;
-				connectionConfig.InitialBandwidth = 15360000;
-				connectionConfig.SendDelay = 10;
-				connectionConfig.ResendTimeout = 600;
-				connectionConfig.MaxSentMessageQueueSize = 300;
-				connectionConfig.AcksType = ConnectionAcksType.Acks128;
-				this.reliableChannel = connectionConfig.AddChannel(QosType.Reliable);
-				this.unreliableChannel = connectionConfig.AddChannel(QosType.UnreliableSequenced);
-				this.reliableSequencedChannel = connectionConfig.AddChannel(QosType.ReliableSequenced);
-				HostTopology topology = new HostTopology(connectionConfig, 1);
-				this.hostId = NetworkTransport.AddHost(topology);
-				if (this.hostId < 0) {
-					this.debugWriter.WriteLine("Failed socket creation for client");
-					NetworkTransport.Shutdown();
-					return;
-				} else {
-					this.debugWriter.WriteLine("Successfully created client socket");
-				}
-				this.connectionId = NetworkTransport.Connect(this.hostId, serverIP, port, 0, out this.error);
-				if (this.error != 0) {
-					this.debugWriter.WriteLine((NetworkError)this.error);
-					return;
-				}
 
 				this.ourController = new MultiplayerPlayerController(debugWriter);
 				this.ourController.ConstructForPlayer();
 				this.ourController.username = user;
 				this.runningClient = true;
 
-				this.IP = serverIP;
-				this.PORT = port;
+				client = new NetworkClient(serverIP, port, this);
+				client.debugWriter = debugWriter;
 			}
 		}
 
 		private void UpdateClient() {
-			byte[] buffer = new byte[1024];
-			int hId;
-			int conId;
-			int chanId;
+			byte[] buffer;
 			int bufSize;
-			NetworkEventType networkEvent = NetworkTransport.Receive(out hId, out conId, out chanId, buffer, 1024, out bufSize, out this.error);
-			while (networkEvent != NetworkEventType.Nothing) {
-				if (this.error != (int)NetworkError.Ok)
-					debugWriter.WriteLine("Error recieving message {0}", (NetworkError)this.error);
-				switch (networkEvent) {
-					case NetworkEventType.ConnectEvent:
-						debugWriter.WriteLine("Successfully connected to server");
-						this.SendBytes(2, Encoding.ASCII.GetBytes(this.ourController.username), this.reliableChannel);
-						this.ourController.EncodeTextures();
-						fileTransfer = new FileTransferClient(this.IP, this.PORT + 1, this);
-						SendTextures();
-						InvokeRepeating("SendUpdate", 0.5f, 1.0f / (float)tickRate);
-						break;
-					case NetworkEventType.DataEvent:
-						ProcessMessage(buffer, bufSize);
-						break;
-					case NetworkEventType.DisconnectEvent:
-						this.debugWriter.WriteLine("Connection to server ended");
-						this.KillConnection();
-						break;
-				}
-				networkEvent = NetworkTransport.Receive(out hId, out conId, out chanId, buffer, 1024, out bufSize, out this.error);
+			bool gotObject = client.GetMessage(out bufSize, out buffer);
+			while (gotObject) {
+				this.ProcessMessage(buffer, bufSize);
+				gotObject = client.GetMessage(out bufSize, out buffer);
 			}
 
 			foreach(MultiplayerSkinBuffer bufferedSkin in textureQueue) {
@@ -152,6 +127,7 @@ namespace XLMultiplayer {
 						debugWriter.WriteLine("Removed texture from queue");
 					}
 				}
+
 				if(bufferedSkin.ElapsedTime() > 10000) {
 					textureQueue.Remove(bufferedSkin);
 					debugWriter.WriteLine("Texture in queue expired");
@@ -170,10 +146,14 @@ namespace XLMultiplayer {
 				if (player.hatMP.loaded == false && player.hatMP.saved)
 					player.hatMP.LoadFromFileMainThread(player);
 			}
+
+			if (client != null && client.timedOut) {
+				KillConnection();
+			}
 		}
 
 		private void SendTextures() {
-			while (!fileTransfer.connection.Connected || !this.ourController.pantsMP.saved || !this.ourController.shirtMP.saved || !this.ourController.shoesMP.saved || !this.ourController.boardMP.saved || !this.ourController.hatMP.saved) {
+			while (!client.tcpConnection.Connected || !this.ourController.pantsMP.saved || !this.ourController.shirtMP.saved || !this.ourController.shoesMP.saved || !this.ourController.boardMP.saved || !this.ourController.hatMP.saved) {
 				if (textureSendWatch == null) {
 					textureSendWatch = new Stopwatch();
 					textureSendWatch.Start();
@@ -188,40 +168,45 @@ namespace XLMultiplayer {
 
 			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\";
 
-			byte[] prebuffer = new byte[13];
-			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length + 9), 0, prebuffer, 0, 4);
-			prebuffer[4] = (byte)MPTextureType.Pants;
-			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.x), 0, prebuffer, 5, 4);
-			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			byte[] prebuffer = new byte[14];
+			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)OpCode.Texture;
+			prebuffer[5] = (byte)MPTextureType.Pants;
+			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.x), 0, prebuffer, 6, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.y), 0, prebuffer, 10, 4);
+			client.tcpConnection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 
-			prebuffer = new byte[13];
-			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.bytes.Length + 9), 0, prebuffer, 0, 4);
-			prebuffer[4] = (byte)MPTextureType.Shirt;
-			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.x), 0, prebuffer, 5, 4);
-			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			prebuffer = new byte[14];
+			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)OpCode.Texture;
+			prebuffer[5] = (byte)MPTextureType.Shirt;
+			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.x), 0, prebuffer, 6, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.y), 0, prebuffer, 10, 4);
+			client.tcpConnection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 
-			prebuffer = new byte[13];
-			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.bytes.Length + 9), 0, prebuffer, 0, 4);
-			prebuffer[4] = (byte)MPTextureType.Shoes;
-			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.x), 0, prebuffer, 5, 4);
-			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			prebuffer = new byte[14];
+			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)OpCode.Texture;
+			prebuffer[5] = (byte)MPTextureType.Shoes;
+			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.x), 0, prebuffer, 6, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.y), 0, prebuffer, 10, 4);
+			client.tcpConnection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 
-			prebuffer = new byte[13];
-			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.bytes.Length + 9), 0, prebuffer, 0, 4);
-			prebuffer[4] = (byte)MPTextureType.Board;
-			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.x), 0, prebuffer, 5, 4);
-			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			prebuffer = new byte[14];
+			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)OpCode.Texture;
+			prebuffer[5] = (byte)MPTextureType.Board;
+			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.x), 0, prebuffer, 6, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.y), 0, prebuffer, 10, 4);
+			client.tcpConnection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 
-			prebuffer = new byte[13];
-			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.bytes.Length + 9), 0, prebuffer, 0, 4);
-			prebuffer[4] = (byte)MPTextureType.Hat;
-			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.x), 0, prebuffer, 5, 4);
-			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.y), 0, prebuffer, 9, 4);
-			fileTransfer.connection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			prebuffer = new byte[14];
+			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer[4] = (byte)OpCode.Texture;
+			prebuffer[5] = (byte)MPTextureType.Hat;
+			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.x), 0, prebuffer, 6, 4);
+			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.y), 0, prebuffer, 10, 4);
+			client.tcpConnection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
 		}
 
 		private void AddPlayer(int playerID) {
@@ -247,18 +232,21 @@ namespace XLMultiplayer {
 		}
 
 		private void SendPlayerPosition() {
-			this.SendBytes(0, this.ourController.PackTransforms(), this.unreliableChannel);
+			this.SendBytes(OpCode.Position, this.ourController.PackTransforms(), false);
 		}
 
 		private void SendPlayerAnimator() {
-			this.SendBytes(1, this.ourController.PackAnimator(), this.unreliableChannel);
+			this.SendBytes(OpCode.Animation, this.ourController.PackAnimator(), false);
 		}
 
 		public void KillConnection() {
 			if (IsInvoking("SendUpdate"))
 				CancelInvoke("SendUpdate");
-			if (fileTransfer != null) {
-				fileTransfer.CloseConnection();
+			this.isConnected = false;
+			if (aliveThread.IsAlive)
+				aliveThread.Abort();
+			if (client != null) {
+				client.tcpConnection.Disconnect(false);
 			}
 			this.textureSendWatch = null;
 			if (otherControllers.Count > 0) {
@@ -286,8 +274,7 @@ namespace XLMultiplayer {
 				}
 				Directory.Delete(path);
 			}
-			NetworkTransport.Disconnect(this.hostId, this.connectionId, out this.error);
-			NetworkTransport.Shutdown();
+			this.client = null;
 			this.runningClient = false;
 			GC.Collect();
 			GC.WaitForPendingFinalizers();
@@ -297,25 +284,24 @@ namespace XLMultiplayer {
 			byte[] newBuffer = new byte[bufferSize - 5];
 			Array.Copy(buffer, 1, newBuffer, 0, bufferSize - 5);
 
-			byte opCode = buffer[0];
+			OpCode opCode = (OpCode)buffer[0];
 			int playerID = BitConverter.ToInt32(buffer, bufferSize - 4);
 
-			this.debugWriter.WriteLine("Message: {0} {1}", opCode, playerID);
-
 			switch (opCode) {
-				case 0:
+				case OpCode.Position:
 					foreach (MultiplayerPlayerController controller in otherControllers) {
 						if (controller.playerID == playerID)
 							controller.UnpackTransforms(newBuffer);
 					}
 					break;
-				case 1:
+				case OpCode.Animation:
 					foreach (MultiplayerPlayerController controller in otherControllers) {
 						if (controller.playerID == playerID)
 							controller.UnpackAnimator(newBuffer);
 					}
 					break;
-				case 2:
+				case OpCode.Username:
+					debugWriter.WriteLine("Processing username from {0}", playerID);
 					foreach (MultiplayerPlayerController controller in otherControllers) {
 						if (controller.playerID == playerID) {
 							controller.username = Encoding.ASCII.GetString(newBuffer, 0, bufferSize - 5);
@@ -323,11 +309,38 @@ namespace XLMultiplayer {
 						}
 					}
 					break;
-				case 254:
-					this.AddPlayer(playerID);
+				case OpCode.Connect:
+					if (buffer.Length == 5) {
+						debugWriter.WriteLine("New player {0}", playerID);
+						this.AddPlayer(playerID);
+					} else {
+						debugWriter.WriteLine("Successfully connected to server");
+						this.SendBytes(OpCode.Username, Encoding.ASCII.GetBytes(this.ourController.username), true);
+						this.isConnected = true;
+						aliveThread = new Thread(new ThreadStart(this.SendAlive));
+						aliveThread.Start();
+						this.ourController.EncodeTextures();
+						SendTextures();
+						InvokeRepeating("SendUpdate", 0.5f, 1.0f / (float)tickRate);
+						break;
+					}
 					break;
-				case 255:
-					this.RemovePlayer(playerID);
+				case OpCode.Disconnect:
+					if(buffer.Length == 5)
+						this.RemovePlayer(playerID);
+					else {
+						KillConnection();
+					}
+					break;
+				case OpCode.StillAlive:
+					long timeOfPacket = BitConverter.ToInt64(buffer, 1);
+					long ping = client.elapsedTime.ElapsedMilliseconds - timeOfPacket;
+
+					client.lastAlive = client.elapsedTime.ElapsedMilliseconds;
+					client.receivedAlive++;
+					client.packetLoss = ((1.0f - (float)client.receivedAlive / (float)client.sentAlive) * 100);
+
+					debugWriter.WriteLine("Current ping {0}ms, packet loss {1}%", ping, client.packetLoss);
 					break;
 			}
 		}
@@ -340,116 +353,33 @@ namespace XLMultiplayer {
 			KillConnection();
 		}
 
-		private void SendBytes(byte opCode, byte[] msg, byte channel) {
-			if (this.connectionId != 0) {
-				byte[] buffer = new byte[msg.Length + 1];
-				buffer[0] = opCode;
-				Array.Copy(msg, 0, buffer, 1, msg.Length);
-				NetworkTransport.Send(this.hostId, this.connectionId, (int)channel, buffer, buffer.Length, out this.error);
-				if (this.error != 0) {
-					this.debugWriter.WriteLine("Error sending message with opcode {0}, {1}", opCode, (NetworkError)this.error);
-				}
-			}
-		}
-
-		public bool runningServer = false;
-		public bool runningClient = false;
-
-		private byte tickRate = 32;
-
-		public MultiplayerPlayerController ourController;
-		public List<MultiplayerPlayerController> otherControllers = new List<MultiplayerPlayerController>();
-
-		private int hostId;
-		private int connectionId;
-		private byte unreliableChannel;
-		private byte reliableChannel;
-		private byte reliableSequencedChannel;
-		private byte error;
-
-		public StreamWriter debugWriter;
-	}
-
-	public class FileTransferClient {
-		public class StateObject {
-			public Socket workSocket = null;
-			public byte[] buffer;
-			public int readBytes = 0;
-		}
-
-		IPAddress ip;
-		IPEndPoint ipEndPoint;
-
-		public Socket connection;
-
-		MultiplayerController controller;
-
-		public FileTransferClient(string ipAdr, int port, MultiplayerController controller) {
-			this.controller = controller;
-			ip = IPAddress.Parse(ipAdr);
-			ipEndPoint = new IPEndPoint(ip, port);
-
-			connection = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-
-			connection.BeginConnect(ipEndPoint, new AsyncCallback(ConnectCallback), connection);
-		}
-
-		private void ConnectCallback(IAsyncResult ar) {
-			connection = (Socket)ar.AsyncState;
-			connection.EndConnect(ar);
-			BeginReceiving();
-		}
-
-		private void BeginReceiving() {
-			StateObject state = new StateObject();
-			state.workSocket = connection;
-			state.buffer = new byte[4];
-			state.readBytes = 0;
-			connection.BeginReceive(state.buffer, 0, state.buffer.Length, SocketFlags.None, ReceiveCallback, state);
-		}
-
-		public void ReceiveCallback(IAsyncResult ar) {
-			try {
-				StateObject state = (StateObject)ar.AsyncState;
-				Socket handler = state.workSocket;
-				int bytesRead = handler.EndReceive(ar);
-
-				if (bytesRead > 0) {
-					state.readBytes += bytesRead;
-					if (state.readBytes < 4) {
-						handler.BeginReceive(state.buffer, state.readBytes, state.buffer.Length - state.readBytes, SocketFlags.None, ReceiveCallback, state);
-					} else {
-						if (state.readBytes == 4) {
-							controller.debugWriter.WriteLine("Got texture buffer size");
-							state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
-						}
-
-						if (state.readBytes - 4 == state.buffer.Length) {
-							controller.debugWriter.WriteLine("Filled texture buffer");
-							controller.debugWriter.WriteLine(state.buffer[0].ToString());
-
-							controller.textureQueue.Add(new MultiplayerSkinBuffer(state.buffer, (int)state.buffer[0], (MPTextureType)state.buffer[1]));
-
-							BeginReceiving();
-						} else {
-							handler.BeginReceive(state.buffer, state.readBytes - 4, state.buffer.Length - state.readBytes + 4, SocketFlags.None, ReceiveCallback, state);
-						}
+		private void SendAlive() {
+			while (this.isConnected) {
+				if (client != null) {
+					client.SendAlive();
+					if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 && IsInvoking("SendUpdate")) {
+						client.timedOut = true;
 					}
-				} else {
-					CloseConnection();
 				}
-			} catch (Exception e) {
-				if (connection.Connected) {
-					BeginReceiving();
-				} else {
-					CloseConnection();
-				}
+				Thread.Sleep(100);
 			}
 		}
 
-		public void CloseConnection() {
-			connection.Shutdown(SocketShutdown.Both);
-			connection.Close();
+		private void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
+			if (!reliable) {
+				byte[] buffer = new byte[msg.Length + 1];
+				buffer[0] = (byte)opCode;
+				Array.Copy(msg, 0, buffer, 1, msg.Length);
+
+				client.SendUnreliable(buffer);
+			}else if(reliable && client.tcpConnection.Connected) {
+				byte[] buffer = new byte[msg.Length + 5];
+				Array.Copy(BitConverter.GetBytes(msg.Length + 1), 0, buffer, 0, 4);
+				buffer[4] = (byte)opCode;
+				Array.Copy(msg, 0, buffer, 5, msg.Length);
+
+				client.SendReliable(buffer);
+			}
 		}
 	}
 }

@@ -85,7 +85,7 @@ namespace XLMultiplayer {
 			this.multiplayerMenuConnectButton.targetGraphic = this.multiplayerMenuConnectButtonImage;
 
 			this.multiplayerMenuConnectButton.onClick.AddListener(delegate () {
-				if (this.multiplayerManagerObject == null || (!this.multiplayerManager.runningClient && !this.multiplayerManager.runningServer)) {
+				if (this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient) {
 					if (this.multiplayerManagerObject == null) {
 						this.multiplayerManagerObject = new GameObject();
 						this.multiplayerManagerObject.transform.parent = this.transform;

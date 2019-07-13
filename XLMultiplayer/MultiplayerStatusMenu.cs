@@ -95,13 +95,14 @@ namespace XLMultiplayer {
 			}
 			if (connectedPlayers == null && Main.menu.multiplayerManager != null)
 				connectedPlayers = Main.menu.multiplayerManager.otherControllers;
-			if (Main.menu.multiplayerManager.ourController == null && Main.menu.multiplayerManager != null)
-				Main.menu.multiplayerManager.ourController = Main.menu.multiplayerManager.ourController;
-			playerNames = Main.menu.multiplayerManager.ourController.username + "(YOU)\n";
+			if(Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.ourController != null)
+				playerNames = Main.menu.multiplayerManager.ourController.username + "(YOU)\n";
 			numPlayers = 0;
-			foreach (MultiplayerPlayerController player in connectedPlayers) {
-				playerNames += player.username + "\n";
-				numPlayers++;
+			if (connectedPlayers != null) {
+				foreach (MultiplayerPlayerController player in connectedPlayers) {
+					playerNames += player.username + "\n";
+					numPlayers++;
+				}
 			}
 		}
 
