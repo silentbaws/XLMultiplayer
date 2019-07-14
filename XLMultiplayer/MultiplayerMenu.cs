@@ -57,6 +57,20 @@ namespace XLMultiplayer {
 
 			this.multiplayerMenuCanvas.renderMode = RenderMode.ScreenSpaceCamera;
 
+			this.multiplayerMenuBackgroundObject = new GameObject();
+			this.multiplayerMenuBackgroundObject.transform.SetParent(this.multiplayerMenuCanvas.transform, false);
+			this.multiplayerMenuBackgroundImage = this.multiplayerMenuBackgroundObject.AddComponent<Image>();
+			this.multiplayerMenuBackgroundImage.transform.SetParent(this.multiplayerMenu.transform, false);
+			this.multiplayerMenuBackgroundImage.rectTransform.sizeDelta = new Vector2(180, 50);
+			this.multiplayerMenuBackgroundImage.rectTransform.anchorMin = new Vector2(0.00f, 0.0f);
+			this.multiplayerMenuBackgroundImage.rectTransform.anchorMax = new Vector2(0.255f, 1.0f);
+			Texture2D backgroundTexture = new Texture2D(640, 1080, TextureFormat.RGBA32, false);
+			backgroundTexture.LoadImage(File.ReadAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Background.png"));
+			backgroundTexture.filterMode = FilterMode.Trilinear;
+			this.multiplayerMenuBackgroundImage.sprite = Sprite.Create(backgroundTexture, new Rect(0, 0, 640, 1080), Vector2.zero, 100);
+			this.multiplayerMenuBackgroundImage.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
+			this.multiplayerMenuBackgroundImage.color = new Color(1, 1, 1, 0.99f);
+
 			this.multiplayerMenuTextObject = new GameObject();
 			this.multiplayerMenuTextObject.transform.SetParent(this.multiplayerMenu.transform, false);
 
@@ -68,7 +82,7 @@ namespace XLMultiplayer {
 			this.multiplayerMenuText.rectTransform.anchorMin = new Vector2(0f, 0.9f);
 			this.multiplayerMenuText.rectTransform.anchorMax = new Vector2(0.3f, 1f);
 			this.multiplayerMenuText.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
-			this.multiplayerMenuText.color = Color.black;
+			this.multiplayerMenuText.color = Color.white;
 			this.multiplayerMenuText.font = Resources.FindObjectsOfTypeAll<Font>()[0];
 			this.multiplayerMenuText.fontSize = 35;
 			this.multiplayerMenuText.alignment = TextAnchor.MiddleCenter;
@@ -78,14 +92,14 @@ namespace XLMultiplayer {
 			this.multiplayerMenuPaypalButtonImage = this.multiplayerMenuPaypalObject.AddComponent<Image>();
 			this.multiplayerMenuPaypalButtonImage.transform.SetParent(this.multiplayerMenu.transform, false);
 			this.multiplayerMenuPaypalButtonImage.rectTransform.sizeDelta = new Vector2(180, 50);
-			this.multiplayerMenuPaypalButtonImage.rectTransform.anchorMin = new Vector2(0.05f, 0.75f);
-			this.multiplayerMenuPaypalButtonImage.rectTransform.anchorMax = new Vector2(0.25f, 0.85f);
-			Texture2D paypalTexture = new Texture2D(720, 200, TextureFormat.RGBA32, false);
+			this.multiplayerMenuPaypalButtonImage.rectTransform.anchorMin = new Vector2(0.05f, 0.025f);
+			this.multiplayerMenuPaypalButtonImage.rectTransform.anchorMax = new Vector2(0.25f, 0.075f);
+			Texture2D paypalTexture = new Texture2D(720, 100, TextureFormat.RGBA32, false);
 			paypalTexture.LoadImage(File.ReadAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Paypal.png"));
 			paypalTexture.filterMode = FilterMode.Point;
-			this.multiplayerMenuPaypalButtonImage.sprite = Sprite.Create(paypalTexture, new Rect(0, 0, 720, 200), Vector2.zero, 100);
+			this.multiplayerMenuPaypalButtonImage.sprite = Sprite.Create(paypalTexture, new Rect(0, 0, 720, 100), Vector2.zero, 100);
 			this.multiplayerMenuPaypalButtonImage.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
-			this.multiplayerMenuPaypalButtonImage.color = Color.white;
+			this.multiplayerMenuPaypalButtonImage.color = new Color(1, 1, 1, 1f);
 			this.multiplayerMenuPaypalButton = this.multiplayerMenuPaypalObject.AddComponent<Button>();
 			this.multiplayerMenuPaypalButton.targetGraphic = this.multiplayerMenuPaypalButtonImage;
 
@@ -98,10 +112,10 @@ namespace XLMultiplayer {
 			this.multiplayerMenuConnectButtonImage = this.multiplayerMenuConnectObject.AddComponent<Image>();
 			this.multiplayerMenuConnectButtonImage.transform.SetParent(this.multiplayerMenu.transform, false);
 			this.multiplayerMenuConnectButtonImage.rectTransform.sizeDelta = new Vector2(180f, 50f);
-			this.multiplayerMenuConnectButtonImage.rectTransform.anchorMin = new Vector2(0.05f, 0.6f);
-			this.multiplayerMenuConnectButtonImage.rectTransform.anchorMax = new Vector2(0.25f, 0.7f);
+			this.multiplayerMenuConnectButtonImage.rectTransform.anchorMin = new Vector2(0.05f, 0.75f);
+			this.multiplayerMenuConnectButtonImage.rectTransform.anchorMax = new Vector2(0.25f, 0.85f);
 			this.multiplayerMenuConnectButtonImage.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
-			this.multiplayerMenuConnectButtonImage.color = Color.white;
+			this.multiplayerMenuConnectButtonImage.color = new Color(1, 1, 1, 0.4f);
 			this.multiplayerMenuConnectButton = this.multiplayerMenuConnectObject.AddComponent<Button>();
 			this.multiplayerMenuConnectButton.targetGraphic = this.multiplayerMenuConnectButtonImage;
 
@@ -124,8 +138,8 @@ namespace XLMultiplayer {
 			this.multiplayerMenuConnectText.text = this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient ? "Connect To Server" : "Disconnect";
 			this.multiplayerMenuConnectText.transform.SetParent(this.multiplayerMenuCanvas.transform, false);
 			this.multiplayerMenuConnectText.rectTransform.sizeDelta = Vector2.zero;
-			this.multiplayerMenuConnectText.rectTransform.anchorMin = new Vector2(0.05f, 0.6f);
-			this.multiplayerMenuConnectText.rectTransform.anchorMax = new Vector2(0.25f, 0.7f);
+			this.multiplayerMenuConnectText.rectTransform.anchorMin = new Vector2(0.05f, 0.75f);
+			this.multiplayerMenuConnectText.rectTransform.anchorMax = new Vector2(0.25f, 0.85f);
 			this.multiplayerMenuConnectText.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
 			this.multiplayerMenuConnectText.color = Color.black;
 			this.multiplayerMenuConnectText.font = Resources.FindObjectsOfTypeAll<Font>()[0];
@@ -183,6 +197,9 @@ namespace XLMultiplayer {
 		private GameObject multiplayerMenuPaypalObject;
 		private Button multiplayerMenuPaypalButton;
 		private Image multiplayerMenuPaypalButtonImage;
+
+		private GameObject multiplayerMenuBackgroundObject;
+		private Image multiplayerMenuBackgroundImage;
 
 		// Token: 0x0400045B RID: 1115
 		private Text multiplayerMenuText;

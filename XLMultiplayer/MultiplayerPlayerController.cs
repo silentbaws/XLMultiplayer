@@ -94,13 +94,7 @@ namespace XLMultiplayer {
 		public string[] animSteezeFloatNames { get; private set; }
 		public string[] animSteezeIntNames { get; private set; }
 
-		//Transform mixamoHips;
-		//Transform[] allBones;
-		//readonly string[] keyBones = new string[] { "mixamorig_LeftUpLeg", "mixamorig_LeftFoot",
-		//											"mixamorig_RightUpLeg", "mixamorig_RightFoot",
-		//											"mixamorig_Spine", "mixamorig_LeftShoulder",
-		//											"mixamorig_LeftShoulder", "mixamorig_LeftForeArm",
-		//											"mixamorig_RightShoulder", "mixamorig_RightForeArm"};
+		public Transform hips;
 
 		public string username = "IT ALL BROKE";
 
@@ -232,50 +226,6 @@ namespace XLMultiplayer {
 			this.debugWriter = writer;
 		}
 
-		//private void FillBonesArray() {
-		//	//Get all bones
-		//	this.mixamoHips = this.skater.transform.Find("Skater").Find("Reference").Find("mixamorig_Hips");
-		//	List<Transform> bones = new List<Transform>();
-		//	bones.Add(mixamoHips);
-		//	foreach (Transform T in mixamoHips.Find(keyBones[0]).GetComponentsInChildren<Transform>()) {
-		//		bones.Add(T);
-		//		if (T.name.Equals(keyBones[1])) {
-		//			break;
-		//		}
-		//	}
-		//	foreach (Transform T in mixamoHips.Find(keyBones[2]).GetComponentsInChildren<Transform>()) {
-		//		bones.Add(T);
-		//		if (T.name.Equals(keyBones[3])) {
-		//			break;
-		//		}
-		//	}
-		//	foreach (Transform T in mixamoHips.Find(keyBones[4]).GetComponentsInChildren<Transform>()) {
-		//		bones.Add(T);
-		//		if (T.name.Equals(keyBones[5])) {
-		//			break;
-		//		}
-		//	}
-		//	Transform newKey = bones[bones.Count - 1];
-		//	foreach (Transform T in newKey.parent.Find(keyBones[6]).GetComponentsInChildren<Transform>()) {
-		//		bones.Add(T);
-		//		if (T.name.Equals(keyBones[7])) {
-		//			break;
-		//		}
-		//	}
-		//	debugWriter.WriteLine(newKey.Find(keyBones[8]) == null);
-		//	foreach (Transform T in newKey.parent.Find(keyBones[8]).GetComponentsInChildren<Transform>()) {
-		//		bones.Add(T);
-		//		if (T.name.Equals(keyBones[9])) {
-		//			break;
-		//		}
-		//	}
-		//	bones.Remove(newKey);
-		//	this.allBones = bones.ToArray();
-		//	foreach (Transform T in bones) {
-		//		debugWriter.WriteLine(T.name);
-		//	}
-		//}
-
 		public void ConstructForPlayer() {
 			//Write the master prefab hierarchy to make sure everything is in place
 			StreamWriter writer = new StreamWriter("Hierarchy.txt");
@@ -329,6 +279,8 @@ namespace XLMultiplayer {
 				return;
 			}
 
+			this.hips = this.skater.transform.Find("Skater").Find("Reference").Find("mixamorig_Hips");
+
 			//Get all animators attached to the root
 			Animator[] ourSkaterAnimators = new Animator[3];
 			Array.Copy(this.skater.GetComponentsInChildren<Animator>(), ourSkaterAnimators, 2);
@@ -338,8 +290,6 @@ namespace XLMultiplayer {
 				this.debugWriter.WriteLine("Failed to find an animator {0}, {1}, {2}", ourSkaterAnimators[0] == null, ourSkaterAnimators[1] == null, ourSkaterAnimators[2] == null);
 				return;
 			}
-
-			//FillBonesArray();
 
 			//Set our animator and steeze animator
 			this.animator = ourSkaterAnimators[0];
@@ -443,6 +393,8 @@ namespace XLMultiplayer {
 				UnityEngine.Object.DestroyImmediate(m);
 			}
 
+			this.hips = this.skater.transform.Find("Skater").Find("Reference").Find("mixamorig_Hips");
+
 			foreach (MonoBehaviour m in source.skater.GetComponentsInChildren<MonoBehaviour>()) {
 				m.enabled = true;
 			}
@@ -450,8 +402,6 @@ namespace XLMultiplayer {
 				m.enabled = true;
 			}
 			Time.timeScale = 1.0f;
-
-			//FillBonesArray();
 
 			this.animBools = source.animBools;
 			this.animFloats = source.animFloats;
@@ -477,6 +427,9 @@ namespace XLMultiplayer {
 			this.steezeAnimator = newSkaterAnimators[1];
 			newSkaterAnimators[1].enabled = true;
 			debugWriter.WriteLine("Activated New Player Animators");
+
+			this.animator.enabled = false;
+			this.steezeAnimator.enabled = false;
 
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
@@ -521,11 +474,15 @@ namespace XLMultiplayer {
 			return packed;
 		}
 
+		int outoforder = 0;
+		int total = 0;
+
 		public void UnpackTransforms(byte[] recBuffer) {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
-
+			total++;
 			byte[] buffer = new byte[recBuffer.Length - 4];
 			if (receivedPacketSequence < currentPositionPacket) {
+				outoforder++;
 				return;
 			} else {
 				currentPositionPacket = receivedPacketSequence;
@@ -614,70 +571,79 @@ namespace XLMultiplayer {
 			return packed;
 		}
 
-		public byte[] PackAnimator() {
+		public byte[][] PackAnimator() {
+			byte[][] packed = new byte[2][];
+
+			byte[] transforms = PackTransformArray(this.hips.GetComponentsInChildren<Transform>());
+
+			packed[0] = new byte[952];
+			Array.Copy(transforms, 0, packed[0], 0, 952);
+
+			packed[1] = new byte[952];
+			Array.Copy(transforms, 952, packed[1], 0, 952);
 			//Create arrays to hold the paramaters | packing 8 bools into a byte to save bandwidth for further expansion
-			byte[] bools = new byte[(int)Math.Ceiling((double)this.animBools / 8)];
-			byte[] floats = new byte[this.animFloats * 4];
-			byte[] ints = new byte[this.animInts * 4];
+			//byte[] bools = new byte[(int)Math.Ceiling((double)this.animBools / 8)];
+			//byte[] floats = new byte[this.animFloats * 4];
+			//byte[] ints = new byte[this.animInts * 4];
 
-			byte[] steezeBools = new byte[(int)Math.Ceiling((double)this.animSteezeBools / 8)];
-			byte[] steezeFloats = new byte[this.animSteezeFloats * 4];
-			byte[] steezeInts = new byte[this.animSteezeInts * 4];
+			//byte[] steezeBools = new byte[(int)Math.Ceiling((double)this.animSteezeBools / 8)];
+			//byte[] steezeFloats = new byte[this.animSteezeFloats * 4];
+			//byte[] steezeInts = new byte[this.animSteezeInts * 4];
 
-			//Pack all individual paramater arrays
-			int currentInt = 0;
-			int currentBool = 0;
-			int currentFloat = 0;
-			foreach (AnimatorControllerParameter param in this.animator.parameters) {
-				int index = param.nameHash;
-				if (param.type == AnimatorControllerParameterType.Bool) {
-					if (currentBool % 8 == 0)
-						bools[(int)Math.Floor((double)currentBool / 8)] = 0;
-					bools[(int)Math.Floor((double)currentBool / 8)] = (byte)(bools[(int)Math.Floor((double)currentBool / 8)] | (Convert.ToByte(this.animator.GetBool(index)) << (byte)(currentBool % 8)));
-					currentBool++;
-				} else if (param.type == AnimatorControllerParameterType.Float) {
-					Array.Copy(BitConverter.GetBytes(this.animator.GetFloat(index)), 0, floats, currentFloat * 4, 4);
-					currentFloat++;
-				} else if (param.type == AnimatorControllerParameterType.Int) {
-					Array.Copy(BitConverter.GetBytes(this.animator.GetInteger(index)), 0, ints, currentInt * 4, 4);
-					currentInt++;
-				}
-			}
+			////Pack all individual paramater arrays
+			//int currentInt = 0;
+			//int currentBool = 0;
+			//int currentFloat = 0;
+			//foreach (AnimatorControllerParameter param in this.animator.parameters) {
+			//	int index = param.nameHash;
+			//	if (param.type == AnimatorControllerParameterType.Bool) {
+			//		if (currentBool % 8 == 0)
+			//			bools[(int)Math.Floor((double)currentBool / 8)] = 0;
+			//		bools[(int)Math.Floor((double)currentBool / 8)] = (byte)(bools[(int)Math.Floor((double)currentBool / 8)] | (Convert.ToByte(this.animator.GetBool(index)) << (byte)(currentBool % 8)));
+			//		currentBool++;
+			//	} else if (param.type == AnimatorControllerParameterType.Float) {
+			//		Array.Copy(BitConverter.GetBytes(this.animator.GetFloat(index)), 0, floats, currentFloat * 4, 4);
+			//		currentFloat++;
+			//	} else if (param.type == AnimatorControllerParameterType.Int) {
+			//		Array.Copy(BitConverter.GetBytes(this.animator.GetInteger(index)), 0, ints, currentInt * 4, 4);
+			//		currentInt++;
+			//	}
+			//}
 
-			currentInt = 0;
-			currentBool = 0;
-			currentFloat = 0;
-			foreach (AnimatorControllerParameter param in this.steezeAnimator.parameters) {
-				int index = param.nameHash;
-				if (param.type == AnimatorControllerParameterType.Bool) {
-					if (currentBool % 8 == 0)
-						steezeBools[(int)Math.Floor((double)currentBool / 8)] = 0;
-					steezeBools[(int)Math.Floor((double)currentBool / 8)] = (byte)(steezeBools[(int)Math.Floor((double)currentBool / 8)] | (Convert.ToByte(this.steezeAnimator.GetBool(index)) << (byte)(currentBool % 8)));
-					currentBool++;
-				} else if (param.type == AnimatorControllerParameterType.Float) {
-					Array.Copy(BitConverter.GetBytes(this.steezeAnimator.GetFloat(index)), 0, steezeFloats, currentFloat * 4, 4);
-					currentFloat++;
-				} else if (param.type == AnimatorControllerParameterType.Int) {
-					Array.Copy(BitConverter.GetBytes(this.steezeAnimator.GetInteger(index)), 0, steezeInts, currentInt * 4, 4);
-					currentInt++;
-				}
-			}
-			
-			//byte[] packedTransforms = this.PackTransformArray(allBones);
+			//currentInt = 0;
+			//currentBool = 0;
+			//currentFloat = 0;
+			//foreach (AnimatorControllerParameter param in this.steezeAnimator.parameters) {
+			//	int index = param.nameHash;
+			//	if (param.type == AnimatorControllerParameterType.Bool) {
+			//		if (currentBool % 8 == 0)
+			//			steezeBools[(int)Math.Floor((double)currentBool / 8)] = 0;
+			//		steezeBools[(int)Math.Floor((double)currentBool / 8)] = (byte)(steezeBools[(int)Math.Floor((double)currentBool / 8)] | (Convert.ToByte(this.steezeAnimator.GetBool(index)) << (byte)(currentBool % 8)));
+			//		currentBool++;
+			//	} else if (param.type == AnimatorControllerParameterType.Float) {
+			//		Array.Copy(BitConverter.GetBytes(this.steezeAnimator.GetFloat(index)), 0, steezeFloats, currentFloat * 4, 4);
+			//		currentFloat++;
+			//	} else if (param.type == AnimatorControllerParameterType.Int) {
+			//		Array.Copy(BitConverter.GetBytes(this.steezeAnimator.GetInteger(index)), 0, steezeInts, currentInt * 4, 4);
+			//		currentInt++;
+			//	}
+			//}
 
-			//Array to hold all paramater types in order
-			byte[] packed = new byte[bools.Length + floats.Length + ints.Length + steezeBools.Length + steezeFloats.Length + steezeInts.Length /*+ packedTransforms.Length*/];
+			////byte[] packedTransforms = this.PackTransformArray(allBones);
 
-			//Copy all paramaters into packed array in order
-			Array.Copy(bools, packed, bools.Length);
-			Array.Copy(floats, 0, packed, bools.Length, floats.Length);
-			Array.Copy(ints, 0, packed, bools.Length + floats.Length, ints.Length);
+			////Array to hold all paramater types in order
+			//byte[] packed = new byte[bools.Length + floats.Length + ints.Length + steezeBools.Length + steezeFloats.Length + steezeInts.Length /*+ packedTransforms.Length*/];
 
-			int steezeOffset = bools.Length + floats.Length + ints.Length;
+			////Copy all paramaters into packed array in order
+			//Array.Copy(bools, packed, bools.Length);
+			//Array.Copy(floats, 0, packed, bools.Length, floats.Length);
+			//Array.Copy(ints, 0, packed, bools.Length + floats.Length, ints.Length);
 
-			Array.Copy(steezeBools, 0, packed, steezeOffset, steezeBools.Length);
-			Array.Copy(steezeFloats, 0, packed, steezeOffset + steezeBools.Length, steezeFloats.Length);
-			Array.Copy(steezeInts, 0, packed, steezeOffset + steezeBools.Length + steezeInts.Length, steezeInts.Length);
+			//int steezeOffset = bools.Length + floats.Length + ints.Length;
+
+			//Array.Copy(steezeBools, 0, packed, steezeOffset, steezeBools.Length);
+			//Array.Copy(steezeFloats, 0, packed, steezeOffset + steezeBools.Length, steezeFloats.Length);
+			//Array.Copy(steezeInts, 0, packed, steezeOffset + steezeBools.Length + steezeInts.Length, steezeInts.Length);
 
 			//Array.Copy(packedTransforms, 0, packed, steezeOffset + steezeBools.Length + steezeInts.Length + steezeInts.Length, packedTransforms.Length);
 
@@ -688,88 +654,100 @@ namespace XLMultiplayer {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
 
 			byte[] buffer = new byte[recBuffer.Length - 4];
-			if(receivedPacketSequence < currentAnimationPacket) {
+			if(receivedPacketSequence < currentAnimationPacket - 1) {
 				return;
 			} else {
 				Array.Copy(recBuffer, 4, buffer, 0, recBuffer.Length - 4);
 				currentAnimationPacket = receivedPacketSequence;
 			}
 
-			bool[] bools = new bool[animBools];
-			float[] floats = new float[animFloats];
-			int[] ints = new int[animInts];
+			List<Vector3> vectors = new List<Vector3>();
+			List<Quaternion> quaternions = new List<Quaternion>();
 
-			for (int i = 0; i < animBools; i++) {
-				bools[i] = Convert.ToBoolean((buffer[(int)Math.Floor((double)i / 8)] >> i % 8) & 0b1);
+			for (int i = 0; i < 34; i++) {
+				Vector3 readVector = new Vector3();
+				readVector.x = BitConverter.ToSingle(buffer, i * 28);
+				readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4);
+				readVector.z = BitConverter.ToSingle(buffer, i * 28 + 8);
+				Quaternion readQuaternion = new Quaternion();
+				readQuaternion.x = BitConverter.ToSingle(buffer, i * 28 + 12);
+				readQuaternion.y = BitConverter.ToSingle(buffer, i * 28 + 16);
+				readQuaternion.z = BitConverter.ToSingle(buffer, i * 28 + 20);
+				readQuaternion.w = BitConverter.ToSingle(buffer, i * 28 + 24);
+
+				vectors.Add(readVector);
+				quaternions.Add(readQuaternion);
 			}
 
-			int floatOffset = (int)Math.Ceiling((double)animBools / 8);
-			int intOffset = floatOffset + animFloats * 4;
-
-			for (int i = 0; i < this.animFloats; i++) {
-				floats[i] = BitConverter.ToSingle(buffer, i * 4 + floatOffset);
+			if (receivedPacketSequence % 2 == 0) {
+				for(int i = 0; i < 34; i++) {
+					this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i];
+					this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i];
+				}
+			} else {
+				for (int i = 34; i < 68; i++) {
+					this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i-34];
+					this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i-34];
+				}
 			}
 
-			for (int i = 0; i < this.animInts; i++) {
-				ints[i] = BitConverter.ToInt32(buffer, i * 4 + intOffset);
-			}
+			//bool[] bools = new bool[animBools];
+			//float[] floats = new float[animFloats];
+			//int[] ints = new int[animInts];
 
-			int steezeOffset = intOffset + this.animInts * 4;
-			int steezeFloatOffset = steezeOffset + (int)Math.Ceiling((double)animSteezeBools / 8);
-			int steezeIntOffset = steezeFloatOffset + this.animSteezeFloats * 4;
-
-			int endAnim = steezeIntOffset + 4 * this.animSteezeInts;
-
-			bool[] steezeBools = new bool[animSteezeBools];
-			float[] steezeFloats = new float[animSteezeFloats];
-			int[] steezeInts = new int[animSteezeInts];
-
-			for (int i = 0; i < animSteezeBools; i++) {
-				steezeBools[i] = Convert.ToBoolean((buffer[(int)Math.Floor((double)i / 8) + steezeOffset] >> i % 8) & 0b1);
-			}
-
-			for (int i = 0; i < this.animSteezeFloats; i++) {
-				steezeFloats[i] = BitConverter.ToSingle(buffer, i * 4 + steezeFloatOffset);
-			}
-
-			for (int i = 0; i < this.animSteezeInts; i++) {
-				steezeInts[i] = BitConverter.ToInt32(buffer, i * 4 + steezeIntOffset);
-			}
-
-			//List<Vector3> vectors = new List<Vector3>();
-			//List<Quaternion> quaternions = new List<Quaternion>();
-
-			//for (int i = 0; i < this.allBones.Length; i++) {
-			//	Vector3 readVector = new Vector3();
-			//	readVector.x = BitConverter.ToSingle(buffer, i * 28 + endAnim);
-			//	readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4 + endAnim);
-			//	readVector.z = BitConverter.ToSingle(buffer, i * 28 + 8 + endAnim);
-			//	Quaternion readQuaternion = new Quaternion();
-			//	readQuaternion.x = BitConverter.ToSingle(buffer, i * 28 + 12 + endAnim);
-			//	readQuaternion.y = BitConverter.ToSingle(buffer, i * 28 + 16 + endAnim);
-			//	readQuaternion.z = BitConverter.ToSingle(buffer, i * 28 + 20 + endAnim);
-			//	readQuaternion.w = BitConverter.ToSingle(buffer, i * 28 + 24 + endAnim);
-
-			//	vectors.Add(readVector);
-			//	quaternions.Add(readQuaternion);
+			//for (int i = 0; i < animBools; i++) {
+			//	bools[i] = Convert.ToBoolean((buffer[(int)Math.Floor((double)i / 8)] >> i % 8) & 0b1);
 			//}
 
-			SetAnimator(bools, floats, ints, steezeBools, steezeFloats, steezeInts);
+			//int floatOffset = (int)Math.Ceiling((double)animBools / 8);
+			//int intOffset = floatOffset + animFloats * 4;
+
+			//for (int i = 0; i < this.animFloats; i++) {
+			//	floats[i] = BitConverter.ToSingle(buffer, i * 4 + floatOffset);
+			//}
+
+			//for (int i = 0; i < this.animInts; i++) {
+			//	ints[i] = BitConverter.ToInt32(buffer, i * 4 + intOffset);
+			//}
+
+			//int steezeOffset = intOffset + this.animInts * 4;
+			//int steezeFloatOffset = steezeOffset + (int)Math.Ceiling((double)animSteezeBools / 8);
+			//int steezeIntOffset = steezeFloatOffset + this.animSteezeFloats * 4;
+
+			//int endAnim = steezeIntOffset + 4 * this.animSteezeInts;
+
+			//bool[] steezeBools = new bool[animSteezeBools];
+			//float[] steezeFloats = new float[animSteezeFloats];
+			//int[] steezeInts = new int[animSteezeInts];
+
+			//for (int i = 0; i < animSteezeBools; i++) {
+			//	steezeBools[i] = Convert.ToBoolean((buffer[(int)Math.Floor((double)i / 8) + steezeOffset] >> i % 8) & 0b1);
+			//}
+
+			//for (int i = 0; i < this.animSteezeFloats; i++) {
+			//	steezeFloats[i] = BitConverter.ToSingle(buffer, i * 4 + steezeFloatOffset);
+			//}
+
+			//for (int i = 0; i < this.animSteezeInts; i++) {
+			//	steezeInts[i] = BitConverter.ToInt32(buffer, i * 4 + steezeIntOffset);
+			//}
+
+			//SetAnimator(bools, floats, ints, steezeBools, steezeFloats, steezeInts);
 		}
 
 		public void SetAnimator(bool[] bools, float[] floats, int[] ints, bool[] steezeBools, float[] steezeFloats, int[] steezeInts) {
-			for (int i = 0; i < this.animBools; i++)
-				this.animator.SetBool(this.animBoolNames[i], bools[i]);
-			for (int i = 0; i < this.animFloats; i++)
-				this.animator.SetFloat(this.animFloatNames[i], floats[i]);
-			for (int i = 0; i < this.animInts; i++)
-				this.animator.SetInteger(this.animIntNames[i], ints[i]);
-			for (int i = 0; i < this.animSteezeBools; i++)
-				this.steezeAnimator.SetBool(this.animSteezeBoolNames[i], steezeBools[i]);
-			for (int i = 0; i < this.animSteezeFloats; i++)
-				this.steezeAnimator.SetFloat(this.animSteezeFloatNames[i], steezeFloats[i]);
-			for (int i = 0; i < this.animSteezeInts; i++)
-				this.steezeAnimator.SetInteger(this.animSteezeIntNames[i], steezeInts[i]);
+			//for (int i = 0; i < this.animBools; i++)
+			//	this.animator.SetBool(this.animBoolNames[i], bools[i]);
+			//for (int i = 0; i < this.animFloats; i++)
+			//	this.animator.SetFloat(this.animFloatNames[i], floats[i]);
+			//for (int i = 0; i < this.animInts; i++)
+			//	this.animator.SetInteger(this.animIntNames[i], ints[i]);
+			//for (int i = 0; i < this.animSteezeBools; i++)
+			//	this.steezeAnimator.SetBool(this.animSteezeBoolNames[i], steezeBools[i]);
+			//for (int i = 0; i < this.animSteezeFloats; i++)
+			//	this.steezeAnimator.SetFloat(this.animSteezeFloatNames[i], steezeFloats[i]);
+			//for (int i = 0; i < this.animSteezeInts; i++)
+			//	this.steezeAnimator.SetInteger(this.animSteezeIntNames[i], steezeInts[i]);
 		}
 	}
 }

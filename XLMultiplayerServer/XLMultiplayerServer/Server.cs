@@ -336,8 +336,6 @@ public class Server {
 				if (receiveSocket != null) {
 					receiveSocket.Shutdown(SocketShutdown.Both);
 					receiveSocket.Close();
-					if (receiveSocket.Connected)
-						receiveSocket.Disconnect(false);
 					SendToAllTCP(new byte[] { (byte)OpCode.Disconnect }, client.connectionId);
 					players[client.connectionId].Pants.DeleteTexture(client.connectionId);
 					players[client.connectionId].Shirt.DeleteTexture(client.connectionId);
@@ -349,7 +347,13 @@ public class Server {
 					Console.WriteLine("Disconnect from {0} on file transfer server {1}", client.connectionId, timeout ? "connection timed out" : "");
 				}
 			}catch(Exception e) {
-
+				players[client.connectionId].Pants.DeleteTexture(client.connectionId);
+				players[client.connectionId].Shirt.DeleteTexture(client.connectionId);
+				players[client.connectionId].Shoes.DeleteTexture(client.connectionId);
+				players[client.connectionId].Board.DeleteTexture(client.connectionId);
+				players[client.connectionId].Hat.DeleteTexture(client.connectionId);
+				players[client.connectionId] = null;
+				clients[client.connectionId] = null;
 			}
 		}
 	}
@@ -475,34 +479,17 @@ public class Server {
 
 	public static int Main(String[] args) {
 		Server server = new Server(7777);
-		Thread monitorAlive = new Thread(() => {
-			while (true) {
-				foreach (Client client in clients) {
-					if (client != null) {
-						if (client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 5000) {
-							try {
-								client.reliableSocket.Disconnect(false);
-							} catch(Exception e) {
-
-							}
-							client.timedOut = true;
-						}
-					}
-				}
-				Thread.Sleep(50);
-			}
-		});
-		monitorAlive.Start();
-		monitorAlive.IsBackground = true;
 		while (true) {
 			int i = 0;
 			foreach(Client client in clients) {
 				if(client != null) {
-					if(client.reliableSocket == null || client.aliveWatch == null || client.lastAlive - client.aliveWatch.ElapsedMilliseconds > 5000 || client.timedOut || client.ReceiveTCP == null) {
-						if (client.ReceiveTCP != null)
-							client.ReceiveTCP.Disconnect(false);
-						else
+					if(client.reliableSocket == null || client.aliveWatch == null || client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 5000 || client.timedOut || client.ReceiveTCP == null) {
+						if (client.ReceiveTCP != null) {
+							client.reliableSocket.Disconnect(true);
+						} else {
 							clients[i] = null;
+							players[i] = null;
+						}
 					}
 				}
 				i++;

@@ -71,6 +71,14 @@ namespace XLMultiplayer {
 			if(client != null && !client.tcpConnection.Connected && client.elapsedTime.ElapsedMilliseconds > 5000) {
 				KillConnection();
 			}
+
+			//if (this.ourController != null && this.otherControllers.Count == 0)
+			//	this.AddPlayer(0);
+			//if (this.otherControllers.Count > 0) {
+			//	this.otherControllers[0].animator.enabled = false;
+			//	this.otherControllers[0].steezeAnimator.enabled = false;
+			//	this.otherControllers[0].hips.Find("mixamorig_LeftUpLeg").Rotate(1, 0, 0);
+			//}
 		}
 
 		private void SendUpdate() {
@@ -254,7 +262,9 @@ namespace XLMultiplayer {
 		}
 
 		private void SendPlayerAnimator() {
-			this.SendBytes(OpCode.Animation, this.ourController.PackAnimator(), false);
+			byte[][] packed = this.ourController.PackAnimator();
+			this.SendBytes(OpCode.Animation, packed[0], false);
+			this.SendBytes(OpCode.Animation, packed[1], false);
 		}
 
 		public void KillConnection() {
@@ -343,6 +353,7 @@ namespace XLMultiplayer {
 						this.SendBytes(OpCode.Settings, settingsBytes, true);
 						this.isConnected = true;
 						aliveThread = new Thread(new ThreadStart(this.SendAlive));
+						aliveThread.IsBackground = true;
 						aliveThread.Start();
 						this.ourController.EncodeTextures();
 						SendTextures();
@@ -382,7 +393,7 @@ namespace XLMultiplayer {
 			while (this.isConnected) {
 				if (client != null) {
 					client.SendAlive();
-					if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 && IsInvoking("SendUpdate")) {
+					if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 && IsInvoking("SendUpdate") && !Application.isLoadingLevel) {
 						client.timedOut = true;
 					}
 				}

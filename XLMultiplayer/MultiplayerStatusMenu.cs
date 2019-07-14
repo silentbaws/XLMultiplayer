@@ -27,31 +27,7 @@ namespace XLMultiplayer {
 			// check for errors
 			if (www.error == null) {
 				if (!loadConnectTexture) {
-					this.disconnectedTexture = www.texture;
-					this.disconnectedImage = new GameObject().AddComponent<Image>();
-					this.disconnectedImage.sprite = Sprite.Create(disconnectedTexture, new Rect(0, 0, 300, 300), Vector2.zero);
-					this.disconnectedImage.transform.SetParent(this.statusCanvas.transform, false);
-					this.disconnectedImage.rectTransform.sizeDelta = new Vector2(52f, 52f);
-					this.disconnectedImage.rectTransform.anchorMin = new Vector2(0.95f, 0.95f);
-					this.disconnectedImage.rectTransform.anchorMax = new Vector2(0.975f, 0.975f);
-					this.disconnectedImage.rectTransform.anchoredPosition = new Vector2(1f, 1f);
-					AspectRatioFitter fitter = this.disconnectedImage.gameObject.AddComponent<AspectRatioFitter>();
-					fitter.aspectRatio = 1.0f;
-					fitter.aspectMode = AspectRatioFitter.AspectMode.HeightControlsWidth;
-					this.disconnectedImage.color = Color.white;
-				} else {
-					this.connectedTexture = www.texture;
-					this.connectedImage = new GameObject().AddComponent<Image>();
-					this.connectedImage.sprite = Sprite.Create(connectedTexture, new Rect(0, 0, 300, 300), Vector2.zero);
-					this.connectedImage.transform.SetParent(this.statusCanvas.transform, false);
-					this.connectedImage.rectTransform.sizeDelta = new Vector2(52f, 52f);
-					this.connectedImage.rectTransform.anchorMin = new Vector2(0.95f, 0.95f);
-					this.connectedImage.rectTransform.anchorMax = new Vector2(0.975f, 0.975f);
-					this.connectedImage.rectTransform.anchoredPosition = new Vector2(1f, 1f);
-					AspectRatioFitter fitter = this.connectedImage.gameObject.AddComponent<AspectRatioFitter>();
-					fitter.aspectRatio = 1.0f;
-					fitter.aspectMode = AspectRatioFitter.AspectMode.HeightControlsWidth;
-					this.disconnectedImage.color = Color.white;
+					
 				}
 				www.Dispose();
 			}
@@ -77,11 +53,37 @@ namespace XLMultiplayer {
 
 			this.statusCanvas.renderMode = RenderMode.ScreenSpaceCamera;
 
-			WWW www = new WWW(texturePath + "StatusGreen.png");
-			StartCoroutine(WaitForRequest(www, true));
 
-			www = new WWW(texturePath + "StatusRed.png");
-			StartCoroutine(WaitForRequest(www, false));
+			this.disconnectedTexture = new Texture2D(64, 64, TextureFormat.RGBA32, false);
+			this.disconnectedTexture.LoadImage(File.ReadAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\StatusRed64.png"));
+			this.disconnectedTexture.filterMode = FilterMode.Point;
+			this.disconnectedImage = new GameObject().AddComponent<Image>();
+			this.disconnectedImage.sprite = Sprite.Create(disconnectedTexture, new Rect(0, 0, 64, 64), Vector2.zero);
+			this.disconnectedImage.transform.SetParent(this.statusCanvas.transform, false);
+			this.disconnectedImage.rectTransform.sizeDelta = new Vector2(64f, 64f);
+			this.disconnectedImage.rectTransform.anchorMin = new Vector2(0.967f, 0.947f);
+			this.disconnectedImage.rectTransform.anchorMax = new Vector2(0.987f, 0.967f);
+			this.disconnectedImage.rectTransform.anchoredPosition = new Vector2(1f, 1f);
+			AspectRatioFitter fitter = this.disconnectedImage.gameObject.AddComponent<AspectRatioFitter>();
+			fitter.aspectRatio = 1.0f;
+			fitter.aspectMode = AspectRatioFitter.AspectMode.HeightControlsWidth;
+			this.disconnectedImage.color = Color.white;
+
+			this.connectedTexture = new Texture2D(64, 64, TextureFormat.RGBA32, false);
+			this.connectedTexture.LoadImage(File.ReadAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\StatusGreen64.png"));
+			this.connectedTexture.filterMode = FilterMode.Point;
+			this.connectedImage = new GameObject().AddComponent<Image>();
+			this.connectedImage.sprite = Sprite.Create(connectedTexture, new Rect(0, 0, 64, 64), Vector2.zero);
+			this.connectedImage.transform.SetParent(this.statusCanvas.transform, false);
+			this.connectedImage.rectTransform.sizeDelta = new Vector2(64f, 64f);
+			this.connectedImage.rectTransform.anchorMin = new Vector2(0.962f, 0.942f);
+			this.connectedImage.rectTransform.anchorMax = new Vector2(0.987f, 0.967f);
+			this.connectedImage.rectTransform.anchoredPosition = new Vector2(1f, 1f);
+			AspectRatioFitter fitter2 = this.connectedImage.gameObject.AddComponent<AspectRatioFitter>();
+			fitter2.aspectRatio = 1.0f;
+			fitter2.aspectMode = AspectRatioFitter.AspectMode.HeightControlsWidth;
+			this.disconnectedImage.color = Color.white;
+			
 		}
 
 		public void Update() {
