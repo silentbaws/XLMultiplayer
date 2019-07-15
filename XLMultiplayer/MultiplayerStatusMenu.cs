@@ -21,13 +21,18 @@ namespace XLMultiplayer {
 		private string playerNames;
 		private int numPlayers = 0;
 
+		public bool isLoading = false;
+		public int loadingStatus = 0;
+
+		Rect windowRect;
+
 		public void Start() {
 			InitializeMenu();
+
+			windowRect = new Rect(Screen.width - Screen.width * 0.7f, Screen.height - Screen.height * 0.7f, Screen.width * 0.4f, Screen.height * 0.4f);
 		}
 
 		public void InitializeMenu() {
-			string texturePath = "file:\\\\\\" + Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\";
-
 			this.statusCanvas = new GameObject().AddComponent<Canvas>();
 			this.statusCanvas.gameObject.AddComponent<GraphicRaycaster>();
 
@@ -115,6 +120,55 @@ namespace XLMultiplayer {
 
 				GUI.Label(rect2, "Ping: " + client.ping.ToString() + "\nPacket Loss: " + client.packetLoss.ToString() + "%", style);
 			}
+
+
+			if (isLoading) {
+				GUI.backgroundColor = Color.black;
+				GUI.contentColor = Color.yellow;
+
+				windowRect = GUI.Window(1, windowRect, DisplayWindow, "Calm down it's loading");
+			}
+		}
+
+		private void DisplayWindow(int windowId) {
+			string loading = "Encoding shirt.......";
+
+			switch (loadingStatus) {
+				case 1:
+					loading += "\nEncoded Shirt\nEncoding Pants.......";
+					break;
+				case 2:
+					loading += "\nEncoded Shirt\nEncoding Pants.......";
+					loading += "\nEncoded Pants\nEncoding Shoes.......";
+					break;
+				case 3:
+					loading += "\nEncoded Shirt\nEncoding Pants.......";
+					loading += "\nEncoded Pants\nEncoding Shoes.......";
+					loading += "\nEncoded Shoes\nEncoding Hat.......";
+					break;
+				case 4:
+					loading += "\nEncoded Shirt\nEncoding Pants.......";
+					loading += "\nEncoded Pants\nEncoding Shoes.......";
+					loading += "\nEncoded Shoes\nEncoding Hat.......";
+					loading += "\nEncoded Hat\nEncoding Board.......";
+					break;
+				case 5:
+					loading += "\nEncoded Shirt\nEncoding Pants.......";
+					loading += "\nEncoded Pants\nEncoding Shoes.......";
+					loading += "\nEncoded Shoes\nEncoding Hat.......";
+					loading += "\nEncoded Hat\nEncoding Board.......";
+					loading += "\nEncoded Board";
+					break;
+				case 6:
+					loading = "All Textures encoded, sending to server";
+					break;
+			}
+
+			GUIStyle style = new GUIStyle();
+			style.fontSize = 16;
+			style.alignment = TextAnchor.UpperCenter;
+			style.normal.textColor = Color.yellow;
+			GUI.Label(new Rect(0, 20, Screen.width*0.4f, Screen.height*0.4f - 20), loading, style);
 		}
 	}
 }

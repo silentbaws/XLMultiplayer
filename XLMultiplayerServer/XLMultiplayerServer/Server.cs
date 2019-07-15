@@ -63,8 +63,10 @@ public class MultiplayerSkin {
 		textureType = mpType;
 	}
 
+	string sep = Path.PathSeparator.ToString();
+
 	public string GetTexturePath(int connectionId) {
-		return Directory.GetCurrentDirectory() + "\\TempClothing\\" + textureType.ToString() + connectionId.ToString() + ".png";
+		return Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png";
 	}
 
 	public byte[] GetBuffer(int connectionId) {
@@ -94,17 +96,17 @@ public class MultiplayerSkin {
 
 		bufferSize = file.Length;
 
-		if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\TempClothing"))
-			Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\TempClothing");
+		if (!Directory.Exists(Directory.GetCurrentDirectory() + sep + "TempClothing"))
+			Directory.CreateDirectory(Directory.GetCurrentDirectory() + sep + "TempClothing");
 
-		File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\TempClothing\\" + textureType.ToString() + connectionId.ToString() + ".png", file);
+		File.WriteAllBytes(Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png", file);
 		finishedCopy = true;
 		Console.WriteLine("Saved texture");
 	}
 
 	public void DeleteTexture(int connectionId) {
-		if(File.Exists(Directory.GetCurrentDirectory() + "\\TempClothing\\" + textureType.ToString() + connectionId.ToString() + ".png"))
-			File.Delete(Directory.GetCurrentDirectory() + "\\TempClothing\\" + textureType.ToString() + connectionId.ToString() + ".png");
+		if (File.Exists(Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png"))
+			File.Delete(Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png");
 	}
 }
 

@@ -4,6 +4,8 @@ using System.IO;
 using UnityEngine;
 using System.Threading;
 using UnityModManagerNet;
+using RootMotion.FinalIK;
+using Harmony12;
 
 namespace XLMultiplayer {
 	public enum MPTextureType : byte {
@@ -133,17 +135,39 @@ namespace XLMultiplayer {
 		public bool copiedTextures = false;
 		public bool startedEncoding = false;
 
-		public void EncodeTextures() {
+		public System.Collections.IEnumerator EncodeTextures() {
 			if (!startedEncoding) {
 				startedEncoding = true;
+				Main.statusMenu.isLoading = true;
+				Main.statusMenu.loadingStatus = 0;
+				yield return new WaitForEndOfFrame();
 				shirtMP = new MultiplayerTexture(ConvertTexture(tShirtTexture, MPTextureType.Shirt).EncodeToPNG(), new Vector2(tShirtTexture.width, tShirtTexture.height), MPTextureType.Shirt, debugWriter);
+				Main.statusMenu.loadingStatus++;
+				yield return new WaitForEndOfFrame();
 				pantsMP = new MultiplayerTexture(ConvertTexture(pantsTexture, MPTextureType.Pants).EncodeToPNG(), new Vector2(pantsTexture.width, pantsTexture.height), MPTextureType.Pants, debugWriter);
+				Main.statusMenu.loadingStatus++;
+				yield return new WaitForEndOfFrame();
 				shoesMP = new MultiplayerTexture(ConvertTexture(shoesTexture, MPTextureType.Shoes).EncodeToPNG(), new Vector2(shoesTexture.width, shoesTexture.height), MPTextureType.Shoes, debugWriter);
+				Main.statusMenu.loadingStatus++;
+				yield return new WaitForEndOfFrame();
 				hatMP = new MultiplayerTexture(ConvertTexture(hatTexture, MPTextureType.Hat).EncodeToPNG(), new Vector2(hatTexture.width, hatTexture.height), MPTextureType.Hat, debugWriter);
+				Main.statusMenu.loadingStatus++;
+				yield return new WaitForEndOfFrame();
 				boardMP = new MultiplayerTexture(ConvertTexture(skateboardTexture, MPTextureType.Board).EncodeToPNG(), new Vector2(skateboardTexture.width, skateboardTexture.height), MPTextureType.Board, debugWriter);
-
 				copiedTextures = true;
+				Main.statusMenu.loadingStatus++;
+				yield return new WaitForEndOfFrame();
+
+				Main.statusMenu.loadingStatus++;
+				yield return new WaitForEndOfFrame();
+				Main.menu.multiplayerManager.SendTextures();
+				yield return new WaitForEndOfFrame();
+
+				Main.menu.multiplayerManager.InvokeRepeating("SendUpdate", 0.5f, 1.0f / (float)MultiplayerController.tickRate);
+				yield return new WaitForEndOfFrame();
+				Main.statusMenu.isLoading = false;
 			}
+			yield break;
 		}
 
 		private Texture2D ConvertTexture(Texture t, MPTextureType texType) {
@@ -282,7 +306,7 @@ namespace XLMultiplayer {
 				return;
 			}
 
-			this.hips = this.skater.transform.Find("Skater").Find("Reference").Find("mixamorig_Hips");
+			this.hips = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>().references.pelvis;
 
 			//Get all animators attached to the root
 			Animator[] ourSkaterAnimators = new Animator[3];

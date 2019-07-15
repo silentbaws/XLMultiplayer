@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Diagnostics;
 using System.Threading;
 using Harmony12;
+using RootMotion.FinalIK;
 
 namespace XLMultiplayer {
 	public enum OpCode : byte{
@@ -89,7 +90,7 @@ namespace XLMultiplayer {
 			//}
 		}
 
-		private void SendUpdate() {
+		public void SendUpdate() {
 			this.SendPlayerPosition();
 			this.SendPlayerAnimator();
 		}
@@ -117,13 +118,13 @@ namespace XLMultiplayer {
 				client = new NetworkClient(serverIP, port, this);
 				client.debugWriter = debugWriter;
 
-				//FullBodyBipedIK biped = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>();
-				//debugWriter.WriteLine(biped.references.root.name);
-				//Transform parent = biped.references.root.parent;
-				//while (parent != null) {
-				//	debugWriter.WriteLine(parent.name);
-				//	parent = parent.parent;
-				//}
+				FullBodyBipedIK biped = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>();
+				debugWriter.WriteLine(biped.references.pelvis.name);
+				Transform parent = biped.references.root.parent;
+				while (parent != null) {
+					debugWriter.WriteLine(parent.name);
+					parent = parent.parent;
+				}
 			}
 		}
 
@@ -186,7 +187,7 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void SendTextures() {
+		public void SendTextures() {
 			while (!client.tcpConnection.Connected || !this.ourController.pantsMP.saved || !this.ourController.shirtMP.saved || !this.ourController.shoesMP.saved || !this.ourController.boardMP.saved || !this.ourController.hatMP.saved) {
 				if (textureSendWatch == null) {
 					textureSendWatch = new Stopwatch();
@@ -363,9 +364,7 @@ namespace XLMultiplayer {
 						aliveThread = new Thread(new ThreadStart(this.SendAlive));
 						aliveThread.IsBackground = true;
 						aliveThread.Start();
-						this.ourController.EncodeTextures();
-						SendTextures();
-						InvokeRepeating("SendUpdate", 0.5f, 1.0f / (float)tickRate);
+						StartCoroutine(this.ourController.EncodeTextures());
 						break;
 					}
 					break;
