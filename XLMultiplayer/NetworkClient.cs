@@ -41,6 +41,7 @@ namespace XLMultiplayer {
 		public int receivedAlive = 0;
 		public long lastAlive = 0;
 		public float packetLoss;
+		public int ping;
 
 		public StreamWriter debugWriter;
 
@@ -171,6 +172,8 @@ namespace XLMultiplayer {
 					if (state.readBytes < 4) {
 						handler.BeginReceive(state.buffer, state.readBytes, state.buffer.Length - state.readBytes, SocketFlags.None, ReceiveCallbackTCP, state);
 					} else {
+						lastAlive = elapsedTime.ElapsedMilliseconds;
+
 						if (state.readBytes == 4) {
 							state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
 						}

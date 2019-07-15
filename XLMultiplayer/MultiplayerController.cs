@@ -41,7 +41,7 @@ namespace XLMultiplayer {
 	public class MultiplayerController : MonoBehaviour {
 		public bool runningClient = false;
 
-		private byte tickRate = 32;
+		public static byte tickRate = 32;
 
 		public MultiplayerPlayerController ourController;
 		public List<MultiplayerPlayerController> otherControllers = new List<MultiplayerPlayerController>();
@@ -70,6 +70,15 @@ namespace XLMultiplayer {
 
 			if(client != null && !client.tcpConnection.Connected && client.elapsedTime.ElapsedMilliseconds > 5000) {
 				KillConnection();
+			}
+
+			foreach(MultiplayerPlayerController controller in this.otherControllers) {
+				if(controller != null) {
+					for(int i = 0; i < 68; i++) {
+						controller.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].position, controller.targetPositions[i], Time.deltaTime/(1f/(float)tickRate));
+						controller.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].rotation, controller.targetRotations[i], Time.deltaTime/(1f/(float)tickRate));
+					}
+				}
 			}
 
 			//if (this.ourController != null && this.otherControllers.Count == 0)
@@ -370,13 +379,13 @@ namespace XLMultiplayer {
 					break;
 				case OpCode.StillAlive:
 					long timeOfPacket = BitConverter.ToInt64(buffer, 1);
-					long ping = client.elapsedTime.ElapsedMilliseconds - timeOfPacket;
+					client.ping = (int)(client.elapsedTime.ElapsedMilliseconds - timeOfPacket);
 
 					client.lastAlive = client.elapsedTime.ElapsedMilliseconds;
 					client.receivedAlive++;
-					client.packetLoss = ((1.0f - (float)client.receivedAlive / (float)client.sentAlive) * 100);
+					client.packetLoss = Mathf.Clamp(((1.0f - (float)client.receivedAlive / (float)client.sentAlive) * 100), 0.0f, 99.9f);
 
-					debugWriter.WriteLine("Current ping {0}ms, packet loss {1}%", ping, client.packetLoss);
+					debugWriter.WriteLine("Current ping {0}ms, packet loss {1}%", client.ping, client.packetLoss);
 					break;
 			}
 		}

@@ -347,13 +347,17 @@ public class Server {
 					Console.WriteLine("Disconnect from {0} on file transfer server {1}", client.connectionId, timeout ? "connection timed out" : "");
 				}
 			}catch(Exception e) {
-				players[client.connectionId].Pants.DeleteTexture(client.connectionId);
-				players[client.connectionId].Shirt.DeleteTexture(client.connectionId);
-				players[client.connectionId].Shoes.DeleteTexture(client.connectionId);
-				players[client.connectionId].Board.DeleteTexture(client.connectionId);
-				players[client.connectionId].Hat.DeleteTexture(client.connectionId);
-				players[client.connectionId] = null;
-				clients[client.connectionId] = null;
+				if (client != null) {
+					if (players[client.connectionId] != null) {
+						players[client.connectionId].Pants.DeleteTexture(client.connectionId);
+						players[client.connectionId].Shirt.DeleteTexture(client.connectionId);
+						players[client.connectionId].Shoes.DeleteTexture(client.connectionId);
+						players[client.connectionId].Board.DeleteTexture(client.connectionId);
+						players[client.connectionId].Hat.DeleteTexture(client.connectionId);
+						players[client.connectionId] = null;
+					}
+					clients[client.connectionId] = null;
+				}
 			}
 		}
 	}
@@ -484,7 +488,7 @@ public class Server {
 			foreach(Client client in clients) {
 				if(client != null) {
 					if(client.reliableSocket == null || client.aliveWatch == null || client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 5000 || client.timedOut || client.ReceiveTCP == null) {
-						if (client.ReceiveTCP != null) {
+						if (client.ReceiveTCP != null && client.reliableSocket != null && client.reliableSocket.Connected) {
 							client.reliableSocket.Disconnect(true);
 						} else {
 							clients[i] = null;

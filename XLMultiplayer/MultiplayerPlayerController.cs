@@ -96,6 +96,9 @@ namespace XLMultiplayer {
 
 		public Transform hips;
 
+		public Vector3[] targetPositions = new Vector3[68];
+		public Quaternion[] targetRotations = new Quaternion[68];
+
 		public string username = "IT ALL BROKE";
 
 		private GameObject usernameObject;
@@ -576,11 +579,13 @@ namespace XLMultiplayer {
 
 			byte[] transforms = PackTransformArray(this.hips.GetComponentsInChildren<Transform>());
 
-			packed[0] = new byte[952];
-			Array.Copy(transforms, 0, packed[0], 0, 952);
+			packed[0] = new byte[953];
+			packed[0][0] = 0;
+			Array.Copy(transforms, 0, packed[0], 1, 952);
 
-			packed[1] = new byte[952];
-			Array.Copy(transforms, 952, packed[1], 0, 952);
+			packed[1] = new byte[953];
+			packed[1][0] = 1;
+			Array.Copy(transforms, 952, packed[1], 1, 952);
 			//Create arrays to hold the paramaters | packing 8 bools into a byte to save bandwidth for further expansion
 			//byte[] bools = new byte[(int)Math.Ceiling((double)this.animBools / 8)];
 			//byte[] floats = new byte[this.animFloats * 4];
@@ -653,11 +658,11 @@ namespace XLMultiplayer {
 		public void UnpackAnimator(byte[] recBuffer) {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
 
-			byte[] buffer = new byte[recBuffer.Length - 4];
+			byte[] buffer = new byte[recBuffer.Length - 5];
 			if(receivedPacketSequence < currentAnimationPacket - 1) {
 				return;
 			} else {
-				Array.Copy(recBuffer, 4, buffer, 0, recBuffer.Length - 4);
+				Array.Copy(recBuffer, 5, buffer, 0, recBuffer.Length - 5);
 				currentAnimationPacket = receivedPacketSequence;
 			}
 
@@ -679,15 +684,29 @@ namespace XLMultiplayer {
 				quaternions.Add(readQuaternion);
 			}
 
-			if (receivedPacketSequence % 2 == 0) {
+			if (recBuffer[4] == 0) {
 				for(int i = 0; i < 34; i++) {
-					this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i];
-					this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i];
+					if (Vector3.Distance(this.targetPositions[i], vectors[i]) > 1) {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i];
+					} else {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = this.targetPositions[i];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.targetRotations[i];
+					}
+					this.targetPositions[i] = vectors[i];
+					this.targetRotations[i] = quaternions[i];
 				}
 			} else {
 				for (int i = 34; i < 68; i++) {
-					this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i-34];
-					this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i-34];
+					if (Vector3.Distance(this.targetPositions[i], vectors[i - 34]) > 1) {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i - 34];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i- 34];
+					} else {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = this.targetPositions[i];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.targetRotations[i];
+					}
+					this.targetPositions[i] = vectors[i - 34];
+					this.targetRotations[i] = quaternions[i - 34];
 				}
 			}
 

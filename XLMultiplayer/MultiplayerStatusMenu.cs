@@ -21,18 +21,6 @@ namespace XLMultiplayer {
 		private string playerNames;
 		private int numPlayers = 0;
 
-		private IEnumerator WaitForRequest(WWW www, bool loadConnectTexture) {
-			yield return www;
-
-			// check for errors
-			if (www.error == null) {
-				if (!loadConnectTexture) {
-					
-				}
-				www.Dispose();
-			}
-		}
-
 		public void Start() {
 			InitializeMenu();
 		}
@@ -110,10 +98,22 @@ namespace XLMultiplayer {
 
 		public void OnGUI() {
 			if (showStatus && Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) {
-				Rect rect = new Rect(Screen.width - Screen.width * 0.2f, Screen.width * 0.1f, Screen.width * 0.2f, (numPlayers + 1) * 25f);
+				Rect rect = new Rect(Screen.width - Screen.width * 0.2f, Screen.width * 0.1f, Screen.width * 0.2f - 5, (numPlayers + 1) * 25f);
 
 				GUI.contentColor = Color.black;
-				GUI.Label(rect, playerNames);
+				GUIStyle nameStyle = new GUIStyle();
+				nameStyle.fontSize = 16;
+				nameStyle.alignment = TextAnchor.UpperRight;
+				GUI.Label(rect, playerNames, nameStyle);
+
+				NetworkClient client = Main.menu.multiplayerManager.client;
+
+				Rect rect2 = new Rect(0, Screen.height - 105, Screen.width, 100);
+				GUIStyle style = new GUIStyle();
+				style.fontSize = 16;
+				style.alignment = TextAnchor.LowerCenter;
+
+				GUI.Label(rect2, "Ping: " + client.ping.ToString() + "\nPacket Loss: " + client.packetLoss.ToString() + "%", style);
 			}
 		}
 	}
