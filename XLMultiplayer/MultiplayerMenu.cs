@@ -36,7 +36,7 @@ namespace XLMultiplayer {
 		// Token: 0x06000448 RID: 1096 RVA: 0x0002BA4C File Offset: 0x00029C4C
 		private void OpenMultiplayerMenu() {
 			if (UnityEngine.Object.FindObjectOfType<EventSystem>() == null) {
-				GameObject gameObject = new GameObject("EVENTSYSTEMCUNTFUCK");
+				GameObject gameObject = new GameObject("Event System");
 				gameObject.AddComponent<EventSystem>();
 				gameObject.AddComponent<StandaloneInputModule>();
 			}

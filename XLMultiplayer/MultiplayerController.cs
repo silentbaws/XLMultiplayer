@@ -7,7 +7,6 @@ using System.Net.Sockets;
 using System.Diagnostics;
 using System.Threading;
 using Harmony12;
-using RootMotion.FinalIK;
 
 namespace XLMultiplayer {
 	public enum OpCode : byte{

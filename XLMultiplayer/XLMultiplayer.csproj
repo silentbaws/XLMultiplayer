@@ -369,7 +369,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Main.cs" />
-    <Compile Include="MultiplayerIKController.cs" />
     <Compile Include="MultiplayerMenu.cs" />
     <Compile Include="MultiplayerController.cs" />
     <Compile Include="MultiplayerPlayerController.cs" />
