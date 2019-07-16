@@ -135,6 +135,8 @@ namespace XLMultiplayer {
 		public bool copiedTextures = false;
 		public bool startedEncoding = false;
 
+		public bool loadedAll = false;
+
 		public System.Collections.IEnumerator EncodeTextures() {
 			if (!startedEncoding) {
 				startedEncoding = true;
@@ -159,6 +161,7 @@ namespace XLMultiplayer {
 				yield return new WaitForEndOfFrame();
 
 				Main.statusMenu.loadingStatus++;
+				yield return new WaitForEndOfFrame();
 				yield return new WaitForEndOfFrame();
 				Main.menu.multiplayerManager.SendTextures();
 				yield return new WaitForEndOfFrame();

@@ -47,13 +47,24 @@ namespace XLMultiplayer {
 
 		MultiplayerController controller;
 
-		public NetworkClient(string ipAdr, int port, MultiplayerController controller) {
+		public NetworkClient(string ipAddr, int port, MultiplayerController controller, StreamWriter sw) {
 			this.controller = controller;
-			ip = IPAddress.Parse(ipAdr);
-			ipEndPoint = new IPEndPoint(ip, port);
-
+			this.debugWriter = sw;
 			elapsedTime = new Stopwatch();
 			elapsedTime.Start();
+			try {
+				ip = IPAddress.Parse(ipAddr.Trim());
+			}catch(Exception e) {
+				debugWriter.WriteLine(e.ToString());
+				controller.KillConnection();
+				return;
+			}
+			if(ip == null) {
+				controller.KillConnection();
+				return;
+			}
+
+			ipEndPoint = new IPEndPoint(ip, port);
 
 			tcpConnection = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 			udpConnection = new UdpClient();
@@ -78,7 +89,9 @@ namespace XLMultiplayer {
 		public void SendReliable(byte[] buffer) {
 			try {
 				tcpConnection.SendTo(buffer, ipEndPoint);
-			} catch (Exception e) { }
+			} catch (Exception e) {
+				debugWriter.WriteLine(e.ToString());
+			}
 		}
 
 		public void SendAlive() {
@@ -93,7 +106,9 @@ namespace XLMultiplayer {
 				sentAlive++;
 
 				udpConnection.Send(buffer, buffer.Length);
-			} catch (Exception e) { }
+			} catch (Exception e) {
+				debugWriter.WriteLine("Error sending alive message {0}", e.ToString());
+			}
 		}
 
 		public void SendUnreliable(byte[] buffer) {
@@ -113,7 +128,9 @@ namespace XLMultiplayer {
 				} else {
 					animationPackets++;
 				}
-			} catch (Exception e) { }
+			} catch (Exception e) {
+				debugWriter.WriteLine(e.ToString());
+			}
 		}
 
 		private void BeginReceivingUDP() {
@@ -145,12 +162,16 @@ namespace XLMultiplayer {
 		}
 
 		private void ConnectCallbackTCP(IAsyncResult ar) {
-			tcpConnection = (Socket)ar.AsyncState;
-			tcpConnection.EndConnect(ar);
-			this.ipEndPoint = (IPEndPoint)tcpConnection.RemoteEndPoint;
+			try {
+				tcpConnection = (Socket)ar.AsyncState;
+				tcpConnection.EndConnect(ar);
+				this.ipEndPoint = (IPEndPoint)tcpConnection.RemoteEndPoint;
 
-			BeginReceivingTCP();
-			BeginReceivingUDP();
+				BeginReceivingTCP();
+				BeginReceivingUDP();
+			} catch(Exception e) {
+				debugWriter.WriteLine(e.ToString());
+			}
 		}
 
 		private void BeginReceivingTCP() {
@@ -172,7 +193,7 @@ namespace XLMultiplayer {
 					if (state.readBytes < 4) {
 						handler.BeginReceive(state.buffer, state.readBytes, state.buffer.Length - state.readBytes, SocketFlags.None, ReceiveCallbackTCP, state);
 					} else {
-						lastAlive = elapsedTime.ElapsedMilliseconds;
+						lastAlive = elapsedTime.ElapsedMilliseconds > lastAlive ? elapsedTime.ElapsedMilliseconds : lastAlive;
 
 						if (state.readBytes == 4) {
 							state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
@@ -210,14 +231,18 @@ namespace XLMultiplayer {
 		}
 
 		public void CloseConnection() {
-			if (tcpConnection != null) {
-				tcpConnection.Shutdown(SocketShutdown.Both);
-				tcpConnection.Close();
+			try {
+				if (tcpConnection != null) {
+					tcpConnection.Shutdown(SocketShutdown.Both);
+					tcpConnection.Close();
+				}
+				if (udpConnection != null) {
+					udpConnection.Close();
+				}
+				bufferObjects.Clear();
+			} catch(Exception e) {
+				debugWriter.WriteLine(e.ToString());
 			}
-			if (udpConnection != null) {
-				udpConnection.Close();
-			}
-			bufferObjects.Clear();
 		}
 	}
 }

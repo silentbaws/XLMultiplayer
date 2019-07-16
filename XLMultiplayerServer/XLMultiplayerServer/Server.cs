@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
-using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 
 public enum OpCode : byte {
 	Connect = 0,
@@ -63,7 +60,7 @@ public class MultiplayerSkin {
 		textureType = mpType;
 	}
 
-	string sep = Path.PathSeparator.ToString();
+	string sep = Path.DirectorySeparatorChar.ToString();
 
 	public string GetTexturePath(int connectionId) {
 		return Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png";

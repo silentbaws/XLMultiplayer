@@ -115,7 +115,7 @@ namespace XLMultiplayer {
 				this.ourController.username = user;
 				this.runningClient = true;
 
-				client = new NetworkClient(serverIP, port, this);
+				client = new NetworkClient(serverIP, port, this, this.debugWriter);
 				client.debugWriter = debugWriter;
 
 				FullBodyBipedIK biped = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>();
@@ -183,6 +183,7 @@ namespace XLMultiplayer {
 			}
 
 			if (client != null && client.timedOut) {
+				debugWriter.WriteLine("Client timed out");
 				KillConnection();
 			}
 		}
@@ -209,7 +210,7 @@ namespace XLMultiplayer {
 			prebuffer[5] = (byte)MPTextureType.Pants;
 			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.y), 0, prebuffer, 10, 4);
-			client.tcpConnection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			client.tcpConnection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
 			prebuffer = new byte[14];
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.bytes.Length + 10), 0, prebuffer, 0, 4);
@@ -217,7 +218,7 @@ namespace XLMultiplayer {
 			prebuffer[5] = (byte)MPTextureType.Shirt;
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.y), 0, prebuffer, 10, 4);
-			client.tcpConnection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			client.tcpConnection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
 			prebuffer = new byte[14];
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.bytes.Length + 10), 0, prebuffer, 0, 4);
@@ -225,7 +226,7 @@ namespace XLMultiplayer {
 			prebuffer[5] = (byte)MPTextureType.Shoes;
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.y), 0, prebuffer, 10, 4);
-			client.tcpConnection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			client.tcpConnection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
 			prebuffer = new byte[14];
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.bytes.Length + 10), 0, prebuffer, 0, 4);
@@ -233,7 +234,7 @@ namespace XLMultiplayer {
 			prebuffer[5] = (byte)MPTextureType.Board;
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.y), 0, prebuffer, 10, 4);
-			client.tcpConnection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			client.tcpConnection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
 			prebuffer = new byte[14];
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.bytes.Length + 10), 0, prebuffer, 0, 4);
@@ -241,7 +242,7 @@ namespace XLMultiplayer {
 			prebuffer[5] = (byte)MPTextureType.Hat;
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.y), 0, prebuffer, 10, 4);
-			client.tcpConnection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseDefaultWorkerThread);
+			client.tcpConnection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 		}
 
 		private void AddPlayer(int playerID) {
@@ -379,7 +380,8 @@ namespace XLMultiplayer {
 					long timeOfPacket = BitConverter.ToInt64(buffer, 1);
 					client.ping = (int)(client.elapsedTime.ElapsedMilliseconds - timeOfPacket);
 
-					client.lastAlive = client.elapsedTime.ElapsedMilliseconds;
+					client.lastAlive = client.elapsedTime.ElapsedMilliseconds > client.lastAlive ? client.elapsedTime.ElapsedMilliseconds : client.lastAlive;
+
 					client.receivedAlive++;
 					client.packetLoss = Mathf.Clamp(((1.0f - (float)client.receivedAlive / (float)client.sentAlive) * 100), 0.0f, 99.9f);
 
@@ -400,8 +402,31 @@ namespace XLMultiplayer {
 			while (this.isConnected) {
 				if (client != null) {
 					client.SendAlive();
-					if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 && IsInvoking("SendUpdate") && !Application.isLoadingLevel) {
-						client.timedOut = true;
+					if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 && ((IsInvoking("SendUpdate") && !Application.isLoadingLevel && textureQueue.Count == 0) || !client.tcpConnection.Connected)) {
+						bool loadedAll = true;
+						foreach (MultiplayerPlayerController controller in this.otherControllers) {
+							if (!controller.shirtMP.loaded) {
+								loadedAll = false;
+								break;
+							}
+							if (!controller.pantsMP.loaded) {
+								loadedAll = false;
+								break;
+							}
+							if (!controller.shoesMP.loaded) {
+								loadedAll = false;
+								break;
+							}
+							if (!controller.boardMP.loaded) {
+								loadedAll = false;
+								break;
+							}
+							if (!controller.hatMP.loaded) {
+								loadedAll = false;
+								break;
+							}
+						}
+						if(loadedAll || this.otherControllers.Count == 0) client.timedOut = true;
 					}
 				}
 				Thread.Sleep(100);
