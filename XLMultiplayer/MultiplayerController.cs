@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Threading;
 using Harmony12;
 using RootMotion.FinalIK;
+using System.Linq;
 
 namespace XLMultiplayer {
 	public enum OpCode : byte{
@@ -62,17 +63,55 @@ namespace XLMultiplayer {
 		public static RuntimeAnimatorController goofySteezeAnim = Traverse.Create(SettingsManager.Instance).Field("_goofySteezeAnim").GetValue<RuntimeAnimatorController>();
 		public static RuntimeAnimatorController regularSteezeAnim = Traverse.Create(SettingsManager.Instance).Field("_regularSteezeAnim").GetValue<RuntimeAnimatorController>();
 
+		List<float> previousFrameTimes = new List<float> ();
+
 		private void Start() {
 		}
 
 		private void Update() {
+			if(previousFrameTimes.Count == 0)
+				for(int i = 0; i < 1000; i++)
+					previousFrameTimes.Add(10000);
+			else {
+				previousFrameTimes.RemoveAt(0);
+				previousFrameTimes.Add(Time.unscaledDeltaTime);
+			}
+
 			this.UpdateClient();
 
-			if(client != null && !client.tcpConnection.Connected && client.elapsedTime.ElapsedMilliseconds > 5000) {
+			if(client != null && !this.isConnected && client.elapsedTime.ElapsedMilliseconds > 5000 + previousFrameTimes.Max()) {
+				debugWriter.WriteLine("Failed to connect to server");
 				KillConnection();
 			}
 
-			foreach(MultiplayerPlayerController controller in this.otherControllers) {
+			if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 + previousFrameTimes.Max() && ((IsInvoking("SendUpdate") && !Application.isLoadingLevel && textureQueue.Count == 0) || !client.tcpConnection.Connected)) {
+				bool loadedAll = true;
+				foreach (MultiplayerPlayerController controller in this.otherControllers) {
+					if (!controller.shirtMP.loaded) {
+						loadedAll = false;
+						break;
+					}
+					if (!controller.pantsMP.loaded) {
+						loadedAll = false;
+						break;
+					}
+					if (!controller.shoesMP.loaded) {
+						loadedAll = false;
+						break;
+					}
+					if (!controller.boardMP.loaded) {
+						loadedAll = false;
+						break;
+					}
+					if (!controller.hatMP.loaded) {
+						loadedAll = false;
+						break;
+					}
+				}
+				if (loadedAll || this.otherControllers.Count == 0) client.timedOut = true;
+			}
+
+			foreach (MultiplayerPlayerController controller in this.otherControllers) {
 				if(controller != null) {
 					for(int i = 0; i < 68; i++) {
 						controller.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].position, controller.targetPositions[i], Time.deltaTime/(1f/(float)tickRate));
@@ -163,7 +202,7 @@ namespace XLMultiplayer {
 					}
 				}
 
-				if(bufferedSkin.ElapsedTime() > 10000) {
+				if(bufferedSkin.ElapsedTime() > 600000) {
 					textureQueue.Remove(bufferedSkin);
 					debugWriter.WriteLine("Texture in queue expired");
 				}
@@ -378,14 +417,14 @@ namespace XLMultiplayer {
 					break;
 				case OpCode.StillAlive:
 					long timeOfPacket = BitConverter.ToInt64(buffer, 1);
-					client.ping = (int)(client.elapsedTime.ElapsedMilliseconds - timeOfPacket);
+					client.ping = (int)(client.elapsedTime.ElapsedMilliseconds - timeOfPacket - Time.unscaledDeltaTime);
 
 					client.lastAlive = client.elapsedTime.ElapsedMilliseconds > client.lastAlive ? client.elapsedTime.ElapsedMilliseconds : client.lastAlive;
 
 					client.receivedAlive++;
 					client.packetLoss = Mathf.Clamp(((1.0f - (float)client.receivedAlive / (float)client.sentAlive) * 100), 0.0f, 99.9f);
 
-					debugWriter.WriteLine("Current ping {0}ms, packet loss {1}%", client.ping, client.packetLoss);
+					debugWriter.WriteLine("Current ping {0}ms, packet loss {1}%", client.ping, client.packetLoss.ToString("n2"));
 					break;
 			}
 		}
@@ -402,32 +441,6 @@ namespace XLMultiplayer {
 			while (this.isConnected) {
 				if (client != null) {
 					client.SendAlive();
-					if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 && ((IsInvoking("SendUpdate") && !Application.isLoadingLevel && textureQueue.Count == 0) || !client.tcpConnection.Connected)) {
-						bool loadedAll = true;
-						foreach (MultiplayerPlayerController controller in this.otherControllers) {
-							if (!controller.shirtMP.loaded) {
-								loadedAll = false;
-								break;
-							}
-							if (!controller.pantsMP.loaded) {
-								loadedAll = false;
-								break;
-							}
-							if (!controller.shoesMP.loaded) {
-								loadedAll = false;
-								break;
-							}
-							if (!controller.boardMP.loaded) {
-								loadedAll = false;
-								break;
-							}
-							if (!controller.hatMP.loaded) {
-								loadedAll = false;
-								break;
-							}
-						}
-						if(loadedAll || this.otherControllers.Count == 0) client.timedOut = true;
-					}
 				}
 				Thread.Sleep(100);
 			}

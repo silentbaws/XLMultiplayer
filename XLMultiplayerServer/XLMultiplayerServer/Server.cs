@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -140,12 +141,19 @@ public class MultiplayerSkin {
 //	}
 //}
 
+public class ServerConfig {
+	[JsonProperty("Max_Players")]
+	public static int MAX_PLAYERS;
+	[JsonProperty("Port")]
+	public static int PORT;
+}
+
 public class Server {
 	public Socket listener;
 	public int port;
 
-	public static Client[] clients = new Client[5];
-	public static Player[] players = new Player[5];
+	public static Client[] clients;
+	public static Player[] players;
 
 	public static UdpClient udpClient;
 
@@ -343,7 +351,7 @@ public class Server {
 					players[client.connectionId].Hat.DeleteTexture(client.connectionId);
 					players[client.connectionId] = null;
 					clients[client.connectionId] = null;
-					Console.WriteLine("Disconnect from {0} on file transfer server {1}", client.connectionId, timeout ? "connection timed out" : "");
+					Console.WriteLine("Disconnect from {0} on game server {1}", client.connectionId, timeout ? "connection timed out" : "");
 				}
 			}catch(Exception e) {
 				if (client != null) {
@@ -371,16 +379,16 @@ public class Server {
 
 		udpClient = new UdpClient();
 		udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-		udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, 7777));
+		udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, ServerConfig.PORT));
 		udpClient.DontFragment = true;
 		BeginReceivingUDP();
 	}
 
 	public void StartListening() {
 		try {
-			Console.WriteLine("Started listening on file transfer server");
+			Console.WriteLine("Started listening on game server");
 			listener.Bind(new IPEndPoint(IPAddress.Any, port));
-			listener.Listen(5);
+			listener.Listen(ServerConfig.MAX_PLAYERS);
 
 			listener.BeginAccept(AcceptCallback, listener);
 		} catch (Exception e) {
@@ -390,7 +398,7 @@ public class Server {
 
 	public void AcceptCallback(IAsyncResult ar) {
 		try {
-			Console.WriteLine("Began connection on file transfer server");
+			Console.WriteLine("Began connection on game server");
 			Socket acceptedSocket = listener.EndAccept(ar);
 			int connectionId = -1;
 
@@ -406,6 +414,14 @@ public class Server {
 				players[connectionId] = new Player(connectionId, "");
 
 				SendToAllTCP(new byte[] { (byte)OpCode.Connect }, connectionId);
+			} else {
+				int connections = 0;
+				foreach(Client client in clients) {
+					if(client != null) {
+						connections++;
+					}
+				}
+				Console.WriteLine("Refused connection due to no open slots, currently {0} connections of {1} filled", connections, ServerConfig.MAX_PLAYERS);
 			}
 			
 			listener.BeginAccept(AcceptCallback, listener);
@@ -446,7 +462,7 @@ public class Server {
 	public void ReceiveCallbackUDP(IAsyncResult ar) {
 		try {
 			UdpClient tempUDP = (UdpClient)ar.AsyncState;
-			IPEndPoint tempEndPoint = new IPEndPoint(IPAddress.Any, 7777);
+			IPEndPoint tempEndPoint = new IPEndPoint(IPAddress.Any, ServerConfig.PORT);
 
 			byte[] buffer = tempUDP.EndReceive(ar, ref tempEndPoint);
 
@@ -481,7 +497,14 @@ public class Server {
 	}
 
 	public static int Main(String[] args) {
-		Server server = new Server(7777);
+		JsonConvert.DeserializeObject<ServerConfig>(File.ReadAllText(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json"));
+
+		Console.WriteLine("Creating game server on port {0}, with a maximum of {1} players", ServerConfig.PORT, ServerConfig.MAX_PLAYERS);
+
+		clients = new Client[ServerConfig.MAX_PLAYERS];
+		players = new Player[ServerConfig.MAX_PLAYERS];
+
+		Server server = new Server(ServerConfig.PORT);
 		while (true) {
 			int i = 0;
 			foreach(Client client in clients) {

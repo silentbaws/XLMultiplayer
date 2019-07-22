@@ -18,7 +18,7 @@ namespace XLMultiplayer {
 		private List<MultiplayerPlayerController> connectedPlayers;
 
 		private bool showStatus = true;
-		private string playerNames;
+		private string playerNames = "";
 		private int numPlayers = 0;
 
 		public bool isLoading = false;

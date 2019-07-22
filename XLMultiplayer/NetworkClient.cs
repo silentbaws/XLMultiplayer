@@ -59,7 +59,7 @@ namespace XLMultiplayer {
 				controller.KillConnection();
 				return;
 			}
-			if(ip == null) {
+			if (ip == null) {
 				controller.KillConnection();
 				return;
 			}
@@ -68,8 +68,13 @@ namespace XLMultiplayer {
 
 			tcpConnection = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 			udpConnection = new UdpClient();
-			udpConnection.Connect(ipEndPoint);
+			try {
+				udpConnection.Connect(ipEndPoint);
+			}catch(Exception e) {
+				debugWriter.WriteLine("UDP Connection error {0}", e);
+			}
 
+			debugWriter.WriteLine("Begin connection tcp");
 			tcpConnection.BeginConnect(ipEndPoint, new AsyncCallback(ConnectCallbackTCP), tcpConnection);
 		}
 
@@ -166,6 +171,8 @@ namespace XLMultiplayer {
 				tcpConnection = (Socket)ar.AsyncState;
 				tcpConnection.EndConnect(ar);
 				this.ipEndPoint = (IPEndPoint)tcpConnection.RemoteEndPoint;
+				
+				debugWriter.WriteLine(this.ipEndPoint.ToString());
 
 				BeginReceivingTCP();
 				BeginReceivingUDP();
