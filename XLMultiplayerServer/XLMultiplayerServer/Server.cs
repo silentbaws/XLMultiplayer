@@ -364,6 +364,7 @@ public class Server {
 						players[client.connectionId] = null;
 					}
 					clients[client.connectionId] = null;
+					players[client.connectionId] = null;
 				}
 			}
 		}
@@ -506,20 +507,34 @@ public class Server {
 
 		Server server = new Server(ServerConfig.PORT);
 		while (true) {
-			int i = 0;
-			foreach(Client client in clients) {
-				if(client != null) {
-					if(client.reliableSocket == null || client.aliveWatch == null || client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 5000 || client.timedOut || client.ReceiveTCP == null) {
-						if (client.ReceiveTCP != null && client.reliableSocket != null && client.reliableSocket.Connected) {
-							client.reliableSocket.Disconnect(true);
-						} else {
-							clients[i] = null;
-							players[i] = null;
-						}
-					}
+
+			foreach (Client client in clients) {
+				if (client != null && client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 10000) {
+					client.timedOut = true;
+					client.ReceiveTCP.Disconnect(client.timedOut);
 				}
-				i++;
 			}
+
+			int i = 0;
+			//foreach(Client client in clients) {
+			//	if (client != null) {
+			//		if (client.reliableSocket == null || client.aliveWatch == null || client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 5000 || client.timedOut || client.ReceiveTCP == null) {
+			//			if (client.ReceiveTCP != null && client.reliableSocket != null && client.reliableSocket.Connected) {
+			//				Console.WriteLine("Disconnecting cunt {0}", i);
+			//				client.reliableSocket.Disconnect(false);
+			//			} else {
+			//				Console.WriteLine("Setting player {0} to null", i);
+			//				if (client.reliableSocket != null) {
+			//					try { client.reliableSocket.Close(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+			//					clients[i] = null;
+			//					players[i] = null;
+			//					break;
+			//				}
+			//			}
+			//		}
+			//	}
+			//	i++;
+			//}
 
 			foreach (Client client in clients) {
 				if (client != null && client.newConnection && client.reliableSocket.Connected) {

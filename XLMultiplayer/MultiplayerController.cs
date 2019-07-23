@@ -336,6 +336,7 @@ namespace XLMultiplayer {
 					RemovePlayer(i);
 				}
 			}
+			otherControllers.Clear();
 			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing";
 			if (Directory.Exists(path)) {
 				string[] files = Directory.GetFiles(path);

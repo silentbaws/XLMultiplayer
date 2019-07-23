@@ -1,4 +1,4 @@
 ﻿{
-  "Max_Players": 3,
-  "Port": 7778
+  "Max_Players": 5,
+  "Port": 7777
 }

@@ -568,9 +568,9 @@ namespace XLMultiplayer {
 			this.board.transform.rotation = quaternions[1];
 			this.skater.transform.position = vectors[2];
 			this.skater.transform.rotation = quaternions[2];
-			this.skater.GetComponent<Rigidbody>().position = vectors[3];
+			//this.skater.GetComponent<Rigidbody>().position = vectors[3];
 			//this.skater.GetComponent<Rigidbody>().velocity = vectors[4];
-			this.skater.GetComponent<Rigidbody>().rotation = quaternions[3];
+			//this.skater.GetComponent<Rigidbody>().rotation = quaternions[3];
 			Rigidbody[] boardBodies = this.board.GetComponentsInChildren<Rigidbody>();
 			boardBodies[0].position = vectors[5];
 			boardBodies[0].velocity = vectors[6];
