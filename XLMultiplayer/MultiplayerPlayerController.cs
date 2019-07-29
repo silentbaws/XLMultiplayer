@@ -6,6 +6,7 @@ using System.Threading;
 using UnityModManagerNet;
 using RootMotion.FinalIK;
 using Harmony12;
+using System.IO.Compression;
 
 namespace XLMultiplayer {
 	public enum MPTextureType : byte {
@@ -114,7 +115,7 @@ namespace XLMultiplayer {
 		private int currentPositionPacket = -1;
 		readonly string[] SkateboardMaterials = new string[] { "GripTape", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
 		readonly string[] TeeShirt = new string[] { "Cory_fixed_Karam:cory_001:shirt_geo" };
-		readonly string[] PantsMaterials = new string[] { "Cory_fixed_Karam:cory_001:pants_geo", "Cory_fixed_Karam:cory_001:lashes_geo" };
+		readonly string[] PantsMaterials = new string[] { "Cory_fixed_Karam:cory_001:pants_geo" };
 		readonly string[] Shoes = new string[] { "Cory_fixed_Karam:cory_001:shoes_geo" };
 		readonly string[] Hat = new string[] { "Cory_fixed_Karam:cory_001:hat_geo" };
 
@@ -379,6 +380,55 @@ namespace XLMultiplayer {
 				boolParams.Clear();
 				floatParams.Clear();
 				intParams.Clear();
+			}
+
+			
+			Thread packShit = new Thread(() => {
+				List<byte> allBones = new List<byte>();
+				List<byte> allTransforms = new List<byte>();
+				int frames = 0;
+				while (frames < 2) {
+					byte[] transforms = PackTransforms();
+					byte[][] bones = PackAnimator();
+
+					allBones.AddRange(new List<byte>(bones[0]));
+					allBones.AddRange(new List<byte>(bones[1]));
+					allTransforms.AddRange(new List<byte>(transforms));
+
+					frames++;
+
+					Thread.Sleep((int)(1.00f / 32.0f * 1000f));
+				}
+
+				debugWriter.WriteLine(allTransforms.Count);
+				debugWriter.WriteLine(Compress(allTransforms.ToArray()).Length);
+				debugWriter.WriteLine(CompressGZIP(allTransforms.ToArray()).Length);
+				debugWriter.WriteLine(allBones.Count);
+				debugWriter.WriteLine(Compress(allBones.ToArray()).Length);
+				debugWriter.WriteLine(CompressGZIP(allBones.ToArray()).Length);
+			});
+			packShit.IsBackground = true;
+			packShit.Start();
+		}
+
+		public static byte[] Compress(byte[] data) {
+			MemoryStream output = new MemoryStream();
+			using (DeflateStream dstream = new DeflateStream(output, System.IO.Compression.CompressionLevel.Optimal)) {
+				dstream.Write(data, 0, data.Length);
+			}
+			return output.ToArray();
+		}
+
+		public static byte[] CompressGZIP(byte[] inputData) {
+			if (inputData == null)
+				throw new ArgumentNullException("inputData must be non-null");
+
+			using (var compressIntoMs = new MemoryStream()) {
+				using (var gzs = new BufferedStream(new GZipStream(compressIntoMs,
+				 CompressionMode.Compress), 8192)) {
+					gzs.Write(inputData, 0, inputData.Length);
+				}
+				return compressIntoMs.ToArray();
 			}
 		}
 
