@@ -3,8 +3,10 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 
 public enum OpCode : byte {
 	Connect = 0,
@@ -80,7 +82,8 @@ public class MultiplayerSkin {
 			Array.Copy(file, 0, buffer, 15, file.Length);
 
 			return buffer;
-		} else {
+		}
+		else {
 			return null;
 		}
 	}
@@ -108,38 +111,6 @@ public class MultiplayerSkin {
 	}
 }
 
-//public class Server {
-//	private readonly HttpClient client = new HttpClient();
-//	private readonly string version = "0.0.1";
-
-//	private string server_name = "my server"; // need to load from settings file
-//	private string map = "my map"; // good luck with this one
-
-//	public void Start() {
-//		//StartCoroutine(SendAnnounce());
-//	}
-
-//	//private IEnumerator SendAnnounce() {
-//	//	while (true) {
-//	//		yield return new WaitForSeconds(5);
-//	//		WWWForm form = new WWWForm();
-//	//		form.AddField("name", server_name);
-//	//		form.AddField("n_players", "" + connections.Count);
-//	//		form.AddField("map", map);
-//	//		form.AddField("version", version);
-//	//		using (UnityWebRequest www = UnityWebRequest.Post(main_server, form)) {
-//	//			yield return www.SendWebRequest();
-//	//			if (www.isNetworkError || www.isHttpError) {
-//	//				WriteLine("Failed announcement to main server: " + www.error + ": " + www.downloadHandler.text);
-//	//			}
-//	//		}
-//	//	}
-//	//}
-
-//	private void Update() {
-//		
-//	}
-//}
 
 public class ServerConfig {
 	[JsonProperty("Max_Players")]
@@ -200,7 +171,7 @@ public class Server {
 					byte[] buffer = new byte[5];
 					buffer[0] = (byte)OpCode.Connect;
 					Array.Copy(BitConverter.GetBytes(client.connectionId), 0, buffer, 1, 4);
-					
+
 					this.SendReliable(buffer);
 
 					byte[] username = ASCIIEncoding.ASCII.GetBytes(players[client.connectionId].username);
@@ -233,12 +204,13 @@ public class Server {
 
 		public void SendUnreliable(byte[] buffer) {
 			if (buffer == null) return;
-			try { 
-				if(udpRemoteEndPoint != null)
+			try {
+				if (udpRemoteEndPoint != null)
 					Server.udpClient.Send(buffer, buffer.Length, udpRemoteEndPoint);
-			} catch(Exception e) { }
+			}
+			catch (Exception e) { }
 		}
-		
+
 		public void SendReliable(byte[] buffer) {
 			if (buffer == null) return;
 			try {
@@ -247,7 +219,8 @@ public class Server {
 				Array.Copy(buffer, 0, newBuffer, 4, buffer.Length);
 
 				reliableSocket.Send(newBuffer);
-			} catch(Exception e) { }
+			}
+			catch (Exception e) { }
 		}
 	}
 
@@ -271,7 +244,8 @@ public class Server {
 				state.readBytes = 0;
 
 				receiveSocket.BeginReceiveFrom(state.buffer, 0, state.buffer.Length, SocketFlags.None, ref remoteEndPoint, ReceiveCallback, state);
-			} catch (Exception e) { };
+			}
+			catch (Exception e) { };
 		}
 
 		public void ReceiveCallback(IAsyncResult ar) {
@@ -285,7 +259,8 @@ public class Server {
 					Console.WriteLine("read " + state.readBytes.ToString() + " bytes of " + state.buffer.Length.ToString());
 					if (state.readBytes < 4) {
 						handler.BeginReceiveFrom(state.buffer, state.readBytes, state.buffer.Length - state.readBytes, SocketFlags.None, ref remoteEndPoint, ReceiveCallback, state);
-					} else {
+					}
+					else {
 						client.lastAlive = client.aliveWatch.ElapsedMilliseconds;
 						if (state.readBytes == 4) {
 							state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
@@ -321,17 +296,21 @@ public class Server {
 							}
 
 							StartReceiving();
-						} else {
+						}
+						else {
 							handler.BeginReceiveFrom(state.buffer, state.readBytes - 4, state.buffer.Length - state.readBytes + 4, SocketFlags.None, ref remoteEndPoint, ReceiveCallback, state);
 						}
 					}
-				} else {
+				}
+				else {
 					Disconnect(client.timedOut);
 				}
-			} catch (Exception e) {
+			}
+			catch (Exception e) {
 				if (receiveSocket.Connected) {
 					StartReceiving();
-				} else {
+				}
+				else {
 					Console.WriteLine(e.ToString());
 					Disconnect(client.timedOut);
 				}
@@ -353,7 +332,8 @@ public class Server {
 					clients[client.connectionId] = null;
 					Console.WriteLine("Disconnect from {0} on game server {1}", client.connectionId, timeout ? "connection timed out" : "");
 				}
-			}catch(Exception e) {
+			}
+			catch (Exception e) {
 				if (client != null) {
 					if (players[client.connectionId] != null) {
 						players[client.connectionId].Pants.DeleteTexture(client.connectionId);
@@ -377,6 +357,7 @@ public class Server {
 		listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 		this.port = port;
 		StartListening();
+		StartAnnouncing();
 
 		udpClient = new UdpClient();
 		udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
@@ -392,8 +373,24 @@ public class Server {
 			listener.Listen(ServerConfig.MAX_PLAYERS);
 
 			listener.BeginAccept(AcceptCallback, listener);
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			Console.WriteLine(e.ToString());
+		}
+	}
+
+	public async void StartAnnouncing() {
+		var client = new HttpClient();
+		while (true) {
+			string data = $"{{\"n_players\":{players.Length}, \"map\":\"map_name\"}}";
+			string myJson = $"{{\"port\":{port}, \"data\":{data}}}";
+			var response = await client.PostAsync(
+				 "http://sxl-server-announcer.herokuapp.com/v2",
+				 new StringContent(myJson, Encoding.UTF8, "application/json"));
+			if (response.StatusCode != HttpStatusCode.OK) {
+				Console.WriteLine($"Error announcing: error {response.StatusCode}");
+			}
+			await Task.Delay(5000);
 		}
 	}
 
@@ -416,19 +413,22 @@ public class Server {
 				players[connectionId] = new Player(connectionId, "");
 
 				SendToAllTCP(new byte[] { (byte)OpCode.Connect }, connectionId);
-			} else {
+			}
+			else {
 				int connections = 0;
-				foreach(Client client in clients) {
-					if(client != null) {
+				foreach (Client client in clients) {
+					if (client != null) {
 						connections++;
 					}
 				}
 				Console.WriteLine("Refused connection due to no open slots, currently {0} connections of {1} filled", connections, ServerConfig.MAX_PLAYERS);
 			}
-			
+
 			listener.BeginAccept(AcceptCallback, listener);
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			Console.WriteLine(e.ToString());
+			listener.BeginAccept(AcceptCallback, listener);
 		}
 	}
 
@@ -437,8 +437,8 @@ public class Server {
 		Array.Copy(buffer, 0, newBuffer, 0, buffer.Length);
 		Array.Copy(BitConverter.GetBytes(fromId), 0, newBuffer, buffer.Length, 4);
 
-		foreach(Client client in clients) {
-			if(client != null && client.connectionId != fromId) {
+		foreach (Client client in clients) {
+			if (client != null && client.connectionId != fromId) {
 				client.SendUnreliable(newBuffer);
 			}
 		}
@@ -456,9 +456,10 @@ public class Server {
 	}
 
 	private void BeginReceivingUDP() {
-		try { 
+		try {
 			udpClient.BeginReceive(ReceiveCallbackUDP, udpClient);
-		} catch (Exception e) { };
+		}
+		catch (Exception e) { };
 	}
 
 	public void ReceiveCallbackUDP(IAsyncResult ar) {
@@ -475,7 +476,7 @@ public class Server {
 							case OpCode.StillAlive:
 								udpClient.Send(buffer, buffer.Length, tempEndPoint);
 								client.lastAlive = client.aliveWatch.ElapsedMilliseconds;
-								if(client.udpRemoteEndPoint == null) {
+								if (client.udpRemoteEndPoint == null) {
 									client.udpRemoteEndPoint = tempEndPoint;
 								}
 								break;
@@ -492,7 +493,8 @@ public class Server {
 			}
 
 			BeginReceivingUDP();
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			Console.WriteLine(e.ToString());
 			BeginReceivingUDP();
 		}
@@ -548,7 +550,8 @@ public class Server {
 								client.reliableSocket.Send(player.Shoes.GetBuffer(player.connectionID));
 								client.reliableSocket.Send(player.Board.GetBuffer(player.connectionID));
 								client.reliableSocket.Send(player.Hat.GetBuffer(player.connectionID));
-							}catch(Exception e) { }
+							}
+							catch (Exception e) { }
 						}
 						client.newConnection = false;
 					}
@@ -567,13 +570,14 @@ public class Server {
 						foreach (Client client in clients) {
 							if (client != null && client.connectionId != player.connectionID && player != null && client.reliableSocket != null) {
 								Console.WriteLine("SENDING TEXTURES");
-								try { 
+								try {
 									client.reliableSocket.Send(player.Pants.GetBuffer(player.connectionID));
 									client.reliableSocket.Send(player.Shirt.GetBuffer(player.connectionID));
 									client.reliableSocket.Send(player.Shoes.GetBuffer(player.connectionID));
 									client.reliableSocket.Send(player.Board.GetBuffer(player.connectionID));
 									client.reliableSocket.Send(player.Hat.GetBuffer(player.connectionID));
-								}catch (Exception e) { }
+								}
+								catch (Exception e) { }
 							}
 						}
 						player.sentAll = true;

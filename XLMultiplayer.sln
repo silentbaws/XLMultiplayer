@@ -1,11 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.705
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29102.190
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XLMultiplayer", "XLMultiplayer\XLMultiplayer.csproj", "{A406ECA9-E864-4EB8-93D7-2288AFDA3A38}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{CC3C3410-AF25-4F57-AFAC-C0D23A86E33D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XLMultiplayerServer", "XLMultiplayerServer\XLMultiplayerServer.csproj", "{06A13D65-CF19-44F3-94D3-28B94727B64F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,6 +19,10 @@ Global
 		{A406ECA9-E864-4EB8-93D7-2288AFDA3A38}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A406ECA9-E864-4EB8-93D7-2288AFDA3A38}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A406ECA9-E864-4EB8-93D7-2288AFDA3A38}.Release|Any CPU.Build.0 = Release|Any CPU
+		{06A13D65-CF19-44F3-94D3-28B94727B64F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{06A13D65-CF19-44F3-94D3-28B94727B64F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{06A13D65-CF19-44F3-94D3-28B94727B64F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{06A13D65-CF19-44F3-94D3-28B94727B64F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
