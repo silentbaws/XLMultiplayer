@@ -397,7 +397,8 @@ public class Server {
 	public void AcceptCallback(IAsyncResult ar) {
 		try {
 			Console.WriteLine("Began connection on game server");
-			Socket acceptedSocket = listener.EndAccept(ar);
+			Socket tempSocket = (Socket)ar.AsyncState;
+			Socket acceptedSocket = tempSocket.EndAccept(ar);
 			int connectionId = -1;
 
 			for (int i = 0; i < clients.Length; i++) {
@@ -427,6 +428,7 @@ public class Server {
 		}
 		catch (Exception e) {
 			Console.WriteLine(e.ToString());
+			listener.BeginAccept(AcceptCallback, listener);
 		}
 	}
 
