@@ -383,32 +383,32 @@ namespace XLMultiplayer {
 			}
 
 			
-			Thread packShit = new Thread(() => {
-				List<byte> allBones = new List<byte>();
-				List<byte> allTransforms = new List<byte>();
-				int frames = 0;
-				while (frames < 2) {
-					byte[] transforms = PackTransforms();
-					byte[][] bones = PackAnimator();
+			//Thread packShit = new Thread(() => {
+			//	List<byte> allBones = new List<byte>();
+			//	List<byte> allTransforms = new List<byte>();
+			//	int frames = 0;
+			//	while (frames < 2) {
+			//		byte[] transforms = PackTransforms();
+			//		byte[][] bones = PackAnimator();
 
-					allBones.AddRange(new List<byte>(bones[0]));
-					allBones.AddRange(new List<byte>(bones[1]));
-					allTransforms.AddRange(new List<byte>(transforms));
+			//		allBones.AddRange(new List<byte>(bones[0]));
+			//		allBones.AddRange(new List<byte>(bones[1]));
+			//		allTransforms.AddRange(new List<byte>(transforms));
 
-					frames++;
+			//		frames++;
 
-					Thread.Sleep((int)(1.00f / 32.0f * 1000f));
-				}
+			//		Thread.Sleep((int)(1.00f / 32.0f * 1000f));
+			//	}
 
-				debugWriter.WriteLine(allTransforms.Count);
-				debugWriter.WriteLine(Compress(allTransforms.ToArray()).Length);
-				debugWriter.WriteLine(CompressGZIP(allTransforms.ToArray()).Length);
-				debugWriter.WriteLine(allBones.Count);
-				debugWriter.WriteLine(Compress(allBones.ToArray()).Length);
-				debugWriter.WriteLine(CompressGZIP(allBones.ToArray()).Length);
-			});
-			packShit.IsBackground = true;
-			packShit.Start();
+			//	debugWriter.WriteLine(allTransforms.Count);
+			//	debugWriter.WriteLine(Compress(allTransforms.ToArray()).Length);
+			//	debugWriter.WriteLine(CompressGZIP(allTransforms.ToArray()).Length);
+			//	debugWriter.WriteLine(allBones.Count);
+			//	debugWriter.WriteLine(Compress(allBones.ToArray()).Length);
+			//	debugWriter.WriteLine(CompressGZIP(allBones.ToArray()).Length);
+			//});
+			//packShit.IsBackground = true;
+			//packShit.Start();
 		}
 
 		public static byte[] Compress(byte[] data) {

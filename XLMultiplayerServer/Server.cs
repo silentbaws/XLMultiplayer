@@ -57,6 +57,7 @@ public class MultiplayerSkin {
 
 	public bool finishedCopy = false;
 
+	byte[] buffer;
 	int bufferSize = 0;
 
 	public MultiplayerSkin(MPTextureType mpType) {
@@ -70,44 +71,40 @@ public class MultiplayerSkin {
 	}
 
 	public byte[] GetBuffer(int connectionId) {
-		if (File.Exists(GetTexturePath(connectionId))) {
-			byte[] file = File.ReadAllBytes(GetTexturePath(connectionId));
-			byte[] buffer = new byte[15 + file.Length];
-			Array.Copy(BitConverter.GetBytes(bufferSize + 11), 0, buffer, 0, 4);
-			buffer[4] = (byte)OpCode.Texture;
-			buffer[5] = (byte)connectionId;
-			buffer[6] = (byte)textureType;
-			Array.Copy(BitConverter.GetBytes(sizeX), 0, buffer, 7, 4);
-			Array.Copy(BitConverter.GetBytes(sizeY), 0, buffer, 11, 4);
-			Array.Copy(file, 0, buffer, 15, file.Length);
+		if (this.buffer != null) {
+			byte[] sendBuffer = new byte[15 + bufferSize];
 
-			return buffer;
+			Array.Copy(BitConverter.GetBytes(bufferSize + 11), 0, sendBuffer, 0, 4);
+
+			sendBuffer[4] = (byte)OpCode.Texture;
+			sendBuffer[5] = (byte)connectionId;
+			sendBuffer[6] = (byte)textureType;
+
+			Array.Copy(BitConverter.GetBytes(sizeX), 0, sendBuffer, 7, 4);
+			Array.Copy(BitConverter.GetBytes(sizeY), 0, sendBuffer, 11, 4);
+
+
+			Array.Copy(this.buffer, 0, sendBuffer, 15, bufferSize);
+
+			return sendBuffer;
 		}
 		else {
 			return null;
 		}
 	}
 
-	public void SaveTexture(int connectionId, byte[] buffer) {
-		Console.WriteLine("Save texture");
-		sizeX = BitConverter.ToSingle(buffer, 2);
-		sizeY = BitConverter.ToSingle(buffer, 6);
-		byte[] file = new byte[buffer.Length - 10];
-		Array.Copy(buffer, 10, file, 0, file.Length);
+	public void SaveTexture(int connectionId, byte[] recvBuffer) {
+		sizeX = BitConverter.ToSingle(recvBuffer, 2);
+		sizeY = BitConverter.ToSingle(recvBuffer, 6);
 
-		bufferSize = file.Length;
+		this.buffer = new byte[recvBuffer.Length - 10];
 
-		if (!Directory.Exists(Directory.GetCurrentDirectory() + sep + "TempClothing"))
-			Directory.CreateDirectory(Directory.GetCurrentDirectory() + sep + "TempClothing");
+		Array.Copy(recvBuffer, 10, this.buffer, 0, this.buffer.Length);
 
-		File.WriteAllBytes(Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png", file);
+		bufferSize = this.buffer.Length;
+
 		finishedCopy = true;
 		Console.WriteLine("Saved texture");
-	}
-
-	public void DeleteTexture(int connectionId) {
-		if (File.Exists(Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png"))
-			File.Delete(Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png");
 	}
 }
 
@@ -228,6 +225,8 @@ public class Server {
 		private Socket receiveSocket;
 		private Client client;
 
+		bool disconnected = false;
+
 		EndPoint remoteEndPoint;
 
 		public ReceivePacket(Socket socket, Client client, int connectionId) {
@@ -318,34 +317,18 @@ public class Server {
 		}
 
 		public void Disconnect(bool timeout) {
-			try {
-				if (receiveSocket != null) {
+			if (receiveSocket != null && !disconnected) {
+				try {
 					receiveSocket.Shutdown(SocketShutdown.Both);
+				} catch (Exception e) { }
+				try {
 					receiveSocket.Close();
-					SendToAllTCP(new byte[] { (byte)OpCode.Disconnect }, client.connectionId);
-					players[client.connectionId].Pants.DeleteTexture(client.connectionId);
-					players[client.connectionId].Shirt.DeleteTexture(client.connectionId);
-					players[client.connectionId].Shoes.DeleteTexture(client.connectionId);
-					players[client.connectionId].Board.DeleteTexture(client.connectionId);
-					players[client.connectionId].Hat.DeleteTexture(client.connectionId);
-					players[client.connectionId] = null;
-					clients[client.connectionId] = null;
-					Console.WriteLine("Disconnect from {0} on game server {1}", client.connectionId, timeout ? "connection timed out" : "");
-				}
-			}
-			catch (Exception e) {
-				if (client != null) {
-					if (players[client.connectionId] != null) {
-						players[client.connectionId].Pants.DeleteTexture(client.connectionId);
-						players[client.connectionId].Shirt.DeleteTexture(client.connectionId);
-						players[client.connectionId].Shoes.DeleteTexture(client.connectionId);
-						players[client.connectionId].Board.DeleteTexture(client.connectionId);
-						players[client.connectionId].Hat.DeleteTexture(client.connectionId);
-						players[client.connectionId] = null;
-					}
-					clients[client.connectionId] = null;
-					players[client.connectionId] = null;
-				}
+				} catch (Exception e) { }
+				SendToAllTCP(new byte[] { (byte)OpCode.Disconnect }, client.connectionId);
+				players[client.connectionId] = null;
+				clients[client.connectionId] = null;
+				disconnected = true;
+				Console.WriteLine("Disconnect from {0} on game server {1}", client.connectionId, timeout ? "connection timed out" : "");
 			}
 		}
 	}
@@ -380,18 +363,22 @@ public class Server {
 	}
 
 	public async void StartAnnouncing() {
-		var client = new HttpClient();
-		while (true) {
-			string data = $"{{\"n_players\":{players.Length}, \"map\":\"map_name\"}}";
-			string myJson = $"{{\"port\":{port}, \"data\":{data}}}";
-			var response = await client.PostAsync(
-				 "http://sxl-server-announcer.herokuapp.com/v2",
-				 new StringContent(myJson, Encoding.UTF8, "application/json"));
-			if (response.StatusCode != HttpStatusCode.OK) {
-				Console.WriteLine($"Error announcing: error {response.StatusCode}");
-			}
-			await Task.Delay(5000);
-		}
+		//var client = new HttpClient();
+		//while (true) {
+		//	try {
+		//		string data = $"{{\"n_players\":{players.Length}, \"map\":\"map_name\"}}";
+		//		string myJson = $"{{\"port\":{port}, \"data\":{data}}}";
+		//		var response = await client.PostAsync(
+		//			 "http://sxl-server-announcer.herokuapp.com/v2",
+		//			 new StringContent(myJson, Encoding.UTF8, "application/json"));
+		//		if (response.StatusCode != HttpStatusCode.OK) {
+		//			Console.WriteLine($"Error announcing: error {response.StatusCode}");
+		//		}
+		//		await Task.Delay(5000);
+		//	} catch(Exception e) {
+		//		Console.WriteLine(e.ToString());
+		//	}
+		//}
 	}
 
 	public void AcceptCallback(IAsyncResult ar) {
