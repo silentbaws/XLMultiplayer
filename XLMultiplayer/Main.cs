@@ -1,6 +1,10 @@
 ﻿using System;
 using UnityEngine;
 using UnityModManagerNet;
+using Harmony12;
+using System.Reflection.Emit;
+using System.Collections.Generic;
+using System.Reflection;
 
 namespace XLMultiplayer
 {

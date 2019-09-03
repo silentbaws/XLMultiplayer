@@ -284,7 +284,7 @@ namespace XLMultiplayer {
 			client.tcpConnection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 		}
 
-		private void AddPlayer(int playerID) {
+		private void AddPlayer(byte playerID) {
 			MultiplayerPlayerController newController = new MultiplayerPlayerController(debugWriter);
 			newController.ConstructFromPlayer(this.ourController);
 			newController.playerID = playerID;
@@ -360,11 +360,11 @@ namespace XLMultiplayer {
 		}
 
 		private void ProcessMessage(byte[] buffer, int bufferSize) {
-			byte[] newBuffer = new byte[bufferSize - 5];
-			Array.Copy(buffer, 1, newBuffer, 0, bufferSize - 5);
+			byte[] newBuffer = new byte[bufferSize - 2];
+			Array.Copy(buffer, 1, newBuffer, 0, bufferSize - 2);
 
 			OpCode opCode = (OpCode)buffer[0];
-			int playerID = BitConverter.ToInt32(buffer, bufferSize - 4);
+			byte playerID = buffer[bufferSize - 1];
 
 			switch (opCode) {
 				case OpCode.Position:
@@ -391,7 +391,7 @@ namespace XLMultiplayer {
 					}
 					break;
 				case OpCode.Connect:
-					if (buffer.Length == 5) {
+					if (buffer.Length == 2) {
 						debugWriter.WriteLine("New player {0}", playerID);
 						this.AddPlayer(playerID);
 					} else {
@@ -410,7 +410,7 @@ namespace XLMultiplayer {
 					}
 					break;
 				case OpCode.Disconnect:
-					if(buffer.Length == 5)
+					if(buffer.Length == 2)
 						this.RemovePlayer(playerID);
 					else {
 						KillConnection();
@@ -449,11 +449,7 @@ namespace XLMultiplayer {
 
 		private void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
 			if (!reliable) {
-				byte[] buffer = new byte[msg.Length + 1];
-				buffer[0] = (byte)opCode;
-				Array.Copy(msg, 0, buffer, 1, msg.Length);
-
-				client.SendUnreliable(buffer);
+				client.SendUnreliable(msg, opCode);
 			}else if(reliable && client.tcpConnection.Connected) {
 				byte[] buffer = new byte[msg.Length + 5];
 				Array.Copy(BitConverter.GetBytes(msg.Length + 1), 0, buffer, 0, 4);

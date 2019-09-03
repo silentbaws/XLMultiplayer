@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 
@@ -116,15 +117,19 @@ namespace XLMultiplayer {
 			}
 		}
 
-		public void SendUnreliable(byte[] buffer) {
+		public void SendUnreliable(byte[] buffer, OpCode opCode) {
 			try { 
 				//Rearrange message before sending
 				//Size of packet, opcode, packet sequence, rest of information
 				byte[] packetSequence = BitConverter.GetBytes(buffer[0] == (byte)OpCode.Position ? positionPackets : animationPackets);
-				byte[] packet = new byte[buffer.Length + packetSequence.Length];
-				packet[0] = buffer[0];
+				byte[] packetData = NetworkClient.Compress(buffer);
+				byte[] packet = new byte[packetData.Length + packetSequence.Length + 1];
+
+				packet[0] = (byte)opCode;
+
 				Array.Copy(packetSequence, 0, packet, 1, 4);
-				Array.Copy(buffer, 1, packet, 5, buffer.Length - 1);
+
+				Array.Copy(packetData, 0, packet, 5, packetData.Length);
 
 				udpConnection.Send(packet, packet.Length);
 
@@ -152,8 +157,23 @@ namespace XLMultiplayer {
 				IPEndPoint tempEndPoint = ipEndPoint;
 
 				byte[] buffer = state.udpClient.EndReceive(ar, ref tempEndPoint);
-				
-				bufferObjects.Add(new BufferObject(buffer, buffer.Length));
+
+				//Still alive is uncompressed udp
+				if (buffer[0] != (byte)OpCode.StillAlive) {
+					//Decompress the data before adding it to the queue
+					byte[] compressedBuffer = new byte[buffer.Length - 6];
+					Array.Copy(buffer, 5, compressedBuffer, 0, buffer.Length - 6);
+					byte[] uncompressedBuffer = NetworkClient.Decompress(compressedBuffer);
+
+					byte[] realBuffer = new byte[uncompressedBuffer.Length + 6];
+					Array.Copy(buffer, 0, realBuffer, 0, 5);
+					Array.Copy(uncompressedBuffer, 0, realBuffer, 5, uncompressedBuffer.Length);
+					realBuffer[realBuffer.Length - 1] = buffer[buffer.Length - 1];
+
+					bufferObjects.Add(new BufferObject(realBuffer, realBuffer.Length));
+				} else {
+					bufferObjects.Add(new BufferObject(buffer, buffer.Length));
+				}
 
 				BeginReceivingUDP();
 			} catch (Exception e) {
@@ -250,6 +270,23 @@ namespace XLMultiplayer {
 			} catch(Exception e) {
 				debugWriter.WriteLine(e.ToString());
 			}
+		}
+
+		public static byte[] Compress(byte[] data) {
+			MemoryStream output = new MemoryStream();
+			using (DeflateStream dstream = new DeflateStream(output, CompressionLevel.Optimal)) {
+				dstream.Write(data, 0, data.Length);
+			}
+			return output.ToArray();
+		}
+
+		public static byte[] Decompress(byte[] data) {
+			MemoryStream compressedStream = new MemoryStream(data);
+			MemoryStream output = new MemoryStream();
+			using (DeflateStream dstream = new DeflateStream(compressedStream, CompressionMode.Decompress)) {
+				dstream.CopyTo(output);
+			}
+			return output.ToArray();
 		}
 	}
 }

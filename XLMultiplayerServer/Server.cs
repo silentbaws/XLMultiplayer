@@ -27,7 +27,7 @@ public enum MPTextureType : byte {
 }
 
 public class Player {
-	public int connectionID;
+	public byte connectionID;
 	public string username;
 
 	public bool isGoofy;
@@ -39,7 +39,7 @@ public class Player {
 
 	public string IP;
 
-	public Player(int cID, string user) {
+	public Player(byte cID, string user) {
 		connectionID = cID;
 		username = user;
 
@@ -66,18 +66,18 @@ public class MultiplayerSkin {
 
 	string sep = Path.DirectorySeparatorChar.ToString();
 
-	public string GetTexturePath(int connectionId) {
+	public string GetTexturePath(byte connectionId) {
 		return Directory.GetCurrentDirectory() + sep + "TempClothing" + sep + textureType.ToString() + connectionId.ToString() + ".png";
 	}
 
-	public byte[] GetBuffer(int connectionId) {
+	public byte[] GetBuffer(byte connectionId) {
 		if (this.buffer != null) {
 			byte[] sendBuffer = new byte[15 + bufferSize];
 
 			Array.Copy(BitConverter.GetBytes(bufferSize + 11), 0, sendBuffer, 0, 4);
 
 			sendBuffer[4] = (byte)OpCode.Texture;
-			sendBuffer[5] = (byte)connectionId;
+			sendBuffer[5] = connectionId;
 			sendBuffer[6] = (byte)textureType;
 
 			Array.Copy(BitConverter.GetBytes(sizeX), 0, sendBuffer, 7, 4);
@@ -93,7 +93,7 @@ public class MultiplayerSkin {
 		}
 	}
 
-	public void SaveTexture(int connectionId, byte[] recvBuffer) {
+	public void SaveTexture(byte connectionId, byte[] recvBuffer) {
 		sizeX = BitConverter.ToSingle(recvBuffer, 2);
 		sizeY = BitConverter.ToSingle(recvBuffer, 6);
 
@@ -140,7 +140,7 @@ public class Server {
 
 		public ReceivePacket ReceiveTCP { get; private set; }
 
-		public int connectionId;
+		public byte connectionId;
 		public bool newConnection = true;
 
 		public long lastAlive = 0;
@@ -148,7 +148,7 @@ public class Server {
 
 		public bool timedOut = false;
 
-		public Client(Socket socket, int connectionId) {
+		public Client(Socket socket, byte connectionId) {
 			this.reliableSocket = socket;
 			this.connectionId = connectionId;
 
@@ -165,18 +165,18 @@ public class Server {
 			foreach (Client client in clients) {
 				if (client != null && client.connectionId != connectionId) {
 					Console.WriteLine("Sending {0} connect to new connection {1}", client.connectionId, connectionId);
-					byte[] buffer = new byte[5];
+					byte[] buffer = new byte[2];
 					buffer[0] = (byte)OpCode.Connect;
-					Array.Copy(BitConverter.GetBytes(client.connectionId), 0, buffer, 1, 4);
+					buffer[1] = client.connectionId;
 
 					this.SendReliable(buffer);
 
 					byte[] username = ASCIIEncoding.ASCII.GetBytes(players[client.connectionId].username);
-					buffer = new byte[username.Length + 6];
+					buffer = new byte[username.Length + 3];
 					buffer[0] = (byte)OpCode.Settings;
 					buffer[1] = players[client.connectionId].isGoofy ? (byte)1 : (byte)0;
 					Array.Copy(username, 0, buffer, 2, username.Length);
-					Array.Copy(BitConverter.GetBytes(client.connectionId), 0, buffer, buffer.Length - 4, 4);
+					buffer[buffer.Length - 1] = client.connectionId;
 
 					this.SendReliable(buffer);
 				}
@@ -186,11 +186,11 @@ public class Server {
 		}
 
 		public void SendConnectMessage() {
-			byte[] buffer = new byte[10];
-			Array.Copy(BitConverter.GetBytes(((int)6)), 0, buffer, 0, 4);
+			byte[] buffer = new byte[7];
+			Array.Copy(BitConverter.GetBytes(((int)3)), 0, buffer, 0, 4);
 			buffer[4] = (byte)OpCode.Connect;
 			buffer[5] = 0;
-			Array.Copy(BitConverter.GetBytes(connectionId), 0, buffer, 6, 4);
+			buffer[6] = connectionId;
 
 			reliableSocket.Send(buffer);
 		}
@@ -386,16 +386,18 @@ public class Server {
 			Console.WriteLine("Began connection on game server");
 			Socket tempSocket = (Socket)ar.AsyncState;
 			Socket acceptedSocket = tempSocket.EndAccept(ar);
-			int connectionId = -1;
+			bool foundConnection = false;
+			byte connectionId = 0;
 
 			for (int i = 0; i < clients.Length; i++) {
 				if (clients[i] == null) {
-					connectionId = i;
+					connectionId = (byte)i;
+					foundConnection = true;
 					break;
 				}
 			}
 
-			if (connectionId != -1) {
+			if (foundConnection) {
 				clients[connectionId] = new Client(acceptedSocket, connectionId);
 				players[connectionId] = new Player(connectionId, "");
 
@@ -419,10 +421,10 @@ public class Server {
 		}
 	}
 
-	public static void SendToAllUDP(byte[] buffer, int fromId) {
-		byte[] newBuffer = new byte[buffer.Length + 4];
+	public static void SendToAllUDP(byte[] buffer, byte fromId) {
+		byte[] newBuffer = new byte[buffer.Length + 1];
 		Array.Copy(buffer, 0, newBuffer, 0, buffer.Length);
-		Array.Copy(BitConverter.GetBytes(fromId), 0, newBuffer, buffer.Length, 4);
+		newBuffer[buffer.Length] = fromId;
 
 		foreach (Client client in clients) {
 			if (client != null && client.connectionId != fromId) {
@@ -431,10 +433,10 @@ public class Server {
 		}
 	}
 
-	public static void SendToAllTCP(byte[] buffer, int fromId) {
-		byte[] newBuffer = new byte[buffer.Length + 4];
+	public static void SendToAllTCP(byte[] buffer, byte fromId) {
+		byte[] newBuffer = new byte[buffer.Length + 1];
 		Array.Copy(buffer, 0, newBuffer, 0, buffer.Length);
-		Array.Copy(BitConverter.GetBytes(fromId), 0, newBuffer, buffer.Length, 4);
+		newBuffer[buffer.Length] = fromId;
 
 		foreach (Client client in clients) {
 			if (client != null && client.connectionId != fromId)
@@ -505,7 +507,7 @@ public class Server {
 				}
 			}
 
-			int i = 0;
+			//int i = 0;
 			//foreach(Client client in clients) {
 			//	if (client != null) {
 			//		if (client.reliableSocket == null || client.aliveWatch == null || client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 5000 || client.timedOut || client.ReceiveTCP == null) {

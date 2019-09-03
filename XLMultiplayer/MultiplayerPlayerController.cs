@@ -109,7 +109,7 @@ namespace XLMultiplayer {
 
 		private StreamWriter debugWriter;
 
-		public int playerID;
+		public byte playerID;
 
 		private int currentAnimationPacket = -1;
 		private int currentPositionPacket = -1;
@@ -381,55 +381,6 @@ namespace XLMultiplayer {
 				floatParams.Clear();
 				intParams.Clear();
 			}
-
-			
-			//Thread packShit = new Thread(() => {
-			//	List<byte> allBones = new List<byte>();
-			//	List<byte> allTransforms = new List<byte>();
-			//	int frames = 0;
-			//	while (frames < 2) {
-			//		byte[] transforms = PackTransforms();
-			//		byte[][] bones = PackAnimator();
-
-			//		allBones.AddRange(new List<byte>(bones[0]));
-			//		allBones.AddRange(new List<byte>(bones[1]));
-			//		allTransforms.AddRange(new List<byte>(transforms));
-
-			//		frames++;
-
-			//		Thread.Sleep((int)(1.00f / 32.0f * 1000f));
-			//	}
-
-			//	debugWriter.WriteLine(allTransforms.Count);
-			//	debugWriter.WriteLine(Compress(allTransforms.ToArray()).Length);
-			//	debugWriter.WriteLine(CompressGZIP(allTransforms.ToArray()).Length);
-			//	debugWriter.WriteLine(allBones.Count);
-			//	debugWriter.WriteLine(Compress(allBones.ToArray()).Length);
-			//	debugWriter.WriteLine(CompressGZIP(allBones.ToArray()).Length);
-			//});
-			//packShit.IsBackground = true;
-			//packShit.Start();
-		}
-
-		public static byte[] Compress(byte[] data) {
-			MemoryStream output = new MemoryStream();
-			using (DeflateStream dstream = new DeflateStream(output, System.IO.Compression.CompressionLevel.Optimal)) {
-				dstream.Write(data, 0, data.Length);
-			}
-			return output.ToArray();
-		}
-
-		public static byte[] CompressGZIP(byte[] inputData) {
-			if (inputData == null)
-				throw new ArgumentNullException("inputData must be non-null");
-
-			using (var compressIntoMs = new MemoryStream()) {
-				using (var gzs = new BufferedStream(new GZipStream(compressIntoMs,
-				 CompressionMode.Compress), 8192)) {
-					gzs.Write(inputData, 0, inputData.Length);
-				}
-				return compressIntoMs.ToArray();
-			}
 		}
 
 		public void ConstructFromPlayer(MultiplayerPlayerController source) {
@@ -663,71 +614,6 @@ namespace XLMultiplayer {
 			packed[1] = new byte[953];
 			packed[1][0] = 1;
 			Array.Copy(transforms, 952, packed[1], 1, 952);
-			//Create arrays to hold the paramaters | packing 8 bools into a byte to save bandwidth for further expansion
-			//byte[] bools = new byte[(int)Math.Ceiling((double)this.animBools / 8)];
-			//byte[] floats = new byte[this.animFloats * 4];
-			//byte[] ints = new byte[this.animInts * 4];
-
-			//byte[] steezeBools = new byte[(int)Math.Ceiling((double)this.animSteezeBools / 8)];
-			//byte[] steezeFloats = new byte[this.animSteezeFloats * 4];
-			//byte[] steezeInts = new byte[this.animSteezeInts * 4];
-
-			////Pack all individual paramater arrays
-			//int currentInt = 0;
-			//int currentBool = 0;
-			//int currentFloat = 0;
-			//foreach (AnimatorControllerParameter param in this.animator.parameters) {
-			//	int index = param.nameHash;
-			//	if (param.type == AnimatorControllerParameterType.Bool) {
-			//		if (currentBool % 8 == 0)
-			//			bools[(int)Math.Floor((double)currentBool / 8)] = 0;
-			//		bools[(int)Math.Floor((double)currentBool / 8)] = (byte)(bools[(int)Math.Floor((double)currentBool / 8)] | (Convert.ToByte(this.animator.GetBool(index)) << (byte)(currentBool % 8)));
-			//		currentBool++;
-			//	} else if (param.type == AnimatorControllerParameterType.Float) {
-			//		Array.Copy(BitConverter.GetBytes(this.animator.GetFloat(index)), 0, floats, currentFloat * 4, 4);
-			//		currentFloat++;
-			//	} else if (param.type == AnimatorControllerParameterType.Int) {
-			//		Array.Copy(BitConverter.GetBytes(this.animator.GetInteger(index)), 0, ints, currentInt * 4, 4);
-			//		currentInt++;
-			//	}
-			//}
-
-			//currentInt = 0;
-			//currentBool = 0;
-			//currentFloat = 0;
-			//foreach (AnimatorControllerParameter param in this.steezeAnimator.parameters) {
-			//	int index = param.nameHash;
-			//	if (param.type == AnimatorControllerParameterType.Bool) {
-			//		if (currentBool % 8 == 0)
-			//			steezeBools[(int)Math.Floor((double)currentBool / 8)] = 0;
-			//		steezeBools[(int)Math.Floor((double)currentBool / 8)] = (byte)(steezeBools[(int)Math.Floor((double)currentBool / 8)] | (Convert.ToByte(this.steezeAnimator.GetBool(index)) << (byte)(currentBool % 8)));
-			//		currentBool++;
-			//	} else if (param.type == AnimatorControllerParameterType.Float) {
-			//		Array.Copy(BitConverter.GetBytes(this.steezeAnimator.GetFloat(index)), 0, steezeFloats, currentFloat * 4, 4);
-			//		currentFloat++;
-			//	} else if (param.type == AnimatorControllerParameterType.Int) {
-			//		Array.Copy(BitConverter.GetBytes(this.steezeAnimator.GetInteger(index)), 0, steezeInts, currentInt * 4, 4);
-			//		currentInt++;
-			//	}
-			//}
-
-			////byte[] packedTransforms = this.PackTransformArray(allBones);
-
-			////Array to hold all paramater types in order
-			//byte[] packed = new byte[bools.Length + floats.Length + ints.Length + steezeBools.Length + steezeFloats.Length + steezeInts.Length /*+ packedTransforms.Length*/];
-
-			////Copy all paramaters into packed array in order
-			//Array.Copy(bools, packed, bools.Length);
-			//Array.Copy(floats, 0, packed, bools.Length, floats.Length);
-			//Array.Copy(ints, 0, packed, bools.Length + floats.Length, ints.Length);
-
-			//int steezeOffset = bools.Length + floats.Length + ints.Length;
-
-			//Array.Copy(steezeBools, 0, packed, steezeOffset, steezeBools.Length);
-			//Array.Copy(steezeFloats, 0, packed, steezeOffset + steezeBools.Length, steezeFloats.Length);
-			//Array.Copy(steezeInts, 0, packed, steezeOffset + steezeBools.Length + steezeInts.Length, steezeInts.Length);
-
-			//Array.Copy(packedTransforms, 0, packed, steezeOffset + steezeBools.Length + steezeInts.Length + steezeInts.Length, packedTransforms.Length);
 
 			return packed;
 		}
@@ -736,7 +622,7 @@ namespace XLMultiplayer {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
 
 			byte[] buffer = new byte[recBuffer.Length - 5];
-			if(receivedPacketSequence < currentAnimationPacket - 1) {
+			if (receivedPacketSequence < currentAnimationPacket - 1) {
 				return;
 			} else {
 				Array.Copy(recBuffer, 5, buffer, 0, recBuffer.Length - 5);
@@ -762,7 +648,7 @@ namespace XLMultiplayer {
 			}
 
 			if (recBuffer[4] == 0) {
-				for(int i = 0; i < 34; i++) {
+				for (int i = 0; i < 34; i++) {
 					if (Vector3.Distance(this.targetPositions[i], vectors[i]) > 1) {
 						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i];
 						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i];
@@ -777,7 +663,7 @@ namespace XLMultiplayer {
 				for (int i = 34; i < 68; i++) {
 					if (Vector3.Distance(this.targetPositions[i], vectors[i - 34]) > 1) {
 						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i - 34];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i- 34];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i - 34];
 					} else {
 						this.hips.GetComponentsInChildren<Transform>()[i].position = this.targetPositions[i];
 						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.targetRotations[i];
@@ -786,64 +672,6 @@ namespace XLMultiplayer {
 					this.targetRotations[i] = quaternions[i - 34];
 				}
 			}
-
-			//bool[] bools = new bool[animBools];
-			//float[] floats = new float[animFloats];
-			//int[] ints = new int[animInts];
-
-			//for (int i = 0; i < animBools; i++) {
-			//	bools[i] = Convert.ToBoolean((buffer[(int)Math.Floor((double)i / 8)] >> i % 8) & 0b1);
-			//}
-
-			//int floatOffset = (int)Math.Ceiling((double)animBools / 8);
-			//int intOffset = floatOffset + animFloats * 4;
-
-			//for (int i = 0; i < this.animFloats; i++) {
-			//	floats[i] = BitConverter.ToSingle(buffer, i * 4 + floatOffset);
-			//}
-
-			//for (int i = 0; i < this.animInts; i++) {
-			//	ints[i] = BitConverter.ToInt32(buffer, i * 4 + intOffset);
-			//}
-
-			//int steezeOffset = intOffset + this.animInts * 4;
-			//int steezeFloatOffset = steezeOffset + (int)Math.Ceiling((double)animSteezeBools / 8);
-			//int steezeIntOffset = steezeFloatOffset + this.animSteezeFloats * 4;
-
-			//int endAnim = steezeIntOffset + 4 * this.animSteezeInts;
-
-			//bool[] steezeBools = new bool[animSteezeBools];
-			//float[] steezeFloats = new float[animSteezeFloats];
-			//int[] steezeInts = new int[animSteezeInts];
-
-			//for (int i = 0; i < animSteezeBools; i++) {
-			//	steezeBools[i] = Convert.ToBoolean((buffer[(int)Math.Floor((double)i / 8) + steezeOffset] >> i % 8) & 0b1);
-			//}
-
-			//for (int i = 0; i < this.animSteezeFloats; i++) {
-			//	steezeFloats[i] = BitConverter.ToSingle(buffer, i * 4 + steezeFloatOffset);
-			//}
-
-			//for (int i = 0; i < this.animSteezeInts; i++) {
-			//	steezeInts[i] = BitConverter.ToInt32(buffer, i * 4 + steezeIntOffset);
-			//}
-
-			//SetAnimator(bools, floats, ints, steezeBools, steezeFloats, steezeInts);
-		}
-
-		public void SetAnimator(bool[] bools, float[] floats, int[] ints, bool[] steezeBools, float[] steezeFloats, int[] steezeInts) {
-			//for (int i = 0; i < this.animBools; i++)
-			//	this.animator.SetBool(this.animBoolNames[i], bools[i]);
-			//for (int i = 0; i < this.animFloats; i++)
-			//	this.animator.SetFloat(this.animFloatNames[i], floats[i]);
-			//for (int i = 0; i < this.animInts; i++)
-			//	this.animator.SetInteger(this.animIntNames[i], ints[i]);
-			//for (int i = 0; i < this.animSteezeBools; i++)
-			//	this.steezeAnimator.SetBool(this.animSteezeBoolNames[i], steezeBools[i]);
-			//for (int i = 0; i < this.animSteezeFloats; i++)
-			//	this.steezeAnimator.SetFloat(this.animSteezeFloatNames[i], steezeFloats[i]);
-			//for (int i = 0; i < this.animSteezeInts; i++)
-			//	this.steezeAnimator.SetInteger(this.animSteezeIntNames[i], steezeInts[i]);
 		}
 	}
 }
