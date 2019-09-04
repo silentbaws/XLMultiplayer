@@ -225,14 +225,15 @@ namespace XLMultiplayer {
 						if (state.readBytes == 4) {
 							state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
 						}
-
 						if (state.readBytes - 4 == state.buffer.Length) {
 							if (state.buffer[0] == (byte)OpCode.Texture) {
 								controller.debugWriter.WriteLine("Filled texture buffer");
 								controller.textureQueue.Add(new MultiplayerSkinBuffer(state.buffer, (int)state.buffer[1], (MPTextureType)state.buffer[2]));
 							}else if (state.buffer[0] == (byte)OpCode.Connect) {
 								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
-							}else if(state.buffer[0] == (byte)OpCode.Settings) {
+							} else if (state.buffer[0] == (byte)OpCode.Chat) {
+								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
+							} else if(state.buffer[0] == (byte)OpCode.Settings) {
 								debugWriter.WriteLine("Adding player settings to queue");
 								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
 							}else if(state.buffer[0] == (byte)OpCode.Disconnect) {

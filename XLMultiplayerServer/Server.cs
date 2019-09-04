@@ -14,6 +14,7 @@ public enum OpCode : byte {
 	Position = 2,
 	Animation = 3,
 	Texture = 4,
+	Chat = 5,
 	StillAlive = 254,
 	Disconnect = 255
 }
@@ -292,6 +293,11 @@ public class Server {
 									Console.WriteLine("Received username {0} from {1}", players[client.connectionId].username, client.connectionId);
 									SendToAllTCP(state.buffer, client.connectionId);
 									break;
+								case OpCode.Chat:
+									Console.WriteLine("Chat Message");
+									if(state.buffer.Length != 1)
+										SendToAllTCP(state.buffer, client.connectionId);
+									break;
 							}
 
 							StartReceiving();
@@ -374,7 +380,7 @@ public class Server {
 		//		if (response.StatusCode != HttpStatusCode.OK) {
 		//			Console.WriteLine($"Error announcing: error {response.StatusCode}");
 		//		}
-		//		await Task.Delay(5000);
+				await Task.Delay(5000);
 		//	} catch(Exception e) {
 		//		Console.WriteLine(e.ToString());
 		//	}

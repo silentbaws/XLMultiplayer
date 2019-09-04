@@ -9,6 +9,7 @@ using System.Threading;
 using Harmony12;
 using RootMotion.FinalIK;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace XLMultiplayer {
 	public enum OpCode : byte{
@@ -17,6 +18,7 @@ namespace XLMultiplayer {
 		Position = 2,
 		Animation = 3,
 		Texture = 4,
+		Chat = 5,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -65,6 +67,8 @@ namespace XLMultiplayer {
 
 		List<float> previousFrameTimes = new List<float> ();
 
+		public static List<string> chatMessages = new List<string>();
+
 		private void Start() {
 		}
 
@@ -83,6 +87,8 @@ namespace XLMultiplayer {
 				debugWriter.WriteLine("Failed to connect to server");
 				KillConnection();
 			}
+
+			if (client == null) return;
 
 			if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 + previousFrameTimes.Max() && ((IsInvoking("SendUpdate") && !Application.isLoadingLevel && textureQueue.Count == 0) || !client.tcpConnection.Connected)) {
 				bool loadedAll = true;
@@ -155,7 +161,6 @@ namespace XLMultiplayer {
 				this.runningClient = true;
 
 				client = new NetworkClient(serverIP, port, this, this.debugWriter);
-				client.debugWriter = debugWriter;
 
 				FullBodyBipedIK biped = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>();
 				debugWriter.WriteLine(biped.references.pelvis.name);
@@ -319,6 +324,11 @@ namespace XLMultiplayer {
 		public void KillConnection() {
 			if (IsInvoking("SendUpdate"))
 				CancelInvoke("SendUpdate");
+			MultiplayerController.chatMessages.Clear();
+			if(Main.statusMenu != null) {
+				Main.statusMenu.previousMessageCount = 0;
+				Main.statusMenu.chat = "";
+			}
 			this.isConnected = false;
 			if (aliveThread != null && aliveThread.IsAlive)
 				aliveThread.Abort();
@@ -387,8 +397,21 @@ namespace XLMultiplayer {
 							controller.steezeAnimator.runtimeAnimatorController = newBuffer[0] == 1 ? goofySteezeAnim : regularSteezeAnim;
 							controller.username = Encoding.ASCII.GetString(newBuffer, 1, newBuffer.Length - 1);
 							debugWriter.WriteLine(controller.username);
+							MultiplayerController.chatMessages.Add("Player <color=\"yellow\">" + controller.username + "{" + controller.playerID + "}</color> <b><color=\"green\">CONNECTED</color></b>");
 						}
 					}
+					break;
+				case OpCode.Chat:
+					string user = "";
+					foreach(MultiplayerPlayerController controller in otherControllers) {
+						if (controller.playerID == playerID) {
+							user = controller.username;
+						}
+					}
+					string msg = ASCIIEncoding.ASCII.GetString(newBuffer);
+					msg = RemoveMarkup(msg);
+					string message = "<b>" + user + "</b>{" + playerID.ToString() + "}: " + msg;
+					MultiplayerController.chatMessages.Add(message);
 					break;
 				case OpCode.Connect:
 					if (buffer.Length == 2) {
@@ -410,9 +433,14 @@ namespace XLMultiplayer {
 					}
 					break;
 				case OpCode.Disconnect:
-					if(buffer.Length == 2)
+					if (buffer.Length == 2) {
+						foreach (MultiplayerPlayerController controller in otherControllers) {
+							if (controller.playerID == playerID) {
+								MultiplayerController.chatMessages.Add("Player <color=\"yellow\">" + controller.username + "{" + controller.playerID + "}</color> <b><color=\"red\">DISCONNECTED</color></b>");
+							}
+						}
 						this.RemovePlayer(playerID);
-					else {
+					} else {
 						KillConnection();
 					}
 					break;
@@ -447,6 +475,14 @@ namespace XLMultiplayer {
 			}
 		}
 
+		public void SendChatMessage(string message) {
+			if (!message.Equals("")) {
+				byte[] msg = ASCIIEncoding.ASCII.GetBytes(message);
+				this.SendBytes(OpCode.Chat, msg, true);
+				MultiplayerController.chatMessages.Add("<b><color=\"blue\">You: </color></b>" + RemoveMarkup(message));
+			}
+		}
+
 		private void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
 			if (!reliable) {
 				client.SendUnreliable(msg, opCode);
@@ -458,6 +494,58 @@ namespace XLMultiplayer {
 
 				client.SendReliable(buffer);
 			}
+		}
+
+		private string RemoveMarkup(string msg) {
+			string old = msg;
+			msg = msg.Trim();
+			msg = Regex.Replace(msg, "<b>", "", RegexOptions.IgnoreCase);
+			msg = Regex.Replace(msg, "<i>", "", RegexOptions.IgnoreCase);
+			msg = Regex.Replace(msg, "</b>", "", RegexOptions.IgnoreCase);
+			msg = Regex.Replace(msg, "</i>", "", RegexOptions.IgnoreCase);
+			msg = Regex.Replace(msg, "</color>", "", RegexOptions.IgnoreCase);
+			msg = Regex.Replace(msg, "</size>", "", RegexOptions.IgnoreCase);
+			msg = Regex.Replace(msg, "</materials>", "", RegexOptions.IgnoreCase);
+
+			int startIndex = msg.IndexOf("<size", StringComparison.CurrentCultureIgnoreCase);
+
+			if (startIndex >= 0) {
+				int endIndex = msg.IndexOf(">", startIndex);
+
+				if (endIndex != -1)
+					msg = msg.Remove(startIndex, endIndex - startIndex + 1);
+			}
+
+			startIndex = msg.IndexOf("<color", StringComparison.CurrentCultureIgnoreCase);
+
+			if (startIndex >= 0) {
+				int endIndex = msg.IndexOf(">", startIndex);
+
+				if (endIndex != -1)
+					msg = msg.Remove(startIndex, endIndex - startIndex + 1);
+			}
+
+			startIndex = msg.IndexOf("<material", StringComparison.CurrentCultureIgnoreCase);
+
+			if (startIndex >= 0) {
+				int endIndex = msg.IndexOf(">", startIndex);
+
+				if (endIndex != -1)
+					msg = msg.Remove(startIndex, endIndex - startIndex + 1);
+			}
+
+			startIndex = msg.IndexOf("<quad", StringComparison.CurrentCultureIgnoreCase);
+
+			if (startIndex >= 0) {
+				int endIndex = msg.IndexOf(">", startIndex);
+				if(endIndex != -1)
+					msg = msg.Remove(startIndex, endIndex - startIndex + 1);
+			}
+
+			if (msg.Equals(old))
+				return msg;
+			else
+				return RemoveMarkup(msg);
 		}
 	}
 }
