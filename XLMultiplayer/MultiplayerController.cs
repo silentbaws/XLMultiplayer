@@ -505,7 +505,7 @@ namespace XLMultiplayer {
 			msg = Regex.Replace(msg, "</i>", "", RegexOptions.IgnoreCase);
 			msg = Regex.Replace(msg, "</color>", "", RegexOptions.IgnoreCase);
 			msg = Regex.Replace(msg, "</size>", "", RegexOptions.IgnoreCase);
-			msg = Regex.Replace(msg, "</materials>", "", RegexOptions.IgnoreCase);
+			msg = Regex.Replace(msg, "</material>", "", RegexOptions.IgnoreCase);
 
 			int startIndex = msg.IndexOf("<size", StringComparison.CurrentCultureIgnoreCase);
 

@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections;
+﻿using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -24,7 +23,7 @@ namespace XLMultiplayer {
 		public bool isLoading = false;
 		public int loadingStatus = 0;
 
-		string typedText = "";
+		private string typedText = "";
 
 		Rect windowRect;
 		Rect chatWindowRect;
@@ -35,6 +34,10 @@ namespace XLMultiplayer {
 
 		public int previousMessageCount = 0;
 		public string chat = "";
+
+		private bool refocused = false;
+
+		private Stopwatch refocusWatch = new Stopwatch();
 
 		public void Start() {
 			InitializeMenu();
@@ -140,6 +143,13 @@ namespace XLMultiplayer {
 					GUI.backgroundColor = Color.black;
 					GUI.contentColor = Color.white;
 
+					if (Input.GetKeyDown(KeyCode.T) && !GUI.GetNameOfFocusedControl().Equals("Text Chat")) {
+						GUI.FocusControl("Text Chat");
+						refocused = true;
+						refocusWatch.Reset();
+						refocusWatch.Start();
+					}
+
 					chatWindowRect = GUI.Window(2, chatWindowRect, DisplayChat, "Chat");
 					if (chatWindowRect.x < 0) {
 						chatWindowRect.x = 0;
@@ -198,14 +208,33 @@ namespace XLMultiplayer {
 
 			style2.wordWrap = false;
 
+
+			if(Event.current.isKey && GUI.GetNameOfFocusedControl().Equals("Text Chat") && Event.current.keyCode == KeyCode.T) {
+				if (refocusWatch.ElapsedMilliseconds < 250)
+					Event.current.Use();
+			}
+
 			GUI.SetNextControlName("Text Chat");
 			typedText = GUI.TextField(new Rect(3, chatWindowRect.height - 25, chatWindowRect.width - 6, 20), typedText, 1000, style2);
+			
+			if (refocused && GUI.GetNameOfFocusedControl().Equals("Text Chat")) {
+				TextEditor te = (TextEditor)GUIUtility.GetStateObject(typeof(TextEditor), GUIUtility.keyboardControl);
+
+				if (te != null) {
+					te.SelectNone();
+					te.MoveTextEnd();
+				}
+
+				refocused = false;
+			}
 
 			Event current = Event.current;
-			if(current.isKey && current.keyCode == KeyCode.Return && GUI.GetNameOfFocusedControl().Equals("Text Chat")) {
+			if (current.isKey && current.keyCode == KeyCode.Return && GUI.GetNameOfFocusedControl().Equals("Text Chat")) {
 				current.Use();
 				Main.menu.multiplayerManager.SendChatMessage(typedText);
 				typedText = "";
+				GUI.FocusControl(null);
+				GUI.UnfocusWindow();
 			}
 		}
 
