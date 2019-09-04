@@ -2,7 +2,7 @@
   "Id": "Silentbaws.XLMultiplayer",
   "DisplayName": "Silents Multiplayer Mod",
   "Author": "Silentbaws",
-  "Version": "0.2.3",
+  "Version": "0.3.0",
   "ManagerVersion": "0.17.0",
   "Requirements": [ "blendermf.XLShredMenu-0.0.4" ],
   "AssemblyName": "XLMultiplayer.dll",
