@@ -7,6 +7,9 @@ using UnityModManagerNet;
 using RootMotion.FinalIK;
 using Harmony12;
 using System.IO.Compression;
+using System.Linq;
+
+//TODO: ITS ALL SPAGHETTI
 
 namespace XLMultiplayer {
 	public enum MPTextureType : byte {
@@ -22,9 +25,13 @@ namespace XLMultiplayer {
 		public MPTextureType textureType;
 		public Vector2 size;
 
+		bool useFull = false;
+
 		Texture2D texture;
 
 		StreamWriter debugWriter;
+
+		bool useTexture = true;
 
 		string file;
 		public bool loaded = false;
@@ -48,59 +55,53 @@ namespace XLMultiplayer {
 		}
 
 		public void LoadFromFileMainThread(MultiplayerPlayerController controller) {
-			debugWriter.WriteLine("LOADING TEXTURE FROM MAIN THREAD");
-			byte[] data = File.ReadAllBytes(file);
-			texture = new Texture2D((int)size.x, (int)size.y);
-			texture.LoadImage(data);
-			controller.SetPlayerTexture(texture, textureType);
-			loaded = true;
+			if (useTexture) {
+				debugWriter.WriteLine("LOADING TEXTURE FROM MAIN THREAD");
+				byte[] data = File.ReadAllBytes(file);
+				texture = new Texture2D((int)size.x, (int)size.y);
+				texture.LoadImage(data);
+				controller.SetPlayerTexture(texture, textureType, useFull);
+				loaded = true;
+			}else if(textureType == MPTextureType.Shirt) {
+				controller.SetPlayerTexture(null, MPTextureType.Shirt, useFull);
+			}
 		}
 
 		public void SaveTexture(int connectionId, byte[] buffer) {
 			debugWriter.WriteLine("Saving texture in queue");
 			size = new Vector2(BitConverter.ToSingle(buffer, 3), BitConverter.ToSingle(buffer, 7));
-			byte[] file = new byte[buffer.Length - 11];
-			Array.Copy(buffer, 11, file, 0, file.Length);
+			useFull = buffer[11] == 1 ? true : false;
+			byte[] file = new byte[buffer.Length - 12];
+			Array.Copy(buffer, 12, file, 0, file.Length);
 
-			if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing"))
-				Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing");
+			if(file.Length == 1) {
+				useTexture = false;
+			} else {
+				if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing"))
+					Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing");
 
-			File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png", file);
+				File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png", file);
 
-			this.file = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png";
-			saved = true;
-			debugWriter.WriteLine("Saved texture in queue");
+				this.file = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png";
+				saved = true;
+				debugWriter.WriteLine("Saved texture in queue");
+			}
 		}
 	}
 
 	public class MultiplayerPlayerController {
 		public GameObject player { get; private set; }
 		public GameObject skater { get; private set; }
+		public GameObject skaterMeshesObject { get; private set; }
 		public GameObject board { get; private set; }
-
-		public Animator animator { get; private set; }
-		public Animator steezeAnimator { get; private set; }
-
-		public int animBools { get; private set; }
-		public int animFloats { get; private set; }
-		public int animInts { get; private set; }
-
-		public string[] animBoolNames { get; private set; }
-		public string[] animFloatNames { get; private set; }
-		public string[] animIntNames { get; private set; }
-
-		public int animSteezeBools { get; private set; }
-		public int animSteezeFloats { get; private set; }
-		public int animSteezeInts { get; private set; }
-
-		public string[] animSteezeBoolNames { get; private set; }
-		public string[] animSteezeFloatNames { get; private set; }
-		public string[] animSteezeIntNames { get; private set; }
 
 		public Transform hips;
 
-		public Vector3[] targetPositions = new Vector3[68];
-		public Quaternion[] targetRotations = new Quaternion[68];
+		public GameObject hatObject, shirtObject, pantsObject, shoesObject, headArmsObject;
+
+		//TODO: Reszie for 71
+		public Vector3[] targetPositions = new Vector3[72];
+		public Quaternion[] targetRotations = new Quaternion[72];
 
 		public string username = "IT ALL BROKE";
 
@@ -113,13 +114,28 @@ namespace XLMultiplayer {
 
 		private int currentAnimationPacket = -1;
 		private int currentPositionPacket = -1;
-		readonly string[] SkateboardMaterials = new string[] { "GripTape", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
-		readonly string[] TeeShirt = new string[] { "Cory_fixed_Karam:cory_001:shirt_geo" };
-		readonly string[] PantsMaterials = new string[] { "Cory_fixed_Karam:cory_001:pants_geo" };
-		readonly string[] Shoes = new string[] { "Cory_fixed_Karam:cory_001:shoes_geo" };
-		readonly string[] Hat = new string[] { "Cory_fixed_Karam:cory_001:hat_geo" };
 
+		public CharacterCustomizer characterCustomizer {
+			get {
+				if(_characterCustomizer == null) {
+					_characterCustomizer = this.skater.GetComponent<CharacterCustomizer>();
+				}
+				return _characterCustomizer;
+			}
+		}
+
+		public List<Tuple<CharacterGear, GameObject>> gearList {
+			get {
+				return Traverse.Create(characterCustomizer).Field("equippedGear").GetValue() as List<Tuple<CharacterGear, GameObject>>;
+			}
+		}
+
+		private static CharacterCustomizer _characterCustomizer;
+		
+		readonly string[] SkateboardMaterials = new string[] { "GripTape", "Deck", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
+		
 		public const string MainTextureName = "Texture2D_4128E5C7";
+		public const string MainDeckTextureName = "Texture2D_694A07B4";
 
 		Texture tShirtTexture;
 		Texture pantsTexture;
@@ -144,19 +160,19 @@ namespace XLMultiplayer {
 				Main.statusMenu.isLoading = true;
 				Main.statusMenu.loadingStatus = 0;
 				yield return new WaitForEndOfFrame();
-				shirtMP = new MultiplayerTexture(ConvertTexture(tShirtTexture, MPTextureType.Shirt).EncodeToPNG(), new Vector2(tShirtTexture.width, tShirtTexture.height), MPTextureType.Shirt, debugWriter);
+				shirtMP = new MultiplayerTexture(ConvertTexture(tShirtTexture, MPTextureType.Shirt), new Vector2(tShirtTexture.width, tShirtTexture.height), MPTextureType.Shirt, debugWriter);
 				Main.statusMenu.loadingStatus++;
 				yield return new WaitForEndOfFrame();
-				pantsMP = new MultiplayerTexture(ConvertTexture(pantsTexture, MPTextureType.Pants).EncodeToPNG(), new Vector2(pantsTexture.width, pantsTexture.height), MPTextureType.Pants, debugWriter);
+				pantsMP = new MultiplayerTexture(ConvertTexture(pantsTexture, MPTextureType.Pants), new Vector2(pantsTexture.width, pantsTexture.height), MPTextureType.Pants, debugWriter);
 				Main.statusMenu.loadingStatus++;
 				yield return new WaitForEndOfFrame();
-				shoesMP = new MultiplayerTexture(ConvertTexture(shoesTexture, MPTextureType.Shoes).EncodeToPNG(), new Vector2(shoesTexture.width, shoesTexture.height), MPTextureType.Shoes, debugWriter);
+				shoesMP = new MultiplayerTexture(ConvertTexture(shoesTexture, MPTextureType.Shoes), new Vector2(shoesTexture.width, shoesTexture.height), MPTextureType.Shoes, debugWriter);
 				Main.statusMenu.loadingStatus++;
 				yield return new WaitForEndOfFrame();
-				hatMP = new MultiplayerTexture(ConvertTexture(hatTexture, MPTextureType.Hat).EncodeToPNG(), new Vector2(hatTexture.width, hatTexture.height), MPTextureType.Hat, debugWriter);
+				hatMP = new MultiplayerTexture(ConvertTexture(hatTexture, MPTextureType.Hat), new Vector2(hatTexture.width, hatTexture.height), MPTextureType.Hat, debugWriter);
 				Main.statusMenu.loadingStatus++;
 				yield return new WaitForEndOfFrame();
-				boardMP = new MultiplayerTexture(ConvertTexture(skateboardTexture, MPTextureType.Board).EncodeToPNG(), new Vector2(skateboardTexture.width, skateboardTexture.height), MPTextureType.Board, debugWriter);
+				boardMP = new MultiplayerTexture(ConvertTexture(skateboardTexture, MPTextureType.Board), new Vector2(skateboardTexture.width, skateboardTexture.height), MPTextureType.Board, debugWriter);
 				copiedTextures = true;
 				Main.statusMenu.loadingStatus++;
 				yield return new WaitForEndOfFrame();
@@ -174,7 +190,7 @@ namespace XLMultiplayer {
 			yield break;
 		}
 
-		private Texture2D ConvertTexture(Texture t, MPTextureType texType) {
+		private byte[] ConvertTexture(Texture t, MPTextureType texType) {
 			Texture2D texture2D = null;
 			if (t.width <= 4096 && t.height <= 4096) {
 				texture2D = new Texture2D(t.width, t.height, TextureFormat.RGB24, false);
@@ -194,58 +210,50 @@ namespace XLMultiplayer {
 				Color[] pixels = texture2D.GetPixels();
 
 				RenderTexture.active = currentRT;
-			} else {
-				texture2D = new Texture2D(1024, 1024);
-				byte[] textureData = File.ReadAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Clothing\\Default" + texType.ToString() + ".png");
-				texture2D.LoadImage(textureData);
 			}
 
-			return texture2D;
+			return texture2D == null ? new byte[1] { 0 } : texture2D.EncodeToPNG();
 		}
 
-		public void SetPlayerTexture(Texture t, MPTextureType texType) {
+		//TODO: Fix with new clothing texture points
+		public void SetPlayerTexture(Texture tex, MPTextureType texType, bool useFull) {
 			switch (texType) {
 				case MPTextureType.Pants:
-					foreach (Transform transform in this.skater.GetComponentsInChildren<Transform>()) {
-						foreach (string s in PantsMaterials) {
-							if (transform.name.Equals(s)) {
-								transform.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
-							}
-						}
-					}
+					pantsObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Shirt:
-					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
-						foreach (string s in TeeShirt) {
-							if (tex.name.Equals(s)) {
-								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
-							}
-						}
+					if (useFull) {
+						GameObject.Destroy(headArmsObject);
+						GameObject.Destroy(shirtObject);
+
+						CharacterBody body = Traverse.Create(characterCustomizer).Field("characterBody").GetValue() as CharacterBody;
+
+						Dictionary<string, Transform> bonesDict = this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name);
+
+						GameObject g = Resources.Load<GameObject>("CharacterCustomization/Hoodie/PAX_1");
+						shirtObject = CustomLoadSMRPrefab(g, skaterMeshesObject.transform, bonesDict);
+
+						GameObject g2 = Resources.Load<GameObject>(body.headAndHandsPath);
+						headArmsObject = CustomLoadSMRPrefab(g2, skaterMeshesObject.transform, bonesDict);
 					}
+					if(tex != null) shirtObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Shoes:
-					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
-						foreach (string s in Shoes) {
-							if (tex.name.Equals(s)) {
-								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
-							}
-						}
-					}
+					GameObject Shoe_L = shoesObject.transform.Find("Shoe_L").gameObject;
+					GameObject Shoe_R = shoesObject.transform.Find("Shoe_R").gameObject;
+
+					Shoe_L.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+					Shoe_R.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Hat:
-					foreach (Transform tex in this.skater.GetComponentsInChildren<Transform>()) {
-						foreach (string s in Hat) {
-							if (tex.name.Equals(s)) {
-								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
-							}
-						}
-					}
+					hatObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Board:
-					foreach (Transform tex in this.board.GetComponentsInChildren<Transform>()) {
-						foreach (string s in SkateboardMaterials) {
-							if (tex.name.Equals(s)) {
-								tex.gameObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, t);
+					foreach(Transform t in board.GetComponentsInChildren<Transform>()) {
+						if (SkateboardMaterials.Contains(t.name)) {
+							Renderer r = t.GetComponent<Renderer>();
+							if(r != null) {
+								r.material.SetTexture(MainDeckTextureName, tex);
 							}
 						}
 					}
@@ -257,10 +265,23 @@ namespace XLMultiplayer {
 			this.debugWriter = writer;
 		}
 
+		public static GameObject CustomLoadSMRPrefab(GameObject prefab, Transform root, Dictionary<string, Transform> bonesDict) {
+			GameObject gameObject = UnityEngine.Object.Instantiate<GameObject>(prefab, root);
+			foreach (GearPrefabController gearPrefabController in gameObject.GetComponentsInChildren<GearPrefabController>()) {
+				try {
+					gearPrefabController.SetBonesFromDict(bonesDict);
+				} catch (Exception ex) {
+				}
+			}
+			return gameObject;
+		}
+
 		public void ConstructForPlayer() {
+			this.debugWriter.WriteLine("Constructing for Player");
 			//Write the master prefab hierarchy to make sure everything is in place
 			StreamWriter writer = new StreamWriter("Hierarchy.txt");
-			foreach (Transform t in GameObject.Find("Master Prefab").GetComponentsInChildren<Transform>()) {
+			writer.AutoFlush = true;
+			foreach (Transform t in GameObject.Find("Skater Root").GetComponentsInChildren<Transform>()) {
 				Transform parent = t.parent;
 				while (parent != null) {
 					writer.Write("\t");
@@ -269,17 +290,19 @@ namespace XLMultiplayer {
 				writer.WriteLine("└─>" + t.name + (t.GetComponents<Rigidbody>().Length != 0 ? "<Contains rigidbody>" : ""));
 			}
 			writer.Close();
+			this.debugWriter.WriteLine("Finished writing to hierarchy.txt");
 
 			//Get the skater root gameobject and set it to the player
 			this.player = PlayerController.Instance.skaterController.skaterTransform.gameObject;
 			Transform[] componentsInChildren = PlayerController.Instance.gameObject.GetComponentsInChildren<Transform>();
 			bool foundSkater = false;
+			bool foundBoard = false;
 
 			//Get the actual skater and skateboard from the root object
 			for (int i = 0; i < componentsInChildren.Length; i++) {
-				if (componentsInChildren[i].gameObject.name.Equals("Skater")) {
+				if (componentsInChildren[i].gameObject.name.Equals("NewSkater")) {
 					if (!foundSkater) {
-						if (componentsInChildren[i].Find("Steeze IK")) {
+						if (componentsInChildren[i].Find("NewSteezeIK")) {
 							this.skater = componentsInChildren[i].gameObject;
 							this.debugWriter.WriteLine("Found Skater");
 							foundSkater = true;
@@ -290,97 +313,55 @@ namespace XLMultiplayer {
 					this.debugWriter.WriteLine("Found Board");
 					foreach(Transform t in componentsInChildren[i].GetComponentsInChildren<Transform>()) {
 						if (t.name.Equals(SkateboardMaterials[0])) {
-							skateboardTexture = t.GetComponent<Renderer>().material.GetTexture(MainTextureName);
+							skateboardTexture = t.GetComponent<Renderer>().material.GetTexture(MainDeckTextureName);
+							foundBoard = true;
 							break;
 						}
 					}
-				} else if (componentsInChildren[i].name.Equals(PantsMaterials[0])) {
-					pantsTexture = componentsInChildren[i].GetComponent<Renderer>().material.GetTexture(MainTextureName);
-				} else if (componentsInChildren[i].name.Equals(TeeShirt[0])) {
-					tShirtTexture = componentsInChildren[i].GetComponent<Renderer>().material.GetTexture(MainTextureName);
-				} else if (componentsInChildren[i].name.Equals(Shoes[0])) {
-					shoesTexture = componentsInChildren[i].GetComponent<Renderer>().material.GetTexture(MainTextureName);
-				} else if (componentsInChildren[i].name.Equals(Hat[0])) {
-					hatTexture = componentsInChildren[i].GetComponent<Renderer>().material.GetTexture(MainTextureName);
+				}
+
+				if(foundBoard && foundSkater) {
+					break;
 				}
 			}
+			//SET textures from player here
 
 			if (!foundSkater) {
 				this.debugWriter.WriteLine("Failed to find skater");
 				return;
 			}
 
-			this.hips = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>().references.pelvis;
-
-			//Get all animators attached to the root
-			Animator[] ourSkaterAnimators = new Animator[3];
-			Array.Copy(this.skater.GetComponentsInChildren<Animator>(), ourSkaterAnimators, 2);
-			ourSkaterAnimators[2] = PlayerController.Instance.animationController.ikAnim;
-
-			if (ourSkaterAnimators[0] == null || ourSkaterAnimators[1] == null || ourSkaterAnimators[2] == null) {
-				this.debugWriter.WriteLine("Failed to find an animator {0}, {1}, {2}", ourSkaterAnimators[0] == null, ourSkaterAnimators[1] == null, ourSkaterAnimators[2] == null);
-				return;
-			}
-
-			//Set our animator and steeze animator
-			this.animator = ourSkaterAnimators[0];
-			this.steezeAnimator = ourSkaterAnimators[1];
-
-			//Get the paramater names, types, and amount of each type from main animator and log all others
-			this.animBools = 0;
-			this.animFloats = 0;
-			this.animInts = 0;
-			for (int i = 0; i < ourSkaterAnimators.Length; i++) {
-				debugWriter.WriteLine("Animator {0}: {1}, humanoid is {2}", i, ourSkaterAnimators[i].name, ourSkaterAnimators[i].isHuman);
-				List<string> boolParams = new List<string>();
-				List<string> floatParams = new List<string>();
-				List<string> intParams = new List<string>();
-				foreach (AnimatorControllerParameter param in ourSkaterAnimators[i].parameters) {
-					if (param.type == AnimatorControllerParameterType.Bool) {
-						if (i == 0)
-							this.animBools++;
-						else if (i == 1)
-							this.animSteezeBools++;
-						boolParams.Add(param.name);
-					} else if (param.type == AnimatorControllerParameterType.Float) {
-						if (i == 0)
-							this.animFloats++;
-						else if (i == 1)
-							this.animSteezeFloats++;
-						floatParams.Add(param.name);
-					} else if (param.type == AnimatorControllerParameterType.Int) {
-						if (i == 0)
-							this.animInts++;
-						else if (i == 1)
-							this.animSteezeInts++;
-						intParams.Add(param.name);
+			foreach (Transform child in skater.transform) {
+				foreach (Transform t in child) {
+					if (t.name.StartsWith("PAX", true, null)) {
+						skaterMeshesObject = child.gameObject;
+						break;
 					}
 				}
-				debugWriter.Write("\tBoolean Paramaters: ");
-				for (int c = 0; c < boolParams.ToArray().Length; c++)
-					debugWriter.Write("\"{0}\", ", boolParams[c]);
-				debugWriter.Write("\n\tFloat Paramaters: ");
-				for (int c = 0; c < floatParams.ToArray().Length; c++)
-					debugWriter.Write("\"{0}\", ", floatParams[c]);
-				debugWriter.Write("\n\tInteger Paramaters: ");
-				for (int c = 0; c < intParams.ToArray().Length; c++)
-					debugWriter.Write("\"{0}\", ", intParams[c]);
-				debugWriter.Write("\n");
-
-				if (i == 0) {
-					this.animBoolNames = boolParams.ToArray();
-					this.animFloatNames = floatParams.ToArray();
-					this.animIntNames = intParams.ToArray();
-				} else if (i == 1) {
-					this.animSteezeBoolNames = boolParams.ToArray();
-					this.animSteezeFloatNames = floatParams.ToArray();
-					this.animSteezeIntNames = intParams.ToArray();
-				}
-
-				boolParams.Clear();
-				floatParams.Clear();
-				intParams.Clear();
+				if (skaterMeshesObject != null) break;
 			}
+
+			foreach (Tuple<CharacterGear, GameObject> t in gearList) {
+				switch (t.Item1.categoryName) {
+					case "Shirt":
+						tShirtTexture = t.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName);
+						break;
+					case "Hoodie":
+						tShirtTexture = t.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName);
+						break;
+					case "Hat":
+						hatTexture = t.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName);
+						break;
+					case "Pants":
+						pantsTexture = t.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName);
+						break;
+					case "Shoes":
+						shoesTexture = t.Item2.transform.Find("Shoe_R").GetComponent<Renderer>().material.GetTexture(MainTextureName);
+						break;
+				}
+			}
+
+			this.hips = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>().references.pelvis.parent;
 		}
 
 		public void ConstructFromPlayer(MultiplayerPlayerController source) {
@@ -424,7 +405,42 @@ namespace XLMultiplayer {
 				UnityEngine.Object.DestroyImmediate(m);
 			}
 
-			this.hips = this.skater.transform.Find("Skater").Find("Reference").Find("mixamorig_Hips");
+			this.hips = this.skater.transform.Find("Skater_Joints").Find("Skater_root");
+
+			foreach (Transform child in skater.transform) {
+				foreach (Transform t in child) {
+					if (t.name.StartsWith("PAX", true, null)) {
+						this.skaterMeshesObject = child.gameObject;
+						break;
+					}
+				}
+				if (this.skaterMeshesObject != null) break;
+			}
+
+			foreach(Transform t in skaterMeshesObject.transform) {
+				if (!t.name.Equals("eyes")) {
+					GameObject.Destroy(t.gameObject);
+				}
+			}
+
+			CharacterBody body = Traverse.Create(characterCustomizer).Field("characterBody").GetValue() as CharacterBody;
+
+			Dictionary<string, Transform> bonesDict = this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name);
+
+			GameObject g = Resources.Load<GameObject>("CharacterCustomization/Shirt/PAX_1");
+			shirtObject = CustomLoadSMRPrefab(g, skaterMeshesObject.transform, bonesDict);
+
+			GameObject g2 = Resources.Load<GameObject>(body.headAndArmsPath);
+			headArmsObject = CustomLoadSMRPrefab(g2, skaterMeshesObject.transform, bonesDict);
+
+			GameObject g3 = Resources.Load<GameObject>("CharacterCustomization/shoes/PAX_1");
+			shoesObject = CustomLoadSMRPrefab(g3, skaterMeshesObject.transform, bonesDict);
+
+			GameObject g4 = Resources.Load<GameObject>("CharacterCustomization/pants/PAX_1");
+			pantsObject = CustomLoadSMRPrefab(g4, skaterMeshesObject.transform, bonesDict);
+
+			GameObject g5 = Resources.Load<GameObject>("CharacterCustomization/Hat/PAX_1");
+			hatObject = CustomLoadSMRPrefab(g5, skaterMeshesObject.transform, bonesDict);
 
 			foreach (MonoBehaviour m in source.skater.GetComponentsInChildren<MonoBehaviour>()) {
 				m.enabled = true;
@@ -433,34 +449,6 @@ namespace XLMultiplayer {
 				m.enabled = true;
 			}
 			Time.timeScale = 1.0f;
-
-			this.animBools = source.animBools;
-			this.animFloats = source.animFloats;
-			this.animInts = source.animInts;
-
-			this.animBoolNames = source.animBoolNames;
-			this.animFloatNames = source.animFloatNames;
-			this.animIntNames = source.animIntNames;
-
-			this.animSteezeBools = source.animSteezeBools;
-			this.animSteezeFloats = source.animSteezeFloats;
-			this.animSteezeInts = source.animSteezeInts;
-
-			this.animSteezeBoolNames = source.animSteezeBoolNames;
-			this.animSteezeFloatNames = source.animSteezeFloatNames;
-			this.animSteezeIntNames = source.animSteezeIntNames;
-			debugWriter.WriteLine("Set New Player Animation variables");
-
-			//Get the animators on the new player
-			Animator[] newSkaterAnimators = this.skater.GetComponentsInChildren<Animator>();
-			this.animator = newSkaterAnimators[0];
-			this.animator.enabled = true;
-			this.steezeAnimator = newSkaterAnimators[1];
-			newSkaterAnimators[1].enabled = true;
-			debugWriter.WriteLine("Activated New Player Animators");
-
-			this.animator.enabled = false;
-			this.steezeAnimator.enabled = false;
 
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
@@ -563,6 +551,7 @@ namespace XLMultiplayer {
 		}
 
 		public void SetTransforms(Vector3[] vectors, Quaternion[] quaternions) {
+			//TODO: LERP THIS
 			this.player.transform.position = vectors[0];
 			this.player.transform.rotation = quaternions[0];
 			this.board.transform.position = vectors[1];
@@ -607,13 +596,13 @@ namespace XLMultiplayer {
 
 			byte[] transforms = PackTransformArray(this.hips.GetComponentsInChildren<Transform>());
 
-			packed[0] = new byte[953];
+			packed[0] = new byte[1009];
 			packed[0][0] = 0;
-			Array.Copy(transforms, 0, packed[0], 1, 952);
+			Array.Copy(transforms, 0, packed[0], 1, 1008);
 
-			packed[1] = new byte[953];
+			packed[1] = new byte[1009];
 			packed[1][0] = 1;
-			Array.Copy(transforms, 952, packed[1], 1, 952);
+			Array.Copy(transforms, 1008, packed[1], 1, 1008);
 
 			return packed;
 		}
@@ -632,7 +621,7 @@ namespace XLMultiplayer {
 			List<Vector3> vectors = new List<Vector3>();
 			List<Quaternion> quaternions = new List<Quaternion>();
 
-			for (int i = 0; i < 34; i++) {
+			for (int i = 0; i < 36; i++) {
 				Vector3 readVector = new Vector3();
 				readVector.x = BitConverter.ToSingle(buffer, i * 28);
 				readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4);
@@ -648,7 +637,7 @@ namespace XLMultiplayer {
 			}
 
 			if (recBuffer[4] == 0) {
-				for (int i = 0; i < 34; i++) {
+				for (int i = 0; i < 36; i++) {
 					if (Vector3.Distance(this.targetPositions[i], vectors[i]) > 1) {
 						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i];
 						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i];
@@ -660,16 +649,16 @@ namespace XLMultiplayer {
 					this.targetRotations[i] = quaternions[i];
 				}
 			} else {
-				for (int i = 34; i < 68; i++) {
-					if (Vector3.Distance(this.targetPositions[i], vectors[i - 34]) > 1) {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i - 34];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i - 34];
+				for (int i = 36; i < 72; i++) {
+					if (Vector3.Distance(this.targetPositions[i], vectors[i - 36]) > 1) {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i - 36];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i - 36];
 					} else {
 						this.hips.GetComponentsInChildren<Transform>()[i].position = this.targetPositions[i];
 						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.targetRotations[i];
 					}
-					this.targetPositions[i] = vectors[i - 34];
-					this.targetRotations[i] = quaternions[i - 34];
+					this.targetPositions[i] = vectors[i - 36];
+					this.targetRotations[i] = quaternions[i - 36];
 				}
 			}
 		}

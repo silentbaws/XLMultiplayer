@@ -56,6 +56,8 @@ public class MultiplayerSkin {
 	float sizeX, sizeY;
 	MPTextureType textureType;
 
+	bool useFull = false;
+
 	public bool finishedCopy = false;
 
 	byte[] buffer;
@@ -73,9 +75,9 @@ public class MultiplayerSkin {
 
 	public byte[] GetBuffer(byte connectionId) {
 		if (this.buffer != null) {
-			byte[] sendBuffer = new byte[15 + bufferSize];
+			byte[] sendBuffer = new byte[16 + bufferSize];
 
-			Array.Copy(BitConverter.GetBytes(bufferSize + 11), 0, sendBuffer, 0, 4);
+			Array.Copy(BitConverter.GetBytes(bufferSize + 12), 0, sendBuffer, 0, 4);
 
 			sendBuffer[4] = (byte)OpCode.Texture;
 			sendBuffer[5] = connectionId;
@@ -84,8 +86,9 @@ public class MultiplayerSkin {
 			Array.Copy(BitConverter.GetBytes(sizeX), 0, sendBuffer, 7, 4);
 			Array.Copy(BitConverter.GetBytes(sizeY), 0, sendBuffer, 11, 4);
 
+			sendBuffer[15] = useFull ? (byte)1 : (byte)0;
 
-			Array.Copy(this.buffer, 0, sendBuffer, 15, bufferSize);
+			Array.Copy(this.buffer, 0, sendBuffer, 16, bufferSize);
 
 			return sendBuffer;
 		}
@@ -98,9 +101,11 @@ public class MultiplayerSkin {
 		sizeX = BitConverter.ToSingle(recvBuffer, 2);
 		sizeY = BitConverter.ToSingle(recvBuffer, 6);
 
-		this.buffer = new byte[recvBuffer.Length - 10];
+		useFull = recvBuffer[10] == 1 ? true : false;
 
-		Array.Copy(recvBuffer, 10, this.buffer, 0, this.buffer.Length);
+		this.buffer = new byte[recvBuffer.Length - 11];
+
+		Array.Copy(recvBuffer, 11, this.buffer, 0, this.buffer.Length);
 
 		bufferSize = this.buffer.Length;
 

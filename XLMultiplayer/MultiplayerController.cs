@@ -173,17 +173,19 @@ namespace XLMultiplayer {
 		}
 
 		private void UpdateClient() {
-			byte[] buffer;
-			int bufSize;
-			bool gotObject = client.GetMessage(out bufSize, out buffer);
-			while (gotObject) {
-				this.ProcessMessage(buffer, bufSize);
-				gotObject = client.GetMessage(out bufSize, out buffer);
+			if (client != null) {
+				byte[] buffer;
+				int bufSize;
+				bool gotObject = client.GetMessage(out bufSize, out buffer);
+				while (gotObject) {
+					this.ProcessMessage(buffer, bufSize);
+					gotObject = client.GetMessage(out bufSize, out buffer);
+				}
 			}
 
-			foreach(MultiplayerSkinBuffer bufferedSkin in textureQueue) {
-				foreach(MultiplayerPlayerController player in otherControllers) {
-					if(player.playerID == bufferedSkin.connectionId) {
+			foreach (MultiplayerSkinBuffer bufferedSkin in textureQueue) {
+				foreach (MultiplayerPlayerController player in otherControllers) {
+					if (player.playerID == bufferedSkin.connectionId) {
 						switch (bufferedSkin.textureType) {
 							case MPTextureType.Pants:
 								player.pantsMP.SaveTexture(bufferedSkin.connectionId, bufferedSkin.buffer);
@@ -207,13 +209,13 @@ namespace XLMultiplayer {
 					}
 				}
 
-				if(bufferedSkin.ElapsedTime() > 600000) {
+				if (bufferedSkin.ElapsedTime() > 600000) {
 					textureQueue.Remove(bufferedSkin);
 					debugWriter.WriteLine("Texture in queue expired");
 				}
 			}
 
-			foreach(MultiplayerPlayerController player in otherControllers) {
+			foreach (MultiplayerPlayerController player in otherControllers) {
 				if (player.pantsMP.loaded == false && player.pantsMP.saved)
 					player.pantsMP.LoadFromFileMainThread(player);
 				if (player.shirtMP.loaded == false && player.shirtMP.saved)
@@ -246,46 +248,60 @@ namespace XLMultiplayer {
 				}
 			}
 
+			//TODO: Add check for hoodie/shirt, possibly check hash of shirt/hoodie texture to determine if it's default
+
 			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\";
 
-			byte[] prebuffer = new byte[14];
-			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			byte[] prebuffer = new byte[15];
+			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)OpCode.Texture;
 			prebuffer[5] = (byte)MPTextureType.Pants;
 			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.y), 0, prebuffer, 10, 4);
+			prebuffer[14] = 0;
 			client.tcpConnection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
-			prebuffer = new byte[14];
-			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer = new byte[15];
+			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)OpCode.Texture;
 			prebuffer[5] = (byte)MPTextureType.Shirt;
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.size.y), 0, prebuffer, 10, 4);
+			bool useHoodie = false;
+			foreach(Tuple<CharacterGear, GameObject> tup in this.ourController.gearList) {
+				if(tup.Item1.categoryName.Equals("Hoodie") || tup.Item1.categoryName.Equals("Shirt")) {
+					useHoodie = tup.Item1.categoryName.Equals("Hoodie");
+					break;
+				}
+			}
+			prebuffer[14] = useHoodie ? (byte)1 : (byte)0;
 			client.tcpConnection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
-			prebuffer = new byte[14];
-			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer = new byte[15];
+			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)OpCode.Texture;
 			prebuffer[5] = (byte)MPTextureType.Shoes;
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.y), 0, prebuffer, 10, 4);
+			prebuffer[14] = 0;
 			client.tcpConnection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
-			prebuffer = new byte[14];
-			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer = new byte[15];
+			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)OpCode.Texture;
 			prebuffer[5] = (byte)MPTextureType.Board;
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.y), 0, prebuffer, 10, 4);
+			prebuffer[14] = 0;
 			client.tcpConnection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
-			prebuffer = new byte[14];
-			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.bytes.Length + 10), 0, prebuffer, 0, 4);
+			prebuffer = new byte[15];
+			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
 			prebuffer[4] = (byte)OpCode.Texture;
 			prebuffer[5] = (byte)MPTextureType.Hat;
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.y), 0, prebuffer, 10, 4);
+			prebuffer[14] = 0;
 			client.tcpConnection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
 		}
 
@@ -393,8 +409,6 @@ namespace XLMultiplayer {
 					debugWriter.WriteLine("Processing settings from {0}", playerID);
 					foreach (MultiplayerPlayerController controller in otherControllers) {
 						if (controller.playerID == playerID) {
-							controller.animator.runtimeAnimatorController = newBuffer[0] == 1 ? goofyAnim : regularAnim;
-							controller.steezeAnimator.runtimeAnimatorController = newBuffer[0] == 1 ? goofySteezeAnim : regularSteezeAnim;
 							controller.username = Encoding.ASCII.GetString(newBuffer, 1, newBuffer.Length - 1);
 							debugWriter.WriteLine(controller.username);
 							MultiplayerController.chatMessages.Add("Player <color=\"yellow\">" + controller.username + "{" + controller.playerID + "}</color> <b><color=\"green\">CONNECTED</color></b>");
