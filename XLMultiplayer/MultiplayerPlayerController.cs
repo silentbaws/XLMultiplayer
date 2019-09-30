@@ -694,7 +694,7 @@ namespace XLMultiplayer {
 			}
 		}
 
-		public void LerpNextFrame() {
+		public void LerpNextFrame(bool recursive = false) {
 			if (!startedAnimating && animationFrames.Count > 2) {
 				if (this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
 					this.animationFrames.RemoveAt(0);
@@ -739,15 +739,15 @@ namespace XLMultiplayer {
 				offset = this.animationFrames[0].timeSinceStart;
 			}
 
-			this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
+			if(!recursive) this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
 
 			for (int i = 0; i < 72; i++) {
 				if (i < 36) {
-					this.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].position, this.animationFrames[0].topHalfVectors[i], (Time.unscaledDeltaTime + offset) / this.animationFrames[0].deltaTime);
-					this.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].rotation, this.animationFrames[0].topHalfQuaternions[i], (Time.unscaledDeltaTime + offset) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].position, this.animationFrames[0].topHalfVectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].rotation, this.animationFrames[0].topHalfQuaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
 				} else {
-					this.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].position, this.animationFrames[0].bottomHalfVectors[i - 36], (Time.unscaledDeltaTime + offset) / this.animationFrames[0].deltaTime);
-					this.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].rotation, this.animationFrames[0].bottomHalfQuaternions[i - 36], (Time.unscaledDeltaTime + offset) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].position, this.animationFrames[0].bottomHalfVectors[i - 36], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].rotation, this.animationFrames[0].bottomHalfQuaternions[i - 36], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
 				}
 			}
 
@@ -773,6 +773,7 @@ namespace XLMultiplayer {
 				this.previousFrameTime = this.animationFrames[0].frameTime;
 				this.animationFrames.RemoveAt(0);
 				this.animationFrames[0].timeSinceStart = oldTime - oldDelta;
+				this.LerpNextFrame(true);
 			}
 		}
 
