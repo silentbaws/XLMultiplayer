@@ -58,7 +58,7 @@ namespace XLMultiplayer {
 			if (useTexture) {
 				debugWriter.WriteLine("LOADING TEXTURE FROM MAIN THREAD");
 				byte[] data = File.ReadAllBytes(file);
-				texture = new Texture2D((int)size.x, (int)size.y);
+				texture = new Texture2D((int)size.x, (int)size.y, TextureFormat.RGBA32, false);
 				texture.LoadImage(data);
 				controller.SetPlayerTexture(texture, textureType, useFull);
 				loaded = true;
@@ -89,6 +89,30 @@ namespace XLMultiplayer {
 		}
 	}
 
+	public class MultiplayerFrameBufferObject {
+		public Vector3[] topHalfVectors = null;
+		public Quaternion[] topHalfQuaternions = null;
+		public Vector3[] bottomHalfVectors = null;
+		public Quaternion[] bottomHalfQuaternions = null;
+
+		public int animFrame = 0;
+
+		public float frameTime;
+		public float deltaTime = 0;
+		public float timeSinceStart = 0;
+
+		public MultiplayerFrameBufferObject() {
+			animFrame = 0;
+			deltaTime = 0;
+			timeSinceStart = 0;
+		}
+	}
+
+	public class MultiplayerPositionFrameBufferObject {
+		public Vector3[] vectors;
+		public Quaternion[] quaternions;
+	}
+
 	public class MultiplayerPlayerController {
 		public GameObject player { get; private set; }
 		public GameObject skater { get; private set; }
@@ -98,8 +122,7 @@ namespace XLMultiplayer {
 		public Transform hips;
 
 		public GameObject hatObject, shirtObject, pantsObject, shoesObject, headArmsObject;
-
-		//TODO: Reszie for 71
+		
 		public Vector3[] targetPositions = new Vector3[72];
 		public Quaternion[] targetRotations = new Quaternion[72];
 
@@ -114,6 +137,12 @@ namespace XLMultiplayer {
 
 		private int currentAnimationPacket = -1;
 		private int currentPositionPacket = -1;
+
+		List<MultiplayerPositionFrameBufferObject> positionFrames = new List<MultiplayerPositionFrameBufferObject>();
+
+		List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
+		bool startedAnimating = false;
+		float previousFrameTime = 0;
 
 		public CharacterCustomizer characterCustomizer {
 			get {
@@ -551,7 +580,203 @@ namespace XLMultiplayer {
 		}
 
 		public void SetTransforms(Vector3[] vectors, Quaternion[] quaternions) {
-			//TODO: LERP THIS
+			MultiplayerPositionFrameBufferObject newPositionObject = new MultiplayerPositionFrameBufferObject();
+			newPositionObject.vectors = vectors;
+			newPositionObject.quaternions = quaternions;
+
+			positionFrames.Add(newPositionObject);
+		}
+
+		public byte[] PackTransformArray(Transform[] T) {
+			byte[] packed = new byte[T.Length * 28];
+			for (int i = 0; i < T.Length; i++) {
+				Array.Copy(BitConverter.GetBytes(T[i].position.x), 0, packed, i * 28, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].position.y), 0, packed, i * 28 + 4, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].position.z), 0, packed, i * 28 + 8, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].rotation.x), 0, packed, i * 28 + 12, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].rotation.y), 0, packed, i * 28 + 16, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].rotation.z), 0, packed, i * 28 + 20, 4);
+				Array.Copy(BitConverter.GetBytes(T[i].rotation.w), 0, packed, i * 28 + 24, 4);
+			}
+			return packed;
+		}
+
+		public byte[][] PackAnimator() {
+			byte[][] packed = new byte[2][];
+
+			byte[] transforms = PackTransformArray(this.hips.GetComponentsInChildren<Transform>());
+
+			packed[0] = new byte[1014];
+			packed[0][0] = 0;
+			Array.Copy(transforms, 0, packed[0], 1, 1008);
+			Array.Copy(BitConverter.GetBytes(Time.timeSinceLevelLoad), 0, packed[0], 1009, 4);
+			packed[0][1013] = 0;
+
+			packed[1] = new byte[1010];
+			packed[1][0] = 1;
+			Array.Copy(transforms, 1008, packed[1], 1, 1008);
+			packed[1][1009] = 1;
+
+			return packed;
+		}
+
+		public void UnpackAnimator(byte[] recBuffer) {
+			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
+
+			byte[] buffer = new byte[recBuffer.Length - 5];
+			if (receivedPacketSequence < currentAnimationPacket - 10) {
+				return;
+			} else {
+				Array.Copy(recBuffer, 5, buffer, 0, recBuffer.Length - 5);
+				currentAnimationPacket = receivedPacketSequence > currentAnimationPacket ? receivedPacketSequence : currentAnimationPacket;
+			}
+
+			int actualPacket = receivedPacketSequence;
+
+			receivedPacketSequence = Mathf.FloorToInt(receivedPacketSequence / 2);
+
+			MultiplayerFrameBufferObject currentBufferObject = null;
+			bool isTop = buffer[buffer.Length - 1] == 0;
+			bool isNew = false;
+
+			foreach(MultiplayerFrameBufferObject animFrame in animationFrames) {
+				if(animFrame.animFrame == receivedPacketSequence) {
+					currentBufferObject = animFrame;
+				}
+			}
+
+			if(currentBufferObject == null) {
+				currentBufferObject = new MultiplayerFrameBufferObject();
+				isNew = true;
+			}
+
+			currentBufferObject.animFrame = receivedPacketSequence;
+			if (isTop) {
+				currentBufferObject.frameTime = BitConverter.ToSingle(buffer, buffer.Length - 5);
+			}
+
+			List<Vector3> vectors = new List<Vector3>();
+			List<Quaternion> quaternions = new List<Quaternion>();
+
+			for (int i = 0; i < 36; i++) {
+				Vector3 readVector = new Vector3();
+				readVector.x = BitConverter.ToSingle(buffer, i * 28);
+				readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4);
+				readVector.z = BitConverter.ToSingle(buffer, i * 28 + 8);
+				Quaternion readQuaternion = new Quaternion();
+				readQuaternion.x = BitConverter.ToSingle(buffer, i * 28 + 12);
+				readQuaternion.y = BitConverter.ToSingle(buffer, i * 28 + 16);
+				readQuaternion.z = BitConverter.ToSingle(buffer, i * 28 + 20);
+				readQuaternion.w = BitConverter.ToSingle(buffer, i * 28 + 24);
+
+				vectors.Add(readVector);
+				quaternions.Add(readQuaternion);
+			}
+
+			if (isTop) {
+				currentBufferObject.topHalfVectors = new Vector3[36];
+				currentBufferObject.topHalfQuaternions = new Quaternion[36];
+				for (int i = 0; i < 36; i++) {
+					currentBufferObject.topHalfVectors[i] = vectors[i];
+					currentBufferObject.topHalfQuaternions[i] = quaternions[i];
+				}
+			} else {
+				currentBufferObject.bottomHalfVectors = new Vector3[36];
+				currentBufferObject.bottomHalfQuaternions = new Quaternion[36];
+				for (int i = 36; i < 72; i++) {
+					currentBufferObject.bottomHalfVectors[i - 36] = vectors[i - 36];
+					currentBufferObject.bottomHalfQuaternions[i - 36] = quaternions[i - 36];
+				}
+			}
+
+			if (isNew) {
+				this.animationFrames.Add(currentBufferObject);
+			}
+		}
+
+		public void LerpNextFrame() {
+			if (!startedAnimating && animationFrames.Count > 2) {
+				if (this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
+					this.animationFrames.RemoveAt(0);
+					return;
+				}
+
+				startedAnimating = true;
+
+				for (int i = 0; i < 72; i++) {
+					if (i < 36) {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = this.animationFrames[0].topHalfVectors[i];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.animationFrames[0].topHalfQuaternions[i];
+					} else {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = this.animationFrames[0].bottomHalfVectors[i - 36];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.animationFrames[0].bottomHalfQuaternions[i - 36];
+					}
+				}
+
+				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
+				positionFrames.RemoveAt(0);
+
+				this.previousFrameTime = this.animationFrames[0].frameTime;
+
+				this.animationFrames.RemoveAt(0);
+			}
+			if (!startedAnimating) return;
+
+			if(this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
+				this.animationFrames.RemoveAt(0);
+
+				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
+				this.positionFrames.RemoveAt(0);
+
+				debugWriter.WriteLine("Skipping frame");
+				return;
+			}
+
+			float offset = 0;
+
+			if(this.animationFrames[0].deltaTime == 0) {
+				this.animationFrames[0].deltaTime = this.animationFrames[0].frameTime - this.previousFrameTime;
+				offset = this.animationFrames[0].timeSinceStart;
+			}
+
+			this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
+
+			for (int i = 0; i < 72; i++) {
+				if (i < 36) {
+					this.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].position, this.animationFrames[0].topHalfVectors[i], (Time.unscaledDeltaTime + offset) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].rotation, this.animationFrames[0].topHalfQuaternions[i], (Time.unscaledDeltaTime + offset) / this.animationFrames[0].deltaTime);
+				} else {
+					this.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].position, this.animationFrames[0].bottomHalfVectors[i - 36], (Time.unscaledDeltaTime + offset) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].rotation, this.animationFrames[0].bottomHalfQuaternions[i - 36], (Time.unscaledDeltaTime + offset) / this.animationFrames[0].deltaTime);
+				}
+			}
+
+			if (this.animationFrames[0].timeSinceStart >= this.animationFrames[0].deltaTime) {
+				for (int i = 0; i < 72; i++) {
+					if (i < 36) {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = this.animationFrames[0].topHalfVectors[i];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.animationFrames[0].topHalfQuaternions[i];
+					} else {
+						this.hips.GetComponentsInChildren<Transform>()[i].position = this.animationFrames[0].bottomHalfVectors[i - 36];
+						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.animationFrames[0].bottomHalfQuaternions[i - 36];
+					}
+				}
+
+				debugWriter.WriteLine("Next frame");
+
+				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
+				positionFrames.RemoveAt(0);
+
+				float oldTime = this.animationFrames[0].timeSinceStart;
+				float oldDelta = this.animationFrames[0].deltaTime;
+
+				this.previousFrameTime = this.animationFrames[0].frameTime;
+				this.animationFrames.RemoveAt(0);
+				this.animationFrames[0].timeSinceStart = oldTime - oldDelta;
+			}
+		}
+
+		private void LerpPosition(Vector3[] vectors, Quaternion[] quaternions) {
 			this.player.transform.position = vectors[0];
 			this.player.transform.rotation = quaternions[0];
 			this.board.transform.position = vectors[1];
@@ -575,92 +800,6 @@ namespace XLMultiplayer {
 			this.usernameText.text = this.username;
 			this.usernameObject.transform.position = this.player.transform.position + this.player.transform.up;
 			this.usernameObject.transform.LookAt(Camera.main.transform);
-		}
-
-		public byte[] PackTransformArray(Transform[] T) {
-			byte[] packed = new byte[T.Length * 28];
-			for (int i = 0; i < T.Length; i++) {
-				Array.Copy(BitConverter.GetBytes(T[i].position.x), 0, packed, i * 28, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].position.y), 0, packed, i * 28 + 4, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].position.z), 0, packed, i * 28 + 8, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.x), 0, packed, i * 28 + 12, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.y), 0, packed, i * 28 + 16, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.z), 0, packed, i * 28 + 20, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.w), 0, packed, i * 28 + 24, 4);
-			}
-			return packed;
-		}
-
-		public byte[][] PackAnimator() {
-			byte[][] packed = new byte[2][];
-
-			byte[] transforms = PackTransformArray(this.hips.GetComponentsInChildren<Transform>());
-
-			packed[0] = new byte[1009];
-			packed[0][0] = 0;
-			Array.Copy(transforms, 0, packed[0], 1, 1008);
-
-			packed[1] = new byte[1009];
-			packed[1][0] = 1;
-			Array.Copy(transforms, 1008, packed[1], 1, 1008);
-
-			return packed;
-		}
-
-		public void UnpackAnimator(byte[] recBuffer) {
-			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
-
-			byte[] buffer = new byte[recBuffer.Length - 5];
-			if (receivedPacketSequence < currentAnimationPacket - 1) {
-				return;
-			} else {
-				Array.Copy(recBuffer, 5, buffer, 0, recBuffer.Length - 5);
-				currentAnimationPacket = receivedPacketSequence;
-			}
-
-			List<Vector3> vectors = new List<Vector3>();
-			List<Quaternion> quaternions = new List<Quaternion>();
-
-			for (int i = 0; i < 36; i++) {
-				Vector3 readVector = new Vector3();
-				readVector.x = BitConverter.ToSingle(buffer, i * 28);
-				readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4);
-				readVector.z = BitConverter.ToSingle(buffer, i * 28 + 8);
-				Quaternion readQuaternion = new Quaternion();
-				readQuaternion.x = BitConverter.ToSingle(buffer, i * 28 + 12);
-				readQuaternion.y = BitConverter.ToSingle(buffer, i * 28 + 16);
-				readQuaternion.z = BitConverter.ToSingle(buffer, i * 28 + 20);
-				readQuaternion.w = BitConverter.ToSingle(buffer, i * 28 + 24);
-
-				vectors.Add(readVector);
-				quaternions.Add(readQuaternion);
-			}
-
-			if (recBuffer[4] == 0) {
-				for (int i = 0; i < 36; i++) {
-					if (Vector3.Distance(this.targetPositions[i], vectors[i]) > 1) {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i];
-					} else {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = this.targetPositions[i];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.targetRotations[i];
-					}
-					this.targetPositions[i] = vectors[i];
-					this.targetRotations[i] = quaternions[i];
-				}
-			} else {
-				for (int i = 36; i < 72; i++) {
-					if (Vector3.Distance(this.targetPositions[i], vectors[i - 36]) > 1) {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = vectors[i - 36];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = quaternions[i - 36];
-					} else {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = this.targetPositions[i];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.targetRotations[i];
-					}
-					this.targetPositions[i] = vectors[i - 36];
-					this.targetRotations[i] = quaternions[i - 36];
-				}
-			}
 		}
 	}
 }

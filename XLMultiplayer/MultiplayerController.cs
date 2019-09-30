@@ -117,22 +117,16 @@ namespace XLMultiplayer {
 				if (loadedAll || this.otherControllers.Count == 0) client.timedOut = true;
 			}
 
+			//Use new frame buffer
 			foreach (MultiplayerPlayerController controller in this.otherControllers) {
 				if(controller != null) {
-					for(int i = 0; i < 68; i++) {
-						controller.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].position, controller.targetPositions[i], Time.deltaTime/(1f/(float)tickRate));
-						controller.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].rotation, controller.targetRotations[i], Time.deltaTime/(1f/(float)tickRate));
-					}
+					controller.LerpNextFrame();
+					//for(int i = 0; i < 72; i++) {
+					//	controller.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].position, controller.targetPositions[i], Time.deltaTime/(1f/(float)tickRate));
+					//	controller.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].rotation, controller.targetRotations[i], Time.deltaTime/(1f/(float)tickRate));
+					//}
 				}
 			}
-
-			//if (this.ourController != null && this.otherControllers.Count == 0)
-			//	this.AddPlayer(0);
-			//if (this.otherControllers.Count > 0) {
-			//	this.otherControllers[0].animator.enabled = false;
-			//	this.otherControllers[0].steezeAnimator.enabled = false;
-			//	this.otherControllers[0].hips.Find("mixamorig_LeftUpLeg").Rotate(1, 0, 0);
-			//}
 		}
 
 		public void SendUpdate() {
@@ -467,7 +461,7 @@ namespace XLMultiplayer {
 					client.receivedAlive++;
 					client.packetLoss = Mathf.Clamp(((1.0f - (float)client.receivedAlive / (float)client.sentAlive) * 100), 0.0f, 99.9f);
 
-					debugWriter.WriteLine("Current ping {0}ms, packet loss {1}%", client.ping, client.packetLoss.ToString("n2"));
+					//debugWriter.WriteLine("Current ping {0}ms, packet loss {1}%", client.ping, client.packetLoss.ToString("n2"));
 					break;
 			}
 		}

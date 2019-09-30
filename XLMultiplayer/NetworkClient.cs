@@ -118,10 +118,10 @@ namespace XLMultiplayer {
 		}
 
 		public void SendUnreliable(byte[] buffer, OpCode opCode) {
-			try { 
+			try {
 				//Rearrange message before sending
 				//Size of packet, opcode, packet sequence, rest of information
-				byte[] packetSequence = BitConverter.GetBytes(buffer[0] == (byte)OpCode.Position ? positionPackets : animationPackets);
+				byte[] packetSequence = BitConverter.GetBytes(opCode == OpCode.Position ? positionPackets : animationPackets);
 				byte[] packetData = NetworkClient.Compress(buffer);
 				byte[] packet = new byte[packetData.Length + packetSequence.Length + 1];
 
@@ -133,7 +133,7 @@ namespace XLMultiplayer {
 
 				udpConnection.Send(packet, packet.Length);
 
-				if(buffer[0] == (byte)OpCode.Position) {
+				if(opCode == OpCode.Position) {
 					positionPackets++;
 				} else {
 					animationPackets++;
