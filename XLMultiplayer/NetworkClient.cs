@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 namespace XLMultiplayer {
 	public class NetworkClient {
@@ -194,6 +195,17 @@ namespace XLMultiplayer {
 				
 				debugWriter.WriteLine(this.ipEndPoint.ToString());
 
+				debugWriter.WriteLine(Main.modEntry.Version.ToString());
+
+				byte[] versionString = ASCIIEncoding.ASCII.GetBytes(Main.modEntry.Version.ToString());
+				byte[] versionMessage = new byte[versionString.Length + 5];
+
+				Array.Copy(BitConverter.GetBytes(versionString.Length + 1), 0, versionMessage, 0, 4);
+				versionMessage[4] = (byte)OpCode.VersionNumber;
+				Array.Copy(versionString, 0, versionMessage, 5, versionString.Length);
+
+				tcpConnection.Send(versionMessage);
+
 				BeginReceivingTCP();
 				BeginReceivingUDP();
 			} catch(Exception e) {
@@ -237,7 +249,7 @@ namespace XLMultiplayer {
 								debugWriter.WriteLine("Adding player settings to queue");
 								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
 							}else if(state.buffer[0] == (byte)OpCode.Disconnect) {
-								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
+								Main.menu.multiplayerManager.ProcessMessage(state.buffer, state.buffer.Length);
 							}
 
 							BeginReceivingTCP();

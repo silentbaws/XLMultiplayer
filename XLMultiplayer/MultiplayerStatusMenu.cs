@@ -39,6 +39,10 @@ namespace XLMultiplayer {
 
 		private Stopwatch refocusWatch = new Stopwatch();
 
+		float invalidVersionTimer = 0.0f;
+		bool displayInvalidVersion = false;
+		string serverVersion = "";
+
 		public void Start() {
 			InitializeMenu();
 
@@ -103,6 +107,14 @@ namespace XLMultiplayer {
 				showStatus = !showStatus;
 			}
 
+			if (displayInvalidVersion)
+				invalidVersionTimer += Time.unscaledDeltaTime;
+
+			if(invalidVersionTimer > 10.0f) {
+				displayInvalidVersion = false;
+				invalidVersionTimer = 0.0f;
+			}
+
 			if (this.connectedImage != null && this.disconnectedImage != null) {
 				this.connectedImage.enabled = (Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) && showStatus;
 				this.disconnectedImage.enabled = (Main.menu.multiplayerManager == null || !Main.menu.multiplayerManager.runningClient) && showStatus;
@@ -120,7 +132,24 @@ namespace XLMultiplayer {
 			}
 		}
 
+		public void DisplayInvalidVersion(string serverVersion) {
+			displayInvalidVersion = true;
+			invalidVersionTimer = 0.0f;
+			this.serverVersion = serverVersion;
+		}
+
 		public void OnGUI() {
+			if (displayInvalidVersion) {
+				Rect rect = new Rect(Screen.width*0.35f, 0, Screen.width*0.55f, 400);
+
+				GUIStyle style = new GUIStyle();
+				style.fontSize = 24;
+				style.wordWrap = true;
+				style.alignment = TextAnchor.UpperCenter;
+				
+				GUI.Label(rect, "Tried to connect to server with different version than client\n Client version: " + Main.modEntry.Version.ToString() + "\nServer Version: " + serverVersion, style);
+			}
+
 			if (showStatus && Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) {
 				Rect rect = new Rect(Screen.width - Screen.width * 0.2f, Screen.width * 0.1f, Screen.width * 0.2f - 5, (numPlayers + 1) * 25f);
 

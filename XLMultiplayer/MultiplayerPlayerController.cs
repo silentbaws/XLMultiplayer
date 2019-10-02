@@ -244,7 +244,6 @@ namespace XLMultiplayer {
 			return texture2D == null ? new byte[1] { 0 } : texture2D.EncodeToPNG();
 		}
 
-		//TODO: Fix with new clothing texture points
 		public void SetPlayerTexture(Texture tex, MPTextureType texType, bool useFull) {
 			switch (texType) {
 				case MPTextureType.Pants:
@@ -310,7 +309,7 @@ namespace XLMultiplayer {
 			//Write the master prefab hierarchy to make sure everything is in place
 			StreamWriter writer = new StreamWriter("Hierarchy.txt");
 			writer.AutoFlush = true;
-			foreach (Transform t in GameObject.Find("Skater Root").GetComponentsInChildren<Transform>()) {
+			foreach (Transform t in GameObject.Find("New Master Prefab(Clone)").GetComponentsInChildren<Transform>()) {
 				Transform parent = t.parent;
 				while (parent != null) {
 					writer.Write("\t");

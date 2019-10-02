@@ -15,6 +15,7 @@ public enum OpCode : byte {
 	Animation = 3,
 	Texture = 4,
 	Chat = 5,
+	VersionNumber = 6,
 	StillAlive = 254,
 	Disconnect = 255
 }
@@ -91,8 +92,7 @@ public class MultiplayerSkin {
 			Array.Copy(this.buffer, 0, sendBuffer, 16, bufferSize);
 
 			return sendBuffer;
-		}
-		else {
+		} else {
 			return null;
 		}
 	}
@@ -131,6 +131,8 @@ public class Server {
 
 	public static UdpClient udpClient;
 
+	const string versionNumber = "0.4.2";
+
 	public class StateObject {
 		public Socket workSocket = null;
 		public UdpClient udpClient = null;
@@ -151,8 +153,11 @@ public class Server {
 
 		public long lastAlive = 0;
 		public Stopwatch aliveWatch;
+		public Stopwatch versionWatch;
 
 		public bool timedOut = false;
+
+		public bool receivedVersion = false;
 
 		public Client(Socket socket, byte connectionId) {
 			this.reliableSocket = socket;
@@ -165,28 +170,6 @@ public class Server {
 			aliveWatch = new Stopwatch();
 			aliveWatch.Start();
 			lastAlive = aliveWatch.ElapsedMilliseconds;
-
-			SendConnectMessage();
-
-			foreach (Client client in clients) {
-				if (client != null && client.connectionId != connectionId) {
-					Console.WriteLine("Sending {0} connect to new connection {1}", client.connectionId, connectionId);
-					byte[] buffer = new byte[2];
-					buffer[0] = (byte)OpCode.Connect;
-					buffer[1] = client.connectionId;
-
-					this.SendReliable(buffer);
-
-					byte[] username = ASCIIEncoding.ASCII.GetBytes(players[client.connectionId].username);
-					buffer = new byte[username.Length + 3];
-					buffer[0] = (byte)OpCode.Settings;
-					buffer[1] = players[client.connectionId].isGoofy ? (byte)1 : (byte)0;
-					Array.Copy(username, 0, buffer, 2, username.Length);
-					buffer[buffer.Length - 1] = client.connectionId;
-
-					this.SendReliable(buffer);
-				}
-			}
 
 			ReceiveTCP.StartReceiving();
 		}
@@ -210,8 +193,7 @@ public class Server {
 			try {
 				if (udpRemoteEndPoint != null)
 					Server.udpClient.Send(buffer, buffer.Length, udpRemoteEndPoint);
-			}
-			catch (Exception e) { }
+			} catch (Exception e) { }
 		}
 
 		public void SendReliable(byte[] buffer) {
@@ -222,8 +204,7 @@ public class Server {
 				Array.Copy(buffer, 0, newBuffer, 4, buffer.Length);
 
 				reliableSocket.Send(newBuffer);
-			}
-			catch (Exception e) { }
+			} catch (Exception e) { }
 		}
 	}
 
@@ -249,8 +230,7 @@ public class Server {
 				state.readBytes = 0;
 
 				receiveSocket.BeginReceiveFrom(state.buffer, 0, state.buffer.Length, SocketFlags.None, ref remoteEndPoint, ReceiveCallback, state);
-			}
-			catch (Exception e) { };
+			} catch (Exception e) { };
 		}
 
 		public void ReceiveCallback(IAsyncResult ar) {
@@ -264,8 +244,7 @@ public class Server {
 					Console.WriteLine("read " + state.readBytes.ToString() + " bytes of " + state.buffer.Length.ToString());
 					if (state.readBytes < 4) {
 						handler.BeginReceiveFrom(state.buffer, state.readBytes, state.buffer.Length - state.readBytes, SocketFlags.None, ref remoteEndPoint, ReceiveCallback, state);
-					}
-					else {
+					} else {
 						client.lastAlive = client.aliveWatch.ElapsedMilliseconds;
 						if (state.readBytes == 4) {
 							state.buffer = new byte[BitConverter.ToInt32(state.buffer, 0)];
@@ -274,6 +253,10 @@ public class Server {
 						if (state.readBytes - 4 == state.buffer.Length) {
 							switch ((OpCode)state.buffer[0]) {
 								case OpCode.Texture:
+									if (!client.receivedVersion) {
+										client.SendReliable(new byte[] { (byte)OpCode.Disconnect, 1, client.connectionId });
+										client.ReceiveTCP.Disconnect(false);
+									}
 									switch ((MPTextureType)state.buffer[1]) {
 										case MPTextureType.Pants:
 											players[client.connectionId].Pants.SaveTexture(client.connectionId, state.buffer);
@@ -298,29 +281,64 @@ public class Server {
 									Console.WriteLine("Received username {0} from {1}", players[client.connectionId].username, client.connectionId);
 									SendToAllTCP(state.buffer, client.connectionId);
 									break;
+								case OpCode.VersionNumber:
+									string version = ASCIIEncoding.ASCII.GetString(state.buffer, 1, state.buffer.Length - 1);
+									if (version != versionNumber) {
+										Console.WriteLine("Player " + client.connectionId.ToString() + " tried to connect with an invalid version");
+
+										byte[] disconnectMessage = new byte[versionNumber.Length + 2];
+										disconnectMessage[0] = (byte)OpCode.Disconnect;
+										disconnectMessage[disconnectMessage.Length - 1] = client.connectionId;
+										Array.Copy(ASCIIEncoding.ASCII.GetBytes(versionNumber), 0, disconnectMessage, 1, versionNumber.Length);
+
+										client.SendReliable(disconnectMessage);
+
+										client.ReceiveTCP.Disconnect(false);
+									} else {
+										SendToAllTCP(new byte[] { (byte)OpCode.Connect }, client.connectionId);
+										client.SendConnectMessage();
+										client.receivedVersion = true;
+
+										foreach (Client c in clients) {
+											if (c != null && c.connectionId != client.connectionId) {
+												Console.WriteLine("Sending {0} connect to new connection {1}", c.connectionId, client.connectionId);
+												byte[] buffer = new byte[2];
+												buffer[0] = (byte)OpCode.Connect;
+												buffer[1] = c.connectionId;
+
+												client.SendReliable(buffer);
+
+												byte[] username = ASCIIEncoding.ASCII.GetBytes(players[c.connectionId].username);
+												buffer = new byte[username.Length + 3];
+												buffer[0] = (byte)OpCode.Settings;
+												buffer[1] = players[c.connectionId].isGoofy ? (byte)1 : (byte)0;
+												Array.Copy(username, 0, buffer, 2, username.Length);
+												buffer[buffer.Length - 1] = c.connectionId;
+
+												client.SendReliable(buffer);
+											}
+										}
+									}
+									break;
 								case OpCode.Chat:
 									Console.WriteLine("Chat Message");
-									if(state.buffer.Length != 1)
+									if (state.buffer.Length != 1)
 										SendToAllTCP(state.buffer, client.connectionId);
 									break;
 							}
 
 							StartReceiving();
-						}
-						else {
+						} else {
 							handler.BeginReceiveFrom(state.buffer, state.readBytes - 4, state.buffer.Length - state.readBytes + 4, SocketFlags.None, ref remoteEndPoint, ReceiveCallback, state);
 						}
 					}
-				}
-				else {
+				} else {
 					Disconnect(client.timedOut);
 				}
-			}
-			catch (Exception e) {
+			} catch (Exception e) {
 				if (receiveSocket.Connected) {
 					StartReceiving();
-				}
-				else {
+				} else {
 					Console.WriteLine(e.ToString());
 					Disconnect(client.timedOut);
 				}
@@ -367,8 +385,7 @@ public class Server {
 			listener.Listen(ServerConfig.MAX_PLAYERS);
 
 			listener.BeginAccept(AcceptCallback, listener);
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			Console.WriteLine(e.ToString());
 		}
 	}
@@ -385,7 +402,7 @@ public class Server {
 		//		if (response.StatusCode != HttpStatusCode.OK) {
 		//			Console.WriteLine($"Error announcing: error {response.StatusCode}");
 		//		}
-				await Task.Delay(5000);
+		await Task.Delay(5000);
 		//	} catch(Exception e) {
 		//		Console.WriteLine(e.ToString());
 		//	}
@@ -412,9 +429,11 @@ public class Server {
 				clients[connectionId] = new Client(acceptedSocket, connectionId);
 				players[connectionId] = new Player(connectionId, "");
 
-				SendToAllTCP(new byte[] { (byte)OpCode.Connect }, connectionId);
-			}
-			else {
+				clients[connectionId].versionWatch = new Stopwatch();
+				clients[connectionId].versionWatch.Start();
+
+				//SendToAllTCP(new byte[] { (byte)OpCode.Connect }, connectionId);
+			} else {
 				int connections = 0;
 				foreach (Client client in clients) {
 					if (client != null) {
@@ -425,8 +444,7 @@ public class Server {
 			}
 
 			listener.BeginAccept(AcceptCallback, listener);
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			Console.WriteLine(e.ToString());
 			listener.BeginAccept(AcceptCallback, listener);
 		}
@@ -458,8 +476,7 @@ public class Server {
 	private void BeginReceivingUDP() {
 		try {
 			udpClient.BeginReceive(ReceiveCallbackUDP, udpClient);
-		}
-		catch (Exception e) { };
+		} catch (Exception e) { };
 	}
 
 	public void ReceiveCallbackUDP(IAsyncResult ar) {
@@ -493,8 +510,7 @@ public class Server {
 			}
 
 			BeginReceivingUDP();
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			Console.WriteLine(e.ToString());
 			BeginReceivingUDP();
 		}
@@ -512,7 +528,7 @@ public class Server {
 		while (true) {
 
 			foreach (Client client in clients) {
-				if (client != null && client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 10000) {
+				if (client != null && (client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 10000 || (client.versionWatch != null && client.versionWatch.ElapsedMilliseconds > 5000 && !client.receivedVersion))) {
 					client.timedOut = true;
 					client.ReceiveTCP.Disconnect(client.timedOut);
 				}
@@ -550,8 +566,7 @@ public class Server {
 								client.reliableSocket.Send(player.Shoes.GetBuffer(player.connectionID));
 								client.reliableSocket.Send(player.Board.GetBuffer(player.connectionID));
 								client.reliableSocket.Send(player.Hat.GetBuffer(player.connectionID));
-							}
-							catch (Exception e) { }
+							} catch (Exception e) { }
 						}
 						client.newConnection = false;
 					}
@@ -576,8 +591,7 @@ public class Server {
 									client.reliableSocket.Send(player.Shoes.GetBuffer(player.connectionID));
 									client.reliableSocket.Send(player.Board.GetBuffer(player.connectionID));
 									client.reliableSocket.Send(player.Hat.GetBuffer(player.connectionID));
-								}
-								catch (Exception e) { }
+								} catch (Exception e) { }
 							}
 						}
 						player.sentAll = true;

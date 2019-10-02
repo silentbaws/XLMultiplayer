@@ -19,6 +19,7 @@ namespace XLMultiplayer {
 		Animation = 3,
 		Texture = 4,
 		Chat = 5,
+		VersionNumber = 6,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -121,10 +122,6 @@ namespace XLMultiplayer {
 			foreach (MultiplayerPlayerController controller in this.otherControllers) {
 				if(controller != null) {
 					controller.LerpNextFrame();
-					//for(int i = 0; i < 72; i++) {
-					//	controller.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].position, controller.targetPositions[i], Time.deltaTime/(1f/(float)tickRate));
-					//	controller.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Lerp(controller.hips.GetComponentsInChildren<Transform>()[i].rotation, controller.targetRotations[i], Time.deltaTime/(1f/(float)tickRate));
-					//}
 				}
 			}
 		}
@@ -242,7 +239,7 @@ namespace XLMultiplayer {
 				}
 			}
 
-			//TODO: Add check for hoodie/shirt, possibly check hash of shirt/hoodie texture to determine if it's default
+			//TODO: Add check hash of shirt/hoodie texture to determine if it's default
 
 			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\";
 
@@ -379,7 +376,7 @@ namespace XLMultiplayer {
 			GC.WaitForPendingFinalizers();
 		}
 
-		private void ProcessMessage(byte[] buffer, int bufferSize) {
+		public void ProcessMessage(byte[] buffer, int bufferSize) {
 			byte[] newBuffer = new byte[bufferSize - 2];
 			Array.Copy(buffer, 1, newBuffer, 0, bufferSize - 2);
 
@@ -449,6 +446,8 @@ namespace XLMultiplayer {
 						}
 						this.RemovePlayer(playerID);
 					} else {
+						string versionNumber = ASCIIEncoding.ASCII.GetString(newBuffer);
+						Main.statusMenu.DisplayInvalidVersion(versionNumber);
 						KillConnection();
 					}
 					break;
