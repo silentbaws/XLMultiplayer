@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -120,6 +121,8 @@ public class ServerConfig {
 	public static int MAX_PLAYERS;
 	[JsonProperty("Port")]
 	public static int PORT;
+	[JsonProperty("Server_Name")]
+	public static string SERVER_NAME;
 }
 
 public class Server {
@@ -131,7 +134,7 @@ public class Server {
 
 	public static UdpClient udpClient;
 
-	const string versionNumber = "0.4.2";
+	const string versionNumber = "0.4.3";
 
 	public class StateObject {
 		public Socket workSocket = null;
@@ -391,22 +394,36 @@ public class Server {
 	}
 
 	public async void StartAnnouncing() {
-		//var client = new HttpClient();
-		//while (true) {
-		//	try {
-		//		string data = $"{{\"n_players\":{players.Length}, \"map\":\"map_name\"}}";
-		//		string myJson = $"{{\"port\":{port}, \"data\":{data}}}";
-		//		var response = await client.PostAsync(
-		//			 "http://sxl-server-announcer.herokuapp.com/v2",
-		//			 new StringContent(myJson, Encoding.UTF8, "application/json"));
-		//		if (response.StatusCode != HttpStatusCode.OK) {
-		//			Console.WriteLine($"Error announcing: error {response.StatusCode}");
-		//		}
-		await Task.Delay(5000);
-		//	} catch(Exception e) {
-		//		Console.WriteLine(e.ToString());
-		//	}
-		//}
+		var client = new HttpClient();
+		while (true) {
+			try {
+
+				int currentPlayers = 0;
+				foreach(Player p in players) {
+					if (p != null)
+						currentPlayers++;
+				}
+
+				var values = new Dictionary<string, string> {
+					{ "maxPlayers",  players.Length.ToString() },
+					{ "serverName", ServerConfig.SERVER_NAME },
+					{ "currentPlayers", currentPlayers.ToString() },
+					{ "serverPort", ServerConfig.PORT.ToString() },
+					{ "serverVersion", versionNumber }
+				};
+
+				var content = new FormUrlEncodedContent(values);
+
+				var response = await client.PostAsync("http://www.davisellwood.com/api/sendserverinfo/", content);
+				if (response.StatusCode != HttpStatusCode.OK) {
+					Console.WriteLine($"Error announcing: {response.StatusCode}");
+				}
+			} catch (Exception e) {
+				Console.WriteLine(e.ToString());
+				client = new HttpClient();
+			}
+			await Task.Delay(10000);
+		}
 	}
 
 	public void AcceptCallback(IAsyncResult ar) {

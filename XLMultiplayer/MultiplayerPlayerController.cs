@@ -111,6 +111,8 @@ namespace XLMultiplayer {
 	public class MultiplayerPositionFrameBufferObject {
 		public Vector3[] vectors;
 		public Quaternion[] quaternions;
+
+		public int positionFrame = 0;
 	}
 
 	public class MultiplayerPlayerController {
@@ -143,6 +145,8 @@ namespace XLMultiplayer {
 		List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
 		bool startedAnimating = false;
 		float previousFrameTime = 0;
+
+		private bool waitingForDelay = false;
 
 		public CharacterCustomizer characterCustomizer {
 			get {
@@ -528,11 +532,11 @@ namespace XLMultiplayer {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
 			total++;
 			byte[] buffer = new byte[recBuffer.Length - 4];
-			if (receivedPacketSequence < currentPositionPacket) {
+			if (receivedPacketSequence < currentPositionPacket - 5) {
 				outoforder++;
 				return;
 			} else {
-				currentPositionPacket = receivedPacketSequence;
+				currentPositionPacket = Math.Max(receivedPacketSequence, currentPositionPacket);
 				Array.Copy(recBuffer, 4, buffer, 0, recBuffer.Length - 4);
 			}
 
@@ -575,15 +579,18 @@ namespace XLMultiplayer {
 				vectors.Add(readVector);
 			}
 
-			SetTransforms(vectors.ToArray(), quaternions.ToArray());
+			SetTransforms(vectors.ToArray(), quaternions.ToArray(), currentPositionPacket);
 		}
 
-		public void SetTransforms(Vector3[] vectors, Quaternion[] quaternions) {
+		public void SetTransforms(Vector3[] vectors, Quaternion[] quaternions, int posFrame) {
 			MultiplayerPositionFrameBufferObject newPositionObject = new MultiplayerPositionFrameBufferObject();
 			newPositionObject.vectors = vectors;
 			newPositionObject.quaternions = quaternions;
+			newPositionObject.positionFrame = posFrame;
 
 			positionFrames.Add(newPositionObject);
+
+			this.positionFrames = this.positionFrames.OrderBy(f => f.positionFrame).ToList();
 		}
 
 		public byte[] PackTransformArray(Transform[] T) {
@@ -690,14 +697,24 @@ namespace XLMultiplayer {
 
 			if (isNew) {
 				this.animationFrames.Add(currentBufferObject);
+				this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
 			}
 		}
 
-		public void LerpNextFrame(bool recursive = false) {
-			if (!startedAnimating && animationFrames.Count > 2) {
+		public void LerpNextFrame(bool recursive = false, float offset = 0) {
+			if (this.animationFrames[0] == null) return;
+			if (!startedAnimating && animationFrames.Count > 5) {
 				if (this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
 					this.animationFrames.RemoveAt(0);
-					return;
+					LerpNextFrame();
+				}
+
+				//debugWriter.WriteLine("Starting animation of other player with " + this.animationFrames.Count + " frame delay");
+
+				while (this.animationFrames.Count > 6) {
+					this.animationFrames.RemoveAt(0);
+					if (this.animationFrames.Count == 6) break;
+					//debugWriter.WriteLine("Removing frame currently still " + this.animationFrames.Count + " Frames behind");
 				}
 
 				startedAnimating = true;
@@ -712,33 +729,40 @@ namespace XLMultiplayer {
 					}
 				}
 
-				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
-				positionFrames.RemoveAt(0);
-
 				this.previousFrameTime = this.animationFrames[0].frameTime;
 
 				this.animationFrames.RemoveAt(0);
 			}
 			if (!startedAnimating) return;
 
-			if(this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
-				this.animationFrames.RemoveAt(0);
-
-				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
-				this.positionFrames.RemoveAt(0);
-
-				debugWriter.WriteLine("Skipping frame");
+			if(this.animationFrames.Count < 3 || this.waitingForDelay) {
+				this.waitingForDelay = !(this.animationFrames.Count > 5);
+				//debugWriter.WriteLine("Waiting for 6 frame delay");
 				return;
 			}
 
-			float offset = 0;
+			if(this.animationFrames.Count >= 10) {
+				while (this.animationFrames.Count > 6) {
+					this.animationFrames.RemoveAt(0);
+					if (this.animationFrames[0].topHalfVectors != null) this.previousFrameTime = this.animationFrames[0].frameTime;
+					if (this.animationFrames.Count == 6) break;
+					//debugWriter.WriteLine("Removing frame currently still " + this.animationFrames.Count + " Frames behind");
+				}
+			}
+
+			if(this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
+				this.animationFrames.RemoveAt(0);
+
+				//debugWriter.WriteLine("Skipping frame");
+				return;
+			}
 
 			if(this.animationFrames[0].deltaTime == 0) {
 				this.animationFrames[0].deltaTime = this.animationFrames[0].frameTime - this.previousFrameTime;
-				offset = this.animationFrames[0].timeSinceStart;
 			}
 
-			if(!recursive) this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
+			if (!recursive) this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
+			else this.animationFrames[0].timeSinceStart = offset;
 
 			for (int i = 0; i < 72; i++) {
 				if (i < 36) {
@@ -761,18 +785,19 @@ namespace XLMultiplayer {
 					}
 				}
 
-				debugWriter.WriteLine("Next frame");
+				while(positionFrames[0] != null && positionFrames[0].positionFrame <= animationFrames[0].animFrame) {
+					LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
+					positionFrames.RemoveAt(0);
+				}
 
-				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
-				positionFrames.RemoveAt(0);
+				//debugWriter.WriteLine("Next frame currently " + this.animationFrames.Count + " frames delayed, called recursively: " + recursive.ToString() + " offset: " + offset.ToString() + " frame time: " + this.animationFrames[0].deltaTime);
 
 				float oldTime = this.animationFrames[0].timeSinceStart;
 				float oldDelta = this.animationFrames[0].deltaTime;
 
 				this.previousFrameTime = this.animationFrames[0].frameTime;
 				this.animationFrames.RemoveAt(0);
-				this.animationFrames[0].timeSinceStart = oldTime - oldDelta;
-				this.LerpNextFrame(true);
+				this.LerpNextFrame(true, oldTime - oldDelta);
 			}
 		}
 

@@ -1,4 +1,5 @@
 ﻿{
   "Max_Players": 5,
-  "Port": 7777
+  "Port": 7777,
+  "Server_Name":  "Hello Test Server"
 }
