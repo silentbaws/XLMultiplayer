@@ -8,6 +8,7 @@ using RootMotion.FinalIK;
 using Harmony12;
 using System.IO.Compression;
 using System.Linq;
+using System.Collections;
 
 //TODO: ITS ALL SPAGHETTI
 
@@ -125,8 +126,8 @@ namespace XLMultiplayer {
 
 		public GameObject hatObject, shirtObject, pantsObject, shoesObject, headArmsObject;
 		
-		public Vector3[] targetPositions = new Vector3[72];
-		public Quaternion[] targetRotations = new Quaternion[72];
+		public Vector3[] targetPositions = new Vector3[68];
+		public Quaternion[] targetRotations = new Quaternion[68];
 
 		public string username = "IT ALL BROKE";
 
@@ -151,7 +152,7 @@ namespace XLMultiplayer {
 		public CharacterCustomizer characterCustomizer {
 			get {
 				if(_characterCustomizer == null) {
-					_characterCustomizer = this.skater.GetComponent<CharacterCustomizer>();
+					_characterCustomizer = this.player.GetComponentInChildren<CharacterCustomizer>();
 				}
 				return _characterCustomizer;
 			}
@@ -163,7 +164,7 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private static CharacterCustomizer _characterCustomizer;
+		private CharacterCustomizer _characterCustomizer;
 		
 		readonly string[] SkateboardMaterials = new string[] { "GripTape", "Deck", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
 		
@@ -251,34 +252,69 @@ namespace XLMultiplayer {
 		public void SetPlayerTexture(Texture tex, MPTextureType texType, bool useFull) {
 			switch (texType) {
 				case MPTextureType.Pants:
-					pantsObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
+						if (gearItem.Item1.categoryName.Equals("Pants")) {
+							gearItem.Item2.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+							break;
+						}
+					}
+					//pantsObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Shirt:
-					if (useFull) {
-						GameObject.Destroy(headArmsObject);
-						GameObject.Destroy(shirtObject);
+					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
+						if (gearItem.Item1.categoryName.Equals("Hoodie") || gearItem.Item1.categoryName.Equals("Shirt")) {
+							CharacterGear newGear = new CharacterGear();
+							newGear.id = "PAX_1";
+							newGear.name = "Black";
+							newGear.category = useFull ? GearCategory.Hoodie : GearCategory.Shirt;
+							newGear.categoryName = useFull ? "Hoodie" : "Shirt";
+							newGear.path = useFull ? "CharacterCustomization/Hoodie/PAX_1" : "CharacterCustomization/Shirt/PAX_1";
 
-						CharacterBody body = Traverse.Create(characterCustomizer).Field("characterBody").GetValue() as CharacterBody;
-
-						Dictionary<string, Transform> bonesDict = this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name);
-
-						GameObject g = Resources.Load<GameObject>("CharacterCustomization/Hoodie/PAX_1");
-						shirtObject = CustomLoadSMRPrefab(g, skaterMeshesObject.transform, bonesDict);
-
-						GameObject g2 = Resources.Load<GameObject>(body.headAndHandsPath);
-						headArmsObject = CustomLoadSMRPrefab(g2, skaterMeshesObject.transform, bonesDict);
+							characterCustomizer.LoadGear(newGear);
+							break;
+						}
 					}
-					if(tex != null) shirtObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+					//if (useFull) {
+					//	GameObject.Destroy(headArmsObject);
+					//	GameObject.Destroy(shirtObject);
+
+					//	CharacterBody body = Traverse.Create(characterCustomizer).Field("characterBody").GetValue() as CharacterBody;
+
+					//	Dictionary<string, Transform> bonesDict = this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name);
+
+					//	GameObject g = Resources.Load<GameObject>("CharacterCustomization/Hoodie/PAX_1");
+					//	shirtObject = CustomLoadSMRPrefab(g, skaterMeshesObject.transform, bonesDict);
+
+					//	GameObject g2 = Resources.Load<GameObject>(body.headAndHandsPath);
+					//	headArmsObject = CustomLoadSMRPrefab(g2, skaterMeshesObject.transform, bonesDict);
+					//}
+					//if (tex != null) shirtObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Shoes:
-					GameObject Shoe_L = shoesObject.transform.Find("Shoe_L").gameObject;
-					GameObject Shoe_R = shoesObject.transform.Find("Shoe_R").gameObject;
+					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
+						if (gearItem.Item1.categoryName.Equals("Shoes")) {
+							GameObject Shoe_L = gearItem.Item2.transform.Find("Shoe_L").gameObject;
+							GameObject Shoe_R = gearItem.Item2.transform.Find("Shoe_R").gameObject;
 
-					Shoe_L.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
-					Shoe_R.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+							Shoe_L.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+							Shoe_R.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+							break;
+						}
+					}
+					//GameObject Shoe_L = shoesObject.transform.Find("Shoe_L").gameObject;
+					//GameObject Shoe_R = shoesObject.transform.Find("Shoe_R").gameObject;
+
+					//Shoe_L.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+					//Shoe_R.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Hat:
-					hatObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
+						if (gearItem.Item1.categoryName.Equals("Hat")) {
+							gearItem.Item2.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+							break;
+						}
+					}
+					//hatObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Board:
 					foreach(Transform t in board.GetComponentsInChildren<Transform>()) {
@@ -394,93 +430,171 @@ namespace XLMultiplayer {
 			}
 
 			this.hips = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>().references.pelvis.parent;
+
+
+			foreach(Transform t in ReplayEditor.ReplayRecorder.Instance.RecordedTransforms) {
+				Transform parent = t.parent;
+				while (parent != null) {
+					debugWriter.Write("\t");
+					parent = parent.parent;
+				}
+				debugWriter.WriteLine("└─>" + t.name);
+			}
 		}
 
 		public void ConstructFromPlayer(MultiplayerPlayerController source) {
 			//Create a new root object for the player
-			this.player = new GameObject();
+			this.player = GameObject.Instantiate<GameObject>(ReplayEditor.ReplayEditorController.Instance.playbackController.gameObject);
 			UnityEngine.Object.DontDestroyOnLoad(this.player);
 			this.player.name = "New Player";
 			this.player.transform.SetParent(null);
 			this.player.transform.position = PlayerController.Instance.transform.position;
 			debugWriter.WriteLine("Created New Player");
 
-			Time.timeScale = 0.0f;
-			foreach (MonoBehaviour m in source.skater.GetComponentsInChildren<MonoBehaviour>()) {
-				m.enabled = false;
-			}
-			foreach (MonoBehaviour m in source.board.GetComponentsInChildren<MonoBehaviour>()) {
-				m.enabled = false;
+
+			foreach (Transform t in this.player.GetComponentsInChildren<Transform>()) {
+				Transform parent = t.parent;
+				while (parent != null) {
+					debugWriter.Write("\t");
+					parent = parent.parent;
+				}
+				debugWriter.WriteLine("└─>" + t.name);
 			}
 
-			//Copy board from the source and reparent/rename it for the new player and remove all scripts
-			//All scripts in the game use PlayerController.Instance and end up breaking the original character if left in
-			//I'm also too lazy to convert every script to be multiplayer compatible hence why client state is just being copied
-			this.board = UnityEngine.Object.Instantiate<GameObject>(source.board, this.player.transform, false);
+			UnityEngine.Object.DestroyImmediate(this.player.GetComponentInChildren<ReplayEditor.ReplayPlaybackController>());
+
+
+			foreach (MonoBehaviour m in this.player.GetComponentsInChildren<MonoBehaviour>()) {
+				if(m.GetType() == typeof(ReplayEditor.ReplayAudioEventPlayer)) {
+					UnityEngine.Object.Destroy(m);
+				}
+			}
+
+
+			this.player.SetActive(true);
+
+			this.board = this.player.transform.Find("Skateboard").gameObject;
 			this.board.name = "New Player Board";
-			this.board.transform.localPosition = Vector3.zero;
-			debugWriter.WriteLine("Created New Board");
-			foreach (MonoBehaviour m in this.board.GetComponentsInChildren<MonoBehaviour>()) {
-				m.enabled = false;
-				debugWriter.WriteLine("Removing script from additional board");
-				UnityEngine.Object.DestroyImmediate(m);
-			}
 
-			//Copy the source players skater for our new player
-			this.skater = UnityEngine.Object.Instantiate<GameObject>(source.skater, this.player.transform, false);
+			this.skater = this.player.transform.Find("NewSkater").gameObject;
 			this.skater.name = "New Player Skater";
-			this.skater.transform.localPosition = Vector3.zero;
-			debugWriter.WriteLine("Created New Skater");
-			foreach (MonoBehaviour m in this.skater.GetComponentsInChildren<MonoBehaviour>()) {
-				m.enabled = false;
-				debugWriter.WriteLine("Removing script from additional skater");
-				UnityEngine.Object.DestroyImmediate(m);
-			}
 
 			this.hips = this.skater.transform.Find("Skater_Joints").Find("Skater_root");
 
-			foreach (Transform child in skater.transform) {
-				foreach (Transform t in child) {
-					if (t.name.StartsWith("PAX", true, null)) {
-						this.skaterMeshesObject = child.gameObject;
-						break;
-					}
-				}
-				if (this.skaterMeshesObject != null) break;
-			}
+			this.skaterMeshesObject = this.skater.transform.Find("Skater").gameObject;
 
-			foreach(Transform t in skaterMeshesObject.transform) {
-				if (!t.name.Equals("eyes")) {
+			debugWriter.WriteLine("created everything");
+
+			//Time.timeScale = 0.0f;
+			//foreach (MonoBehaviour m in source.skater.GetComponentsInChildren<MonoBehaviour>()) {
+			//	m.enabled = false;
+			//}
+			//foreach (MonoBehaviour m in source.board.GetComponentsInChildren<MonoBehaviour>()) {
+			//	m.enabled = false;
+			//}
+
+			////Copy board from the source and reparent/rename it for the new player and remove all scripts
+			////All scripts in the game use PlayerController.Instance and end up breaking the original character if left in
+			////I'm also too lazy to convert every script to be multiplayer compatible hence why client state is just being copied
+			//this.board = UnityEngine.Object.Instantiate<GameObject>(source.board, this.player.transform, false);
+			//this.board.name = "New Player Board";
+			//this.board.transform.localPosition = Vector3.zero;
+			//debugWriter.WriteLine("Created New Board");
+			//foreach (MonoBehaviour m in this.board.GetComponentsInChildren<MonoBehaviour>()) {
+			//	m.enabled = false;
+			//	debugWriter.WriteLine("Removing script from additional board");
+			//	UnityEngine.Object.DestroyImmediate(m);
+			//}
+
+			////Copy the source players skater for our new player
+			//this.skater = UnityEngine.Object.Instantiate<GameObject>(source.skater, this.player.transform, false);
+			//this.skater.name = "New Player Skater";
+			//this.skater.transform.localPosition = Vector3.zero;
+			//debugWriter.WriteLine("Created New Skater");
+			//foreach (MonoBehaviour m in this.skater.GetComponentsInChildren<MonoBehaviour>()) {
+			//	m.enabled = false;
+			//	debugWriter.WriteLine("Removing script from additional skater");
+			//	UnityEngine.Object.DestroyImmediate(m);
+			//}
+
+			//this.hips = this.skater.transform.Find("Skater_Joints").Find("Skater_root");
+
+			//foreach (Transform child in skater.transform) {
+			//	foreach (Transform t in child) {
+			//		if (t.name.StartsWith("PAX", true, null)) {
+			//			this.skaterMeshesObject = child.gameObject;
+			//			break;
+			//		}
+			//	}
+			//	if (this.skaterMeshesObject != null) break;
+			//}
+
+			characterCustomizer.enabled = true;
+			characterCustomizer.RemoveAllGear();
+			foreach (Transform t in skaterMeshesObject.GetComponentsInChildren<Transform>()) {
+				if (t.gameObject != null)
 					GameObject.Destroy(t.gameObject);
+			}
+
+			debugWriter.WriteLine("Removed gear");
+
+			debugWriter.WriteLine(characterCustomizer.ClothingParent.name);
+			debugWriter.WriteLine(characterCustomizer.RootBone.name);
+
+			characterCustomizer.ClothingParent = this.hips.Find("Skater_pelvis");
+			characterCustomizer.RootBone = this.hips;
+			Traverse.Create(characterCustomizer).Field("_bonesDict").SetValue(this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name));
+			
+			characterCustomizer.LoadCustomizations(PlayerController.Instance.characterCustomizer.CurrentCustomizations);
+
+			debugWriter.WriteLine("Added gear back");
+
+			foreach(Tuple<CharacterGear, GameObject> GearItem in gearList) {
+				switch (GearItem.Item1.category) {
+					case GearCategory.Hat:
+						hatObject = GearItem.Item2;
+						break;
+					case GearCategory.Hoodie:
+						shirtObject = GearItem.Item2;
+						break;
+					case GearCategory.Shirt:
+						shirtObject = GearItem.Item2;
+						break;
+					case GearCategory.Pants:
+						pantsObject = GearItem.Item2;
+						break;
+					case GearCategory.Shoes:
+						shoesObject = GearItem.Item2;
+						break;
 				}
 			}
 
-			CharacterBody body = Traverse.Create(characterCustomizer).Field("characterBody").GetValue() as CharacterBody;
+			//CharacterBody body = Traverse.Create(characterCustomizer).Field("characterBody").GetValue() as CharacterBody;
 
-			Dictionary<string, Transform> bonesDict = this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name);
+			//Dictionary<string, Transform> bonesDict = this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name);
 
-			GameObject g = Resources.Load<GameObject>("CharacterCustomization/Shirt/PAX_1");
-			shirtObject = CustomLoadSMRPrefab(g, skaterMeshesObject.transform, bonesDict);
+			//GameObject g = Resources.Load<GameObject>("CharacterCustomization/Shirt/PAX_1");
+			//shirtObject = CustomLoadSMRPrefab(g, skaterMeshesObject.transform, bonesDict);
 
-			GameObject g2 = Resources.Load<GameObject>(body.headAndArmsPath);
-			headArmsObject = CustomLoadSMRPrefab(g2, skaterMeshesObject.transform, bonesDict);
+			//GameObject g2 = Resources.Load<GameObject>(body.headAndArmsPath);
+			//headArmsObject = CustomLoadSMRPrefab(g2, skaterMeshesObject.transform, bonesDict);
 
-			GameObject g3 = Resources.Load<GameObject>("CharacterCustomization/shoes/PAX_1");
-			shoesObject = CustomLoadSMRPrefab(g3, skaterMeshesObject.transform, bonesDict);
+			//GameObject g3 = Resources.Load<GameObject>("CharacterCustomization/shoes/PAX_1");
+			//shoesObject = CustomLoadSMRPrefab(g3, skaterMeshesObject.transform, bonesDict);
 
-			GameObject g4 = Resources.Load<GameObject>("CharacterCustomization/pants/PAX_1");
-			pantsObject = CustomLoadSMRPrefab(g4, skaterMeshesObject.transform, bonesDict);
+			//GameObject g4 = Resources.Load<GameObject>("CharacterCustomization/pants/PAX_1");
+			//pantsObject = CustomLoadSMRPrefab(g4, skaterMeshesObject.transform, bonesDict);
 
-			GameObject g5 = Resources.Load<GameObject>("CharacterCustomization/Hat/PAX_1");
-			hatObject = CustomLoadSMRPrefab(g5, skaterMeshesObject.transform, bonesDict);
+			//GameObject g5 = Resources.Load<GameObject>("CharacterCustomization/Hat/PAX_1");
+			//hatObject = CustomLoadSMRPrefab(g5, skaterMeshesObject.transform, bonesDict);
 
-			foreach (MonoBehaviour m in source.skater.GetComponentsInChildren<MonoBehaviour>()) {
-				m.enabled = true;
-			}
-			foreach (MonoBehaviour m in source.board.GetComponentsInChildren<MonoBehaviour>()) {
-				m.enabled = true;
-			}
-			Time.timeScale = 1.0f;
+			//foreach (MonoBehaviour m in source.skater.GetComponentsInChildren<MonoBehaviour>()) {
+			//	m.enabled = true;
+			//}
+			//foreach (MonoBehaviour m in source.board.GetComponentsInChildren<MonoBehaviour>()) {
+			//	m.enabled = true;
+			//}
+			//Time.timeScale = 1.0f;
 
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
@@ -607,21 +721,35 @@ namespace XLMultiplayer {
 			return packed;
 		}
 
+		public byte[] PackTransformInfoArray(ReplayEditor.TransformInfo[] T, int start) {
+			byte[] packed = new byte[T.Length * 28 - (start * 28)];
+			for (int i = 0; i < T.Length - start; i++) {
+				Array.Copy(BitConverter.GetBytes(T[i + start].position.x), 0, packed, i * 28, 4);
+				Array.Copy(BitConverter.GetBytes(T[i + start].position.y), 0, packed, i * 28 + 4, 4);
+				Array.Copy(BitConverter.GetBytes(T[i + start].position.z), 0, packed, i * 28 + 8, 4);
+				Array.Copy(BitConverter.GetBytes(T[i + start].rotation.x), 0, packed, i * 28 + 12, 4);
+				Array.Copy(BitConverter.GetBytes(T[i + start].rotation.y), 0, packed, i * 28 + 16, 4);
+				Array.Copy(BitConverter.GetBytes(T[i + start].rotation.z), 0, packed, i * 28 + 20, 4);
+				Array.Copy(BitConverter.GetBytes(T[i + start].rotation.w), 0, packed, i * 28 + 24, 4);
+			}
+			return packed;
+		}
+
 		public byte[][] PackAnimator() {
 			byte[][] packed = new byte[2][];
 
-			byte[] transforms = PackTransformArray(this.hips.GetComponentsInChildren<Transform>());
+			byte[] transforms = PackTransformInfoArray(ReplayEditor.ReplayRecorder.Instance.RecordedFrames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count - 1].transformInfos, 8);
 
-			packed[0] = new byte[1014];
+			packed[0] = new byte[958];
 			packed[0][0] = 0;
-			Array.Copy(transforms, 0, packed[0], 1, 1008);
-			Array.Copy(BitConverter.GetBytes(Time.timeSinceLevelLoad), 0, packed[0], 1009, 4);
-			packed[0][1013] = 0;
+			Array.Copy(transforms, 0, packed[0], 1, 952);
+			Array.Copy(BitConverter.GetBytes(ReplayEditor.ReplayRecorder.Instance.RecordedFrames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count-1].time), 0, packed[0], 953, 4);
+			packed[0][957] = 0;
 
-			packed[1] = new byte[1010];
+			packed[1] = new byte[954];
 			packed[1][0] = 1;
-			Array.Copy(transforms, 1008, packed[1], 1, 1008);
-			packed[1][1009] = 1;
+			Array.Copy(transforms, 952, packed[1], 1, 952);
+			packed[1][953] = 1;
 
 			return packed;
 		}
@@ -664,7 +792,7 @@ namespace XLMultiplayer {
 			List<Vector3> vectors = new List<Vector3>();
 			List<Quaternion> quaternions = new List<Quaternion>();
 
-			for (int i = 0; i < 36; i++) {
+			for (int i = 0; i < 34; i++) {
 				Vector3 readVector = new Vector3();
 				readVector.x = BitConverter.ToSingle(buffer, i * 28);
 				readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4);
@@ -680,18 +808,18 @@ namespace XLMultiplayer {
 			}
 
 			if (isTop) {
-				currentBufferObject.topHalfVectors = new Vector3[36];
-				currentBufferObject.topHalfQuaternions = new Quaternion[36];
-				for (int i = 0; i < 36; i++) {
+				currentBufferObject.topHalfVectors = new Vector3[34];
+				currentBufferObject.topHalfQuaternions = new Quaternion[34];
+				for (int i = 0; i < 34; i++) {
 					currentBufferObject.topHalfVectors[i] = vectors[i];
 					currentBufferObject.topHalfQuaternions[i] = quaternions[i];
 				}
 			} else {
-				currentBufferObject.bottomHalfVectors = new Vector3[36];
-				currentBufferObject.bottomHalfQuaternions = new Quaternion[36];
-				for (int i = 36; i < 72; i++) {
-					currentBufferObject.bottomHalfVectors[i - 36] = vectors[i - 36];
-					currentBufferObject.bottomHalfQuaternions[i - 36] = quaternions[i - 36];
+				currentBufferObject.bottomHalfVectors = new Vector3[34];
+				currentBufferObject.bottomHalfQuaternions = new Quaternion[34];
+				for (int i = 34; i < 68; i++) {
+					currentBufferObject.bottomHalfVectors[i - 34] = vectors[i - 34];
+					currentBufferObject.bottomHalfQuaternions[i - 34] = quaternions[i - 34];
 				}
 			}
 
@@ -702,7 +830,7 @@ namespace XLMultiplayer {
 		}
 
 		public void LerpNextFrame(bool recursive = false, float offset = 0) {
-			if (this.animationFrames[0] == null) return;
+			if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) return;
 			if (!startedAnimating && animationFrames.Count > 5) {
 				if (this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
 					this.animationFrames.RemoveAt(0);
@@ -719,13 +847,13 @@ namespace XLMultiplayer {
 
 				startedAnimating = true;
 
-				for (int i = 0; i < 72; i++) {
-					if (i < 36) {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = this.animationFrames[0].topHalfVectors[i];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.animationFrames[0].topHalfQuaternions[i];
+				for (int i = 0; i < 68; i++) {
+					if (i < 34) {
+						this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].topHalfVectors[i];
+						this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].topHalfQuaternions[i];
 					} else {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = this.animationFrames[0].bottomHalfVectors[i - 36];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.animationFrames[0].bottomHalfQuaternions[i - 36];
+						this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].bottomHalfVectors[i - 34];
+						this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].bottomHalfQuaternions[i - 34];
 					}
 				}
 
@@ -741,7 +869,7 @@ namespace XLMultiplayer {
 				return;
 			}
 
-			if(this.animationFrames.Count >= 10) {
+			if (this.animationFrames.Count >= 10) {
 				while (this.animationFrames.Count > 6) {
 					this.animationFrames.RemoveAt(0);
 					if (this.animationFrames[0].topHalfVectors != null) this.previousFrameTime = this.animationFrames[0].frameTime;
@@ -750,42 +878,42 @@ namespace XLMultiplayer {
 				}
 			}
 
-			if(this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
+			if (this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
 				this.animationFrames.RemoveAt(0);
 
 				//debugWriter.WriteLine("Skipping frame");
 				return;
 			}
 
-			if(this.animationFrames[0].deltaTime == 0) {
+			if (this.animationFrames[0].deltaTime == 0) {
 				this.animationFrames[0].deltaTime = this.animationFrames[0].frameTime - this.previousFrameTime;
 			}
 
 			if (!recursive) this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
 			else this.animationFrames[0].timeSinceStart = offset;
 
-			for (int i = 0; i < 72; i++) {
-				if (i < 36) {
-					this.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].position, this.animationFrames[0].topHalfVectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
-					this.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].rotation, this.animationFrames[0].topHalfQuaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+			for (int i = 0; i < 68; i++) {
+				if (i < 34) {
+					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].localPosition, this.animationFrames[0].topHalfVectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].localRotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].localRotation, this.animationFrames[0].topHalfQuaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
 				} else {
-					this.hips.GetComponentsInChildren<Transform>()[i].position = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].position, this.animationFrames[0].bottomHalfVectors[i - 36], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
-					this.hips.GetComponentsInChildren<Transform>()[i].rotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].rotation, this.animationFrames[0].bottomHalfQuaternions[i - 36], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].localPosition, this.animationFrames[0].bottomHalfVectors[i - 34], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+					this.hips.GetComponentsInChildren<Transform>()[i].localRotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].localRotation, this.animationFrames[0].bottomHalfQuaternions[i - 34], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
 				}
 			}
 
 			if (this.animationFrames[0].timeSinceStart >= this.animationFrames[0].deltaTime) {
-				for (int i = 0; i < 72; i++) {
-					if (i < 36) {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = this.animationFrames[0].topHalfVectors[i];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.animationFrames[0].topHalfQuaternions[i];
+				for (int i = 0; i < 68; i++) {
+					if (i < 34) {
+						this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].topHalfVectors[i];
+						this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].topHalfQuaternions[i];
 					} else {
-						this.hips.GetComponentsInChildren<Transform>()[i].position = this.animationFrames[0].bottomHalfVectors[i - 36];
-						this.hips.GetComponentsInChildren<Transform>()[i].rotation = this.animationFrames[0].bottomHalfQuaternions[i - 36];
+						this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].bottomHalfVectors[i - 34];
+						this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].bottomHalfQuaternions[i - 34];
 					}
 				}
 
-				while(positionFrames[0] != null && positionFrames[0].positionFrame <= animationFrames[0].animFrame) {
+				while (positionFrames[0] != null && positionFrames[0].positionFrame <= animationFrames[0].animFrame) {
 					LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
 					positionFrames.RemoveAt(0);
 				}
@@ -811,16 +939,6 @@ namespace XLMultiplayer {
 			//this.skater.GetComponent<Rigidbody>().position = vectors[3];
 			//this.skater.GetComponent<Rigidbody>().velocity = vectors[4];
 			//this.skater.GetComponent<Rigidbody>().rotation = quaternions[3];
-			Rigidbody[] boardBodies = this.board.GetComponentsInChildren<Rigidbody>();
-			boardBodies[0].position = vectors[5];
-			boardBodies[0].velocity = vectors[6];
-			boardBodies[0].rotation = quaternions[4];
-			boardBodies[1].position = vectors[7];
-			boardBodies[1].velocity = vectors[8];
-			boardBodies[1].rotation = quaternions[5];
-			boardBodies[2].position = vectors[9];
-			boardBodies[2].velocity = vectors[10];
-			boardBodies[2].rotation = quaternions[6];
 
 			this.usernameText.text = this.username;
 			this.usernameObject.transform.position = this.player.transform.position + this.player.transform.up;

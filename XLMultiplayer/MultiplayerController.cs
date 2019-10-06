@@ -10,6 +10,7 @@ using Harmony12;
 using RootMotion.FinalIK;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Collections;
 
 namespace XLMultiplayer {
 	public enum OpCode : byte{
@@ -160,6 +161,10 @@ namespace XLMultiplayer {
 					debugWriter.WriteLine(parent.name);
 					parent = parent.parent;
 				}
+
+
+				MultiplayerPlayerController cont = new MultiplayerPlayerController(this.debugWriter);
+				cont.ConstructFromPlayer(this.ourController);
 			}
 		}
 

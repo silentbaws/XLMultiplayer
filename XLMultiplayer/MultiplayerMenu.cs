@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.IO;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -10,6 +11,16 @@ namespace XLMultiplayer {
 	public class MultiplayerMenu : MonoBehaviour {
 
 		private void Start() {
+			if (ReplayEditor.ReplayEditorController.Instance == null) {
+				GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(true);
+				StartCoroutine(TurnOffReplay());
+			}
+		}
+
+		private IEnumerator TurnOffReplay() {
+			yield return new WaitForEndOfFrame();
+			GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(false);
+			yield break;
 		}
 
 		private void Update() {

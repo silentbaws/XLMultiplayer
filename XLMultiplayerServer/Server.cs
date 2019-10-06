@@ -397,10 +397,9 @@ public class Server {
 		var client = new HttpClient();
 		while (true) {
 			try {
-
 				int currentPlayers = 0;
-				foreach(Player p in players) {
-					if (p != null)
+				foreach(Client c in clients) {
+					if (c != null)
 						currentPlayers++;
 				}
 
@@ -412,6 +411,8 @@ public class Server {
 					{ "serverVersion", versionNumber }
 				};
 
+				Console.WriteLine(currentPlayers.ToString());
+
 				var content = new FormUrlEncodedContent(values);
 
 				var response = await client.PostAsync("http://www.davisellwood.com/api/sendserverinfo/", content);
@@ -419,7 +420,6 @@ public class Server {
 					Console.WriteLine($"Error announcing: {response.StatusCode}");
 				}
 			} catch (Exception e) {
-				Console.WriteLine(e.ToString());
 				client = new HttpClient();
 			}
 			await Task.Delay(10000);

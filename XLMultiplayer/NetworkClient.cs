@@ -118,6 +118,8 @@ namespace XLMultiplayer {
 			}
 		}
 
+		long animDataSent = 0;
+
 		public void SendUnreliable(byte[] buffer, OpCode opCode) {
 			try {
 				//Rearrange message before sending
@@ -138,6 +140,9 @@ namespace XLMultiplayer {
 					positionPackets++;
 				} else {
 					animationPackets++;
+					animDataSent += packet.Length;
+					float average = animDataSent / animationPackets;
+					debugWriter.WriteLine(opCode.ToString() + " average packet data length " + average + " current packet " + buffer.Length.ToString() + " uncompressed, " + packet.Length + " compressed");
 				}
 			} catch (Exception e) {
 				debugWriter.WriteLine(e.ToString());
