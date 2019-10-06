@@ -2,13 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using System.Threading;
 using UnityModManagerNet;
 using RootMotion.FinalIK;
 using Harmony12;
-using System.IO.Compression;
 using System.Linq;
-using System.Collections;
 
 //TODO: ITS ALL SPAGHETTI
 
@@ -258,7 +255,6 @@ namespace XLMultiplayer {
 							break;
 						}
 					}
-					//pantsObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Shirt:
 					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
@@ -274,21 +270,13 @@ namespace XLMultiplayer {
 							break;
 						}
 					}
-					//if (useFull) {
-					//	GameObject.Destroy(headArmsObject);
-					//	GameObject.Destroy(shirtObject);
-
-					//	CharacterBody body = Traverse.Create(characterCustomizer).Field("characterBody").GetValue() as CharacterBody;
-
-					//	Dictionary<string, Transform> bonesDict = this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name);
-
-					//	GameObject g = Resources.Load<GameObject>("CharacterCustomization/Hoodie/PAX_1");
-					//	shirtObject = CustomLoadSMRPrefab(g, skaterMeshesObject.transform, bonesDict);
-
-					//	GameObject g2 = Resources.Load<GameObject>(body.headAndHandsPath);
-					//	headArmsObject = CustomLoadSMRPrefab(g2, skaterMeshesObject.transform, bonesDict);
-					//}
-					//if (tex != null) shirtObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+					if (tex != null) {
+						foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
+							if (gearItem.Item1.categoryName.Equals("Hoodie") || gearItem.Item1.categoryName.Equals("Shirt")) {
+								gearItem.Item2.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
+							}
+						}
+					}
 					break;
 				case MPTextureType.Shoes:
 					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
@@ -301,11 +289,6 @@ namespace XLMultiplayer {
 							break;
 						}
 					}
-					//GameObject Shoe_L = shoesObject.transform.Find("Shoe_L").gameObject;
-					//GameObject Shoe_R = shoesObject.transform.Find("Shoe_R").gameObject;
-
-					//Shoe_L.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
-					//Shoe_R.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Hat:
 					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
@@ -314,7 +297,6 @@ namespace XLMultiplayer {
 							break;
 						}
 					}
-					//hatObject.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
 					break;
 				case MPTextureType.Board:
 					foreach(Transform t in board.GetComponentsInChildren<Transform>()) {
@@ -430,16 +412,6 @@ namespace XLMultiplayer {
 			}
 
 			this.hips = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>().references.pelvis.parent;
-
-
-			foreach(Transform t in ReplayEditor.ReplayRecorder.Instance.RecordedTransforms) {
-				Transform parent = t.parent;
-				while (parent != null) {
-					debugWriter.Write("\t");
-					parent = parent.parent;
-				}
-				debugWriter.WriteLine("└─>" + t.name);
-			}
 		}
 
 		public void ConstructFromPlayer(MultiplayerPlayerController source) {
@@ -451,25 +423,13 @@ namespace XLMultiplayer {
 			this.player.transform.position = PlayerController.Instance.transform.position;
 			debugWriter.WriteLine("Created New Player");
 
-
-			foreach (Transform t in this.player.GetComponentsInChildren<Transform>()) {
-				Transform parent = t.parent;
-				while (parent != null) {
-					debugWriter.Write("\t");
-					parent = parent.parent;
-				}
-				debugWriter.WriteLine("└─>" + t.name);
-			}
-
 			UnityEngine.Object.DestroyImmediate(this.player.GetComponentInChildren<ReplayEditor.ReplayPlaybackController>());
-
 
 			foreach (MonoBehaviour m in this.player.GetComponentsInChildren<MonoBehaviour>()) {
 				if(m.GetType() == typeof(ReplayEditor.ReplayAudioEventPlayer)) {
 					UnityEngine.Object.Destroy(m);
 				}
 			}
-
 
 			this.player.SetActive(true);
 
@@ -484,50 +444,6 @@ namespace XLMultiplayer {
 			this.skaterMeshesObject = this.skater.transform.Find("Skater").gameObject;
 
 			debugWriter.WriteLine("created everything");
-
-			//Time.timeScale = 0.0f;
-			//foreach (MonoBehaviour m in source.skater.GetComponentsInChildren<MonoBehaviour>()) {
-			//	m.enabled = false;
-			//}
-			//foreach (MonoBehaviour m in source.board.GetComponentsInChildren<MonoBehaviour>()) {
-			//	m.enabled = false;
-			//}
-
-			////Copy board from the source and reparent/rename it for the new player and remove all scripts
-			////All scripts in the game use PlayerController.Instance and end up breaking the original character if left in
-			////I'm also too lazy to convert every script to be multiplayer compatible hence why client state is just being copied
-			//this.board = UnityEngine.Object.Instantiate<GameObject>(source.board, this.player.transform, false);
-			//this.board.name = "New Player Board";
-			//this.board.transform.localPosition = Vector3.zero;
-			//debugWriter.WriteLine("Created New Board");
-			//foreach (MonoBehaviour m in this.board.GetComponentsInChildren<MonoBehaviour>()) {
-			//	m.enabled = false;
-			//	debugWriter.WriteLine("Removing script from additional board");
-			//	UnityEngine.Object.DestroyImmediate(m);
-			//}
-
-			////Copy the source players skater for our new player
-			//this.skater = UnityEngine.Object.Instantiate<GameObject>(source.skater, this.player.transform, false);
-			//this.skater.name = "New Player Skater";
-			//this.skater.transform.localPosition = Vector3.zero;
-			//debugWriter.WriteLine("Created New Skater");
-			//foreach (MonoBehaviour m in this.skater.GetComponentsInChildren<MonoBehaviour>()) {
-			//	m.enabled = false;
-			//	debugWriter.WriteLine("Removing script from additional skater");
-			//	UnityEngine.Object.DestroyImmediate(m);
-			//}
-
-			//this.hips = this.skater.transform.Find("Skater_Joints").Find("Skater_root");
-
-			//foreach (Transform child in skater.transform) {
-			//	foreach (Transform t in child) {
-			//		if (t.name.StartsWith("PAX", true, null)) {
-			//			this.skaterMeshesObject = child.gameObject;
-			//			break;
-			//		}
-			//	}
-			//	if (this.skaterMeshesObject != null) break;
-			//}
 
 			characterCustomizer.enabled = true;
 			characterCustomizer.RemoveAllGear();
@@ -549,53 +465,50 @@ namespace XLMultiplayer {
 
 			debugWriter.WriteLine("Added gear back");
 
+			bool foundHat = false, foundShirt = false, foundPants = false, foundShoes = false;
+
 			foreach(Tuple<CharacterGear, GameObject> GearItem in gearList) {
-				switch (GearItem.Item1.category) {
-					case GearCategory.Hat:
+				switch (GearItem.Item1.categoryName) {
+					case "Hat":
 						hatObject = GearItem.Item2;
+						foundHat = true;
 						break;
-					case GearCategory.Hoodie:
+					case "Hoodie":
 						shirtObject = GearItem.Item2;
+						foundShirt = true;
 						break;
-					case GearCategory.Shirt:
+					case "Shirt":
 						shirtObject = GearItem.Item2;
+						foundShirt = true;
 						break;
-					case GearCategory.Pants:
+					case "Pants":
 						pantsObject = GearItem.Item2;
+						foundPants = true;
 						break;
-					case GearCategory.Shoes:
+					case "Shoes":
 						shoesObject = GearItem.Item2;
+						foundShoes = true;
 						break;
 				}
 			}
 
-			//CharacterBody body = Traverse.Create(characterCustomizer).Field("characterBody").GetValue() as CharacterBody;
-
-			//Dictionary<string, Transform> bonesDict = this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name);
-
-			//GameObject g = Resources.Load<GameObject>("CharacterCustomization/Shirt/PAX_1");
-			//shirtObject = CustomLoadSMRPrefab(g, skaterMeshesObject.transform, bonesDict);
-
-			//GameObject g2 = Resources.Load<GameObject>(body.headAndArmsPath);
-			//headArmsObject = CustomLoadSMRPrefab(g2, skaterMeshesObject.transform, bonesDict);
-
-			//GameObject g3 = Resources.Load<GameObject>("CharacterCustomization/shoes/PAX_1");
-			//shoesObject = CustomLoadSMRPrefab(g3, skaterMeshesObject.transform, bonesDict);
-
-			//GameObject g4 = Resources.Load<GameObject>("CharacterCustomization/pants/PAX_1");
-			//pantsObject = CustomLoadSMRPrefab(g4, skaterMeshesObject.transform, bonesDict);
-
-			//GameObject g5 = Resources.Load<GameObject>("CharacterCustomization/Hat/PAX_1");
-			//hatObject = CustomLoadSMRPrefab(g5, skaterMeshesObject.transform, bonesDict);
-
-			//foreach (MonoBehaviour m in source.skater.GetComponentsInChildren<MonoBehaviour>()) {
-			//	m.enabled = true;
-			//}
-			//foreach (MonoBehaviour m in source.board.GetComponentsInChildren<MonoBehaviour>()) {
-			//	m.enabled = true;
-			//}
-			//Time.timeScale = 1.0f;
-
+			if (!foundHat) {
+				CharacterGear newHat = CreateGear(GearCategory.Hat, "Hat", "PAX_1");
+				characterCustomizer.LoadGear(newHat);
+			}
+			if (!foundPants) {
+				CharacterGear newPants = CreateGear(GearCategory.Pants, "Pants", "PAX_1");
+				characterCustomizer.LoadGear(newPants);
+			}
+			if (!foundShirt) {
+				CharacterGear newShirt = CreateGear(GearCategory.Shirt, "Shirt", "PAX_1");
+				characterCustomizer.LoadGear(newShirt);
+			}
+			if (!foundShoes) {
+				CharacterGear newShoes = CreateGear(GearCategory.Shoes, "Shoes", "PAX_1");
+				characterCustomizer.LoadGear(newShoes);
+			}
+			
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
 			this.usernameObject.transform.localScale = new Vector3(-0.01f, 0.01f, 1f);
@@ -613,6 +526,15 @@ namespace XLMultiplayer {
 			this.hatMP = new MultiplayerTexture(this.debugWriter, MPTextureType.Hat);
 			this.shoesMP = new MultiplayerTexture(this.debugWriter, MPTextureType.Shoes);
 			this.boardMP = new MultiplayerTexture(this.debugWriter, MPTextureType.Board);
+		}
+
+		private CharacterGear CreateGear(GearCategory category, string categoryName, string id) {
+			CharacterGear newGear = new CharacterGear();
+			newGear.category = category;
+			newGear.categoryName = categoryName;
+			newGear.id = id;
+			newGear.path = "CharacterCustomization/" + categoryName + "/" + id;
+			return newGear;
 		}
 
 		public byte[] PackTransforms() {
@@ -722,111 +644,145 @@ namespace XLMultiplayer {
 		}
 
 		public byte[] PackTransformInfoArray(ReplayEditor.TransformInfo[] T, int start) {
-			byte[] packed = new byte[T.Length * 28 - (start * 28)];
+			byte[] packed = new byte[T.Length * 14 - (start * 14)];
+
 			for (int i = 0; i < T.Length - start; i++) {
-				Array.Copy(BitConverter.GetBytes(T[i + start].position.x), 0, packed, i * 28, 4);
-				Array.Copy(BitConverter.GetBytes(T[i + start].position.y), 0, packed, i * 28 + 4, 4);
-				Array.Copy(BitConverter.GetBytes(T[i + start].position.z), 0, packed, i * 28 + 8, 4);
-				Array.Copy(BitConverter.GetBytes(T[i + start].rotation.x), 0, packed, i * 28 + 12, 4);
-				Array.Copy(BitConverter.GetBytes(T[i + start].rotation.y), 0, packed, i * 28 + 16, 4);
-				Array.Copy(BitConverter.GetBytes(T[i + start].rotation.z), 0, packed, i * 28 + 20, 4);
-				Array.Copy(BitConverter.GetBytes(T[i + start].rotation.w), 0, packed, i * 28 + 24, 4);
+				Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].position.x)), 0, packed, i * 14, 2);
+				Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].position.y)), 0, packed, i * 14 + 2, 2);
+				Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].position.z)), 0, packed, i * 14 + 4, 2);
+				if (Quaternion.Angle(T[i + start].rotation, Quaternion.identity) < 0.01f) {
+					for(int c = 6; c < 14; c++) {
+						packed[i * 14 + c] = 0;
+					}
+				} else {
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].rotation.x)), 0, packed, i * 14 + 6, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].rotation.y)), 0, packed, i * 14 + 8, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].rotation.z)), 0, packed, i * 14 + 10, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].rotation.w)), 0, packed, i * 14 + 12, 2);
+				}
 			}
+
 			return packed;
 		}
 
-		public byte[][] PackAnimator() {
-			byte[][] packed = new byte[2][];
+		System.Diagnostics.Stopwatch averageWatch = null;
+		bool timing = false;
+		double totalMS = 0;
+		int ticks = 0;
+
+		public byte[] PackAnimator() {
+			if (!timing) {
+				timing = true;
+				averageWatch = System.Diagnostics.Stopwatch.StartNew();
+			}
+			var watch = System.Diagnostics.Stopwatch.StartNew();
+			//byte[][] packed = new byte[2][];
 
 			byte[] transforms = PackTransformInfoArray(ReplayEditor.ReplayRecorder.Instance.RecordedFrames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count - 1].transformInfos, 8);
 
-			packed[0] = new byte[958];
-			packed[0][0] = 0;
-			Array.Copy(transforms, 0, packed[0], 1, 952);
-			Array.Copy(BitConverter.GetBytes(ReplayEditor.ReplayRecorder.Instance.RecordedFrames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count-1].time), 0, packed[0], 953, 4);
-			packed[0][957] = 0;
+			byte[] packed = new byte[956];
+			//packed[0][0] = 0;
+			Array.Copy(transforms, 0, packed, 0, 952);
+			Array.Copy(BitConverter.GetBytes(ReplayEditor.ReplayRecorder.Instance.RecordedFrames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count-1].time), 0, packed, 952, 4);
+			//packed[0][957] = 0;
 
-			packed[1] = new byte[954];
-			packed[1][0] = 1;
-			Array.Copy(transforms, 952, packed[1], 1, 952);
-			packed[1][953] = 1;
-
+			//packed[1] = new byte[954];
+			//packed[1][0] = 1;
+			//Array.Copy(transforms, 952, packed[1], 1, 952);
+			//packed[1][953] = 1;
+			watch.Stop();
+			if (averageWatch.ElapsedMilliseconds >= 5000 && averageWatch.IsRunning) {
+				double averageMS = totalMS / ticks;
+				debugWriter.WriteLine("Average function time of " + averageMS.ToString() + " over " + ticks + " ticks");
+				averageWatch.Stop();
+			}
+			totalMS += watch.Elapsed.TotalMilliseconds;
+			ticks++;
+			//debugWriter.WriteLine(watch.Elapsed.TotalMilliseconds);
 			return packed;
 		}
 
 		public void UnpackAnimator(byte[] recBuffer) {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
 
-			byte[] buffer = new byte[recBuffer.Length - 5];
-			if (receivedPacketSequence < currentAnimationPacket - 10) {
+			byte[] buffer = new byte[recBuffer.Length - 4];
+			if (receivedPacketSequence < currentAnimationPacket - 5) {
 				return;
 			} else {
-				Array.Copy(recBuffer, 5, buffer, 0, recBuffer.Length - 5);
+				Array.Copy(recBuffer, 4, buffer, 0, recBuffer.Length - 4);
 				currentAnimationPacket = receivedPacketSequence > currentAnimationPacket ? receivedPacketSequence : currentAnimationPacket;
 			}
 
-			int actualPacket = receivedPacketSequence;
-
-			receivedPacketSequence = Mathf.FloorToInt(receivedPacketSequence / 2);
-
-			MultiplayerFrameBufferObject currentBufferObject = null;
-			bool isTop = buffer[buffer.Length - 1] == 0;
-			bool isNew = false;
-
-			foreach(MultiplayerFrameBufferObject animFrame in animationFrames) {
-				if(animFrame.animFrame == receivedPacketSequence) {
-					currentBufferObject = animFrame;
-				}
-			}
-
-			if(currentBufferObject == null) {
-				currentBufferObject = new MultiplayerFrameBufferObject();
-				isNew = true;
-			}
+			MultiplayerFrameBufferObject currentBufferObject = new MultiplayerFrameBufferObject();
 
 			currentBufferObject.animFrame = receivedPacketSequence;
-			if (isTop) {
-				currentBufferObject.frameTime = BitConverter.ToSingle(buffer, buffer.Length - 5);
-			}
+			currentBufferObject.frameTime = BitConverter.ToSingle(buffer, buffer.Length - 4);
 
 			List<Vector3> vectors = new List<Vector3>();
 			List<Quaternion> quaternions = new List<Quaternion>();
 
-			for (int i = 0; i < 34; i++) {
+			for (int i = 0; i < 68; i++) {
 				Vector3 readVector = new Vector3();
-				readVector.x = BitConverter.ToSingle(buffer, i * 28);
-				readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4);
-				readVector.z = BitConverter.ToSingle(buffer, i * 28 + 8);
+				bool zeroVector = true;
+				if(buffer[i * 14] == 0) {
+					for(int c = 0; c < 6; c++) {
+						if(buffer[i * 14 + c] != 0) {
+							zeroVector = false;
+							break;
+						}
+					}
+				} else {
+					zeroVector = false;
+				}
+				if (!zeroVector) {
+					readVector.x = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14));
+					readVector.y = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 2));
+					readVector.z = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 4));
+				} else {
+					readVector = Vector3.zero;
+				}
+
 				Quaternion readQuaternion = new Quaternion();
-				readQuaternion.x = BitConverter.ToSingle(buffer, i * 28 + 12);
-				readQuaternion.y = BitConverter.ToSingle(buffer, i * 28 + 16);
-				readQuaternion.z = BitConverter.ToSingle(buffer, i * 28 + 20);
-				readQuaternion.w = BitConverter.ToSingle(buffer, i * 28 + 24);
+				bool zeroQuaternion = true;
+				if (buffer[i * 14 + 6] == 0) {
+					for (int c = 6; c < 14; c++) {
+						if (buffer[i * 14 + c] != 0) {
+							zeroQuaternion = false;
+							break;
+						}
+					}
+				} else {
+					zeroQuaternion = false;
+				}
+				if (!zeroQuaternion) {
+					readQuaternion.x = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 6));
+					readQuaternion.y = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 8));
+					readQuaternion.z = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 10));
+					readQuaternion.w = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 12));
+				} else {
+					readQuaternion = Quaternion.identity;
+				}
 
 				vectors.Add(readVector);
 				quaternions.Add(readQuaternion);
 			}
-
-			if (isTop) {
-				currentBufferObject.topHalfVectors = new Vector3[34];
-				currentBufferObject.topHalfQuaternions = new Quaternion[34];
-				for (int i = 0; i < 34; i++) {
-					currentBufferObject.topHalfVectors[i] = vectors[i];
-					currentBufferObject.topHalfQuaternions[i] = quaternions[i];
-				}
-			} else {
-				currentBufferObject.bottomHalfVectors = new Vector3[34];
-				currentBufferObject.bottomHalfQuaternions = new Quaternion[34];
-				for (int i = 34; i < 68; i++) {
-					currentBufferObject.bottomHalfVectors[i - 34] = vectors[i - 34];
-					currentBufferObject.bottomHalfQuaternions[i - 34] = quaternions[i - 34];
-				}
+			
+			currentBufferObject.topHalfVectors = new Vector3[34];
+			currentBufferObject.topHalfQuaternions = new Quaternion[34];
+			for (int i = 0; i < 34; i++) {
+				currentBufferObject.topHalfVectors[i] = vectors[i];
+				currentBufferObject.topHalfQuaternions[i] = quaternions[i];
 			}
 
-			if (isNew) {
-				this.animationFrames.Add(currentBufferObject);
-				this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
+			currentBufferObject.bottomHalfVectors = new Vector3[34];
+			currentBufferObject.bottomHalfQuaternions = new Quaternion[34];
+			for (int i = 34; i < 68; i++) {
+				currentBufferObject.bottomHalfVectors[i - 34] = vectors[i];
+				currentBufferObject.bottomHalfQuaternions[i - 34] = quaternions[i];
 			}
+			
+			this.animationFrames.Add(currentBufferObject);
+			this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
 		}
 
 		public void LerpNextFrame(bool recursive = false, float offset = 0) {
@@ -892,6 +848,9 @@ namespace XLMultiplayer {
 			if (!recursive) this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
 			else this.animationFrames[0].timeSinceStart = offset;
 
+			if (positionFrames.Count > 0 && positionFrames[0].positionFrame <= animationFrames[0].animFrame + 1)
+				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions, recursive ? offset : Time.unscaledDeltaTime);
+
 			for (int i = 0; i < 68; i++) {
 				if (i < 34) {
 					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].localPosition, this.animationFrames[0].topHalfVectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
@@ -913,8 +872,8 @@ namespace XLMultiplayer {
 					}
 				}
 
-				while (positionFrames[0] != null && positionFrames[0].positionFrame <= animationFrames[0].animFrame) {
-					LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions);
+				while (positionFrames.Count > 0 && positionFrames[0].positionFrame <= animationFrames[0].animFrame) {
+					LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions, 9999999);
 					positionFrames.RemoveAt(0);
 				}
 
@@ -929,16 +888,15 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void LerpPosition(Vector3[] vectors, Quaternion[] quaternions) {
-			this.player.transform.position = vectors[0];
-			this.player.transform.rotation = quaternions[0];
-			this.board.transform.position = vectors[1];
-			this.board.transform.rotation = quaternions[1];
-			this.skater.transform.position = vectors[2];
-			this.skater.transform.rotation = quaternions[2];
-			//this.skater.GetComponent<Rigidbody>().position = vectors[3];
-			//this.skater.GetComponent<Rigidbody>().velocity = vectors[4];
-			//this.skater.GetComponent<Rigidbody>().rotation = quaternions[3];
+		private void LerpPosition(Vector3[] vectors, Quaternion[] quaternions, float deltaTime) {
+			this.player.transform.position = Vector3.Lerp(this.player.transform.position, vectors[0], deltaTime / this.animationFrames[0].deltaTime);
+			this.player.transform.rotation = Quaternion.Slerp(this.player.transform.rotation, quaternions[0], deltaTime / this.animationFrames[0].deltaTime);
+
+			this.board.transform.position = Vector3.Lerp(this.board.transform.position, vectors[1], deltaTime / this.animationFrames[0].deltaTime);
+			this.board.transform.rotation = Quaternion.Slerp(this.board.transform.rotation, quaternions[1], deltaTime / this.animationFrames[0].deltaTime);
+
+			this.skater.transform.position = Vector3.Lerp(this.skater.transform.position, vectors[2], deltaTime / this.animationFrames[0].deltaTime);
+			this.skater.transform.rotation = Quaternion.Slerp(this.skater.transform.rotation, quaternions[2], deltaTime / this.animationFrames[0].deltaTime);
 
 			this.usernameText.text = this.username;
 			this.usernameObject.transform.position = this.player.transform.position + this.player.transform.up;

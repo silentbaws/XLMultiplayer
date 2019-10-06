@@ -162,7 +162,6 @@ namespace XLMultiplayer {
 					parent = parent.parent;
 				}
 
-
 				MultiplayerPlayerController cont = new MultiplayerPlayerController(this.debugWriter);
 				cont.ConstructFromPlayer(this.ourController);
 			}
@@ -328,9 +327,8 @@ namespace XLMultiplayer {
 		}
 
 		private void SendPlayerAnimator() {
-			byte[][] packed = this.ourController.PackAnimator();
-			this.SendBytes(OpCode.Animation, packed[0], false);
-			this.SendBytes(OpCode.Animation, packed[1], false);
+			byte[] packed = this.ourController.PackAnimator();
+			this.SendBytes(OpCode.Animation, packed, false);
 		}
 
 		public void KillConnection() {

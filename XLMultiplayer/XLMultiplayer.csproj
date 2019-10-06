@@ -23,6 +23,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -115,6 +116,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Half.cs" />
+    <Compile Include="HalfHelper.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="MultiplayerMenu.cs" />
     <Compile Include="MultiplayerController.cs" />
