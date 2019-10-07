@@ -75,6 +75,10 @@ namespace XLMultiplayer {
 		}
 
 		private void Update() {
+			if (Input.GetKeyDown(KeyCode.F5)) {
+
+			}
+
 			if(previousFrameTimes.Count == 0)
 				for(int i = 0; i < 1000; i++)
 					previousFrameTimes.Add(10000);
@@ -161,9 +165,6 @@ namespace XLMultiplayer {
 					debugWriter.WriteLine(parent.name);
 					parent = parent.parent;
 				}
-
-				MultiplayerPlayerController cont = new MultiplayerPlayerController(this.debugWriter);
-				cont.ConstructFromPlayer(this.ourController);
 			}
 		}
 

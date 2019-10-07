@@ -234,11 +234,9 @@ namespace XLMultiplayer {
 				RenderTexture.active = renderTexture;
 				texture2D.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
 				texture2D.Apply();
-
-				if (texture2D.width > 2048 || texture2D.height > 2048)
-					TextureScale.Bilinear(texture2D, 2048, 2048);
-
-				Color[] pixels = texture2D.GetPixels();
+				
+				if (texture2D.width > 1024 || texture2D.height > 1024)
+					TextureScale.Bilinear(texture2D, 1024, 1024);
 
 				RenderTexture.active = currentRT;
 			}
@@ -539,26 +537,10 @@ namespace XLMultiplayer {
 
 		public byte[] PackTransforms() {
 			Transform[] T = new Transform[] { this.player.transform, this.board.transform, this.skater.transform };
-			Rigidbody[] R = new Rigidbody[] { this.board.GetComponent<Rigidbody>(), this.board.GetComponent<Rigidbody>(), this.board.GetComponentsInChildren<Rigidbody>()[1], this.board.GetComponentsInChildren<Rigidbody>()[2] };
-
-			byte[] packed = new byte[T.Length * 28 + R.Length * 40];
+			
 			byte[] TPacked = this.PackTransformArray(T);
-			Array.Copy(TPacked, 0, packed, 0, TPacked.Length);
 
-			for (int i = 0; i < R.Length; i++) {
-				Array.Copy(BitConverter.GetBytes(R[i].position.x), 0, packed, T.Length * 28 + i * 40, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].position.y), 0, packed, T.Length * 28 + i * 40 + 4, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].position.z), 0, packed, T.Length * 28 + i * 40 + 8, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].rotation.x), 0, packed, T.Length * 28 + i * 40 + 12, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].rotation.y), 0, packed, T.Length * 28 + i * 40 + 16, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].rotation.z), 0, packed, T.Length * 28 + i * 40 + 20, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].rotation.w), 0, packed, T.Length * 28 + i * 40 + 24, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].velocity.x), 0, packed, T.Length * 28 + i * 40 + 28, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].velocity.y), 0, packed, T.Length * 28 + i * 40 + 32, 4);
-				Array.Copy(BitConverter.GetBytes(R[i].velocity.z), 0, packed, T.Length * 28 + i * 40 + 36, 4);
-			}
-
-			return packed;
+			return TPacked;
 		}
 
 		int outoforder = 0;
@@ -594,28 +576,7 @@ namespace XLMultiplayer {
 				quaternions.Add(readQuaternion);
 			}
 
-			for (int i = 0; i < (buffer.Length - 28 * 3) / 40; i++) {
-				Vector3 readVector = new Vector3();
-				readVector.x = BitConverter.ToSingle(buffer, i * 40 + 28 * 3);
-				readVector.y = BitConverter.ToSingle(buffer, i * 40 + 4 + 28 * 3);
-				readVector.z = BitConverter.ToSingle(buffer, i * 40 + 8 + 28 * 3);
-				vectors.Add(readVector);
-
-				Quaternion readQuaternion = new Quaternion();
-				readQuaternion.x = BitConverter.ToSingle(buffer, i * 40 + 12 + 28 * 3);
-				readQuaternion.y = BitConverter.ToSingle(buffer, i * 40 + 16 + 28 * 3);
-				readQuaternion.z = BitConverter.ToSingle(buffer, i * 40 + 20 + 28 * 3);
-				readQuaternion.w = BitConverter.ToSingle(buffer, i * 40 + 24 + 28 * 3);
-				quaternions.Add(readQuaternion);
-
-				readVector = new Vector3();
-				readVector.x = BitConverter.ToSingle(buffer, i * 40 + 28 + 28 * 3);
-				readVector.y = BitConverter.ToSingle(buffer, i * 40 + 32 + 28 * 3);
-				readVector.z = BitConverter.ToSingle(buffer, i * 40 + 36 + 28 * 3);
-				vectors.Add(readVector);
-			}
-
-			SetTransforms(vectors.ToArray(), quaternions.ToArray(), currentPositionPacket);
+			SetTransforms(vectors.ToArray(), quaternions.ToArray(), receivedPacketSequence);
 		}
 
 		public void SetTransforms(Vector3[] vectors, Quaternion[] quaternions, int posFrame) {
