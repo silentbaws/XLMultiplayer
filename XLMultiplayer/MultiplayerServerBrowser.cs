@@ -5,224 +5,249 @@ using System.Collections;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
+using Newtonsoft.Json;
 
-namespace XLMultiplayer
-{
+namespace XLMultiplayer {
+	public class ServerBrowser : MonoBehaviour {
+		private readonly string mainServer = "http://www.davisellwood.com/api/getservers/";
+		private List<Server> servers = new List<Server>();
 
-    public class ServerBrowser : MonoBehaviour
-    {
+		// GUI stuff
+		public bool showUI { get; private set; }
+		private GameObject master;
+		private bool setUp;
+		private Rect windowRect = new Rect(300f, 50f, 300f, 400f);
+		private GUIStyle windowStyle;
+		private GUIStyle spoilerBtnStyle;
+		private GUIStyle sliderStyle;
+		private GUIStyle thumbStyle;
+		private readonly Color windowColor = new Color(0.2f, 0.2f, 0.2f);
+		private string separator;
+		private GUIStyle separatorStyle;
+		private Vector2 scrollPosition = new Vector2();
+		private GUIStyle usingStyle;
 
-        private readonly string mainServer = "http://www.davisellwood.com/api/getservers/";
-        private List<Server> servers = new List<Server>();
+		private void Start() {
+			log("Starting");
+			StartCoroutine(StartUpdatingServerList());
+			showUI = false;
+		}
 
-        // GUI stuff
-        private bool showUI = false;
-        private GameObject master;
-        private bool setUp;
-        private Rect windowRect = new Rect(300f, 50f, 600f, 0f);
-        private GUIStyle windowStyle;
-        private GUIStyle spoilerBtnStyle;
-        private GUIStyle sliderStyle;
-        private GUIStyle thumbStyle;
-        private readonly Color windowColor = new Color(0.2f, 0.2f, 0.2f);
-        private string separator;
-        private GUIStyle separatorStyle;
-        private Vector2 scrollPosition = new Vector2();
-        private GUIStyle usingStyle;
+		public IEnumerator StartUpdatingServerList() {
+			log("Started requesting servers");
 
-        private void Start() {
-            log("Starting");
-            StartCoroutine(StartUpdatingServerList());
-        }
+			while (true) {
+				log("Requesting servers");
 
-        private void Update() {
-        }
+				UnityWebRequest www = UnityWebRequest.Get(mainServer);
+				yield return www.SendWebRequest();
 
-        public IEnumerator StartUpdatingServerList() {
-            log("started Requesting");
+				if (www.isNetworkError || www.isHttpError) {
+					log($"Error getting servers: {www.error}");
+				}
+				else {
+					var responseString = www.downloadHandler.text;
+					responseString = responseString.Remove(0, 1).Remove(responseString.Length - 2, 1).Replace("\\\"", "\"");
 
-            while (true) {
-                log("Requesting");
+					log($"response: '{responseString}'");
+					
+					JArray a = JArray.Parse(responseString);
 
-                UnityWebRequest www = UnityWebRequest.Get(mainServer);
-                yield return www.SendWebRequest();
+					servers.Clear();
+					foreach (JObject o in a.Children<JObject>()) {
+						foreach (JProperty p in o.Properties()) {
+							if(p.Name == "fields") {
+								Server newServer = new Server();
+								foreach(JObject o2 in p.Children<JObject>()) {
+									foreach(JProperty p2 in o2.Properties()) {
+										switch (p2.Name) {
+											case "name":
+												newServer.name = (string)p2.Value;
+												break;
+											case "IP":
+												newServer.ip = (string)p2.Value;
+												break;
+											case "port":
+												newServer.port = (string)p2.Value;
+												break;
+											case "version":
+												newServer.version = (string)p2.Value;
+												break;
+											case "maxPlayers":
+												newServer.playerMax = (int)p2.Value;
+												break;
+											case "currentPlayers":
+												newServer.playerCurrent = (int)p2.Value;
+												break;
+										}
+									}
+								}
+								servers.Add(newServer);
+							}
+						}
+					}
+				}
 
-                if (www.isNetworkError || www.isHttpError) {
-                    log($"Error getting servers: {www.error}");
-                }
-                else {
-                    var responseString = www.downloadHandler.text;
-                    log($"response: '{responseString}'");
+				yield return new WaitForSeconds(30);
+			}
+		}
 
-                    JArray a = JArray.Parse(responseString.Replace("\\\"", ""));
+		void RenderWindow(int windowID) {
+			if (Event.current.type == EventType.Repaint) windowRect.height = 0;
 
-                    foreach (JObject o in a.Children<JObject>()) {
-                        foreach (JProperty p in o.Properties()) {
-                            string name = p.Name;
-                            //string value = (string)p.Value;
-                            log(name);// + " -- " + value);
-                        }
-                    }
+			GUI.DragWindow(new Rect(0, 0, 10000, 20));
 
-                    servers.Clear();
-                    //foreach (var j in json.Children()) {
-                    //    log($"Child: {j.ToString()}");
-                    //    var s = j.ToObject<Server>();
-                    //    servers.Add(s);
-                    //}
-                }
+			scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Width(400), GUILayout.Height(400));
+			{
+				GUIStyle title = new GUIStyle();
+				title.fontSize = 16;
+				title.richText = true;
+				title.alignment = TextAnchor.UpperCenter;
+				title.normal.textColor = Color.white;
 
-                yield return new WaitForSeconds(30);
-            }
-        }
+				GUIStyle center = new GUIStyle();
+				center.fontSize = 12;
+				center.alignment = TextAnchor.MiddleCenter;
+				center.normal.textColor = Color.white;
 
-        void RenderWindow(int windowID) {
-            if (Event.current.type == EventType.Repaint) windowRect.height = 0;
+				foreach (var s in servers) {
+					Label($"<b>{s.name}  v{s.version}</b>\n", title);
+					Label($"<b>IP:</b> {s.ip}      <b>port:</b> {s.port}      <b>players:</b> {s.playerCurrent}/{s.playerMax}", center);
+					if (Button($"Connect with username \"{Main.menu.username}\"")) {
+						this.Close();
+						Main.menu.CreateMultiplayerManager();
+						Main.menu.multiplayerManager.ConnectToServer(s.ip, int.Parse(s.port), Main.menu.username);
+					}
+					Separator();
+				}
 
-            GUI.DragWindow(new Rect(0, 0, 10000, 20));
+				GUILayout.FlexibleSpace();
+				Separator();
+				// Preset selection, save, close
+				{
+					BeginHorizontal();
+					if (Button("Close")) {
+						Close();
+					}
+					EndHorizontal();
+				}
+			}
+			GUILayout.EndScrollView();
+		}
 
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Width(400), GUILayout.Height(750));
-            {
-                foreach (var s in servers) {
-                    //Label($"IP: {s.ip}, port: {s.port}");
-                    Label($"IP: {s.pk}");
-                    Separator();
-                }
+		private class Server {
+			public string name;
+			public string ip;
+			public string port;
+			public string version;
+			public int playerMax;
+			public int playerCurrent;
+		}
 
-                GUILayout.FlexibleSpace();
-                Separator();
-                // Preset selection, save, close
-                {
-                    BeginHorizontal();
-                    if (Button("Close")) {
-                        Close();
-                    }
-                    EndHorizontal();
-                }
-            }
-            GUILayout.EndScrollView();
-        }
+		#region Utility
 
-        private class Server
-        {
-            public string model;
-            public int pk;
-            //[DataMember]
-            //public string fields;
-            //[DataMember]
-            //public string ip;
-            //[DataMember]
-            //public string port;
-        }
+		public void Open() {
+			showUI = true;
+		}
 
-        #region Utility
+		public void Close() {
+			showUI = false;
+		}
 
-        public void Open() {
-            showUI = true;
-        }
+		private void OnGUI() {
+			if (!setUp) {
+				setUp = true;
+				SetUp();
+			}
 
-        public void Close() {
-            showUI = false;
-        }
+			GUI.backgroundColor = windowColor;
 
-        private void OnGUI() {
-            if (!setUp) {
-                setUp = true;
-                SetUp();
-            }
+			if (showUI) {
+				windowRect = GUILayout.Window(GUIUtility.GetControlID(FocusType.Passive), windowRect, RenderWindow, "Server Browser", windowStyle, GUILayout.Width(400));
+			}
+		}
 
-            GUI.backgroundColor = windowColor;
+		internal void log(string s) {
+			UnityModManager.Logger.Log("[Server Browser] " + s);
+		}
 
-            if (showUI) {
-                windowRect = GUILayout.Window(GUIUtility.GetControlID(FocusType.Passive), windowRect, RenderWindow, "Server Browser", windowStyle, GUILayout.Width(400));
-            }
-        }
+		private void SetUp() {
+			DontDestroyOnLoad(gameObject);
 
-        internal void log(string s) {
-            UnityModManager.Logger.Log("[Server Browser] " + s);
-        }
+			windowStyle = new GUIStyle(GUI.skin.window) {
+				padding = new RectOffset(10, 10, 25, 10),
+				contentOffset = new Vector2(0, -23.0f)
+			};
 
-        private void SetUp() {
-            DontDestroyOnLoad(gameObject);
-            master = GameObject.Find("Master Prefab");
-            if (master != null) {
-                DontDestroyOnLoad(master);
-            }
+			spoilerBtnStyle = new GUIStyle(GUI.skin.button) {
+				fixedWidth = 100,
+			};
 
-            windowStyle = new GUIStyle(GUI.skin.window) {
-                padding = new RectOffset(10, 10, 25, 10),
-                contentOffset = new Vector2(0, -23.0f)
-            };
+			sliderStyle = new GUIStyle(GUI.skin.horizontalSlider) {
+				fixedWidth = 200
+			};
 
-            spoilerBtnStyle = new GUIStyle(GUI.skin.button) {
-                fixedWidth = 100
-            };
+			thumbStyle = new GUIStyle(GUI.skin.horizontalSliderThumb) {
 
-            sliderStyle = new GUIStyle(GUI.skin.horizontalSlider) {
-                fixedWidth = 200
-            };
+			};
 
-            thumbStyle = new GUIStyle(GUI.skin.horizontalSliderThumb) {
+			separatorStyle = new GUIStyle(GUI.skin.label) {
 
-            };
+			};
+			separatorStyle.normal.textColor = Color.red;
+			separatorStyle.fontSize = 4;
 
-            separatorStyle = new GUIStyle(GUI.skin.label) {
+			separator = new string('=', 196);
 
-            };
-            separatorStyle.normal.textColor = Color.red;
-            separatorStyle.fontSize = 4;
+			usingStyle = new GUIStyle(GUI.skin.label);
+			usingStyle.normal.textColor = Color.red;
+			usingStyle.fontSize = 16;
+		}
 
-            separator = new string('_', 188);
+		private void Label(string text, GUIStyle style) {
+			GUILayout.Label(text, style);
+		}
 
-            usingStyle = new GUIStyle(GUI.skin.label);
-            usingStyle.normal.textColor = Color.red;
-            usingStyle.fontSize = 16;
-        }
+		private void Label(string text) {
+			GUILayout.Label(text);
+		}
 
-        private void Label(string text, GUIStyle style) {
-            GUILayout.Label(text, style);
-        }
+		private void Separator() {
+			Label(separator, separatorStyle);
+		}
 
-        private void Label(string text) {
-            GUILayout.Label(text);
-        }
+		private bool Button(string text) {
+			return GUILayout.Button(text, GUILayout.Height(30));
+		}
 
-        private void Separator() {
-            Label(separator, separatorStyle);
-        }
+		private bool Spoiler(string text) {
+			return GUILayout.Button(text, spoilerBtnStyle);
+		}
 
-        private bool Button(string text) {
-            return GUILayout.Button(text);
-        }
+		private void BeginHorizontal() {
+			GUILayout.BeginHorizontal();
+		}
 
-        private bool Spoiler(string text) {
-            return GUILayout.Button(text, spoilerBtnStyle);
-        }
+		private void EndHorizontal() {
+			GUILayout.EndHorizontal();
+		}
 
-        private void BeginHorizontal() {
-            GUILayout.BeginHorizontal();
-        }
+		private float Slider(string name, float current, float min, float max, bool horizontal = true) {
+			if (horizontal) BeginHorizontal();
+			Label(name + ": " + current.ToString("0.00"));
+			float res = GUILayout.HorizontalSlider(current, min, max, sliderStyle, thumbStyle);
+			if (horizontal) EndHorizontal();
+			return res;
+		}
 
-        private void EndHorizontal() {
-            GUILayout.EndHorizontal();
-        }
+		private int SliderInt(string name, int current, int min, int max, bool horizontal = true) {
+			if (horizontal) BeginHorizontal();
+			Label(name + ": " + current);
+			float res = GUILayout.HorizontalSlider(current, min, max, sliderStyle, thumbStyle);
+			if (horizontal) EndHorizontal();
+			return Mathf.FloorToInt(res);
+		}
 
-        private float Slider(string name, float current, float min, float max, bool horizontal = true) {
-            if (horizontal) BeginHorizontal();
-            Label(name + ": " + current.ToString("0.00"));
-            float res = GUILayout.HorizontalSlider(current, min, max, sliderStyle, thumbStyle);
-            if (horizontal) EndHorizontal();
-            return res;
-        }
-
-        private int SliderInt(string name, int current, int min, int max, bool horizontal = true) {
-            if (horizontal) BeginHorizontal();
-            Label(name + ": " + current);
-            float res = GUILayout.HorizontalSlider(current, min, max, sliderStyle, thumbStyle);
-            if (horizontal) EndHorizontal();
-            return Mathf.FloorToInt(res);
-        }
-
-        #endregion
-    }
+		#endregion
+	}
 }

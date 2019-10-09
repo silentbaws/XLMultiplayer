@@ -6,6 +6,8 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using XLShredLib;
 
+//TODO: refactor all of this
+
 namespace XLMultiplayer {
 	// Token: 0x0200005D RID: 93
 	public class MultiplayerMenu : MonoBehaviour {
@@ -14,6 +16,11 @@ namespace XLMultiplayer {
 			if (ReplayEditor.ReplayEditorController.Instance == null) {
 				GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(true);
 				StartCoroutine(TurnOffReplay());
+			}
+			if(serverBrowser == null) {
+				GameObject g = new GameObject();
+				GameObject.DontDestroyOnLoad(g);
+				serverBrowser = g.AddComponent<ServerBrowser>();
 			}
 		}
 
@@ -132,11 +139,7 @@ namespace XLMultiplayer {
 
 			this.multiplayerMenuConnectButton.onClick.AddListener(delegate () {
 				if (this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient) {
-					if (this.multiplayerManagerObject == null) {
-						this.multiplayerManagerObject = new GameObject();
-						this.multiplayerManagerObject.transform.parent = this.transform;
-						this.multiplayerManager = this.multiplayerManagerObject.AddComponent<MultiplayerController>();
-					}
+					CreateMultiplayerManager();
 					this.multiplayerManager.ConnectToServer(ipAddress.Equals("IP Address") ? "127.0.0.1" : ipAddress, port.Equals("Port") ? 7777 : int.Parse(port), this.username);
 				} else if (this.multiplayerManagerObject != null) {
 					this.multiplayerManager.KillConnection();
@@ -166,6 +169,8 @@ namespace XLMultiplayer {
 
 		// Token: 0x06000449 RID: 1097 RVA: 0x0000533E File Offset: 0x0000353E
 		private void CloseMultiplayerMenu() {
+			serverBrowser.Close();
+
 			UnityEngine.Object.Destroy(this.multiplayerMenu);
 			UnityEngine.Object.Destroy(this.multiplayerMenuTextObject);
 			UnityEngine.Object.Destroy(this.multiplayerMenuConnectButton);
@@ -187,6 +192,23 @@ namespace XLMultiplayer {
 				port = GUI.TextField(rect2, port, 4);
 				Rect rect3 = new Rect(rect.x, rect.y + rect.height + 5, rect.width, rect.height);
 				username = GUI.TextField(rect3, username, 16);
+
+				if (this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient) {
+					Rect openBrowser = new Rect(rect.x, rect3.y + rect3.height + 5, rect.width, 40);
+					if (GUI.Button(openBrowser, "Open server browser")) {
+						if (!serverBrowser.showUI) {
+							serverBrowser.Open();
+						}
+					}
+				}
+			}
+		}
+
+		public void CreateMultiplayerManager() {
+			if (this.multiplayerManagerObject == null) {
+				this.multiplayerManagerObject = new GameObject();
+				this.multiplayerManagerObject.transform.parent = this.transform;
+				this.multiplayerManager = this.multiplayerManagerObject.AddComponent<MultiplayerController>();
 			}
 		}
 
@@ -224,7 +246,7 @@ namespace XLMultiplayer {
 		private Text multiplayerMenuConnectText;
 		private GameObject multiplayerMenuConnectTextObject;
 
-		private string username;
+		public string username { get; private set; }
 		private string ipAddress;
 		private string port;
 
@@ -235,5 +257,6 @@ namespace XLMultiplayer {
 		public GameObject multiplayerManagerObject;
 
 		public MultiplayerController multiplayerManager;
+		public ServerBrowser serverBrowser;
 	}
 }

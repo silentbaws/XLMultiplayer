@@ -510,10 +510,10 @@ namespace XLMultiplayer {
 		private string RemoveMarkup(string msg) {
 			string old;
 
-            do{
-                old = msg;
-                msg = Regex.Replace(msg.Trim(), "</?(?:b|i|color|size|material|quad)[^>]*>", "", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-            } while (msg.Equals(old));
+			do {
+				old = msg;
+				msg = Regex.Replace(msg.Trim(), "</?(?:b|i|color|size|material|quad)[^>]*>", "", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+			} while (msg.Equals(old));
 
 			return msg;
 		}
