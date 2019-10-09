@@ -43,7 +43,7 @@ namespace XLMultiplayer {
 			if (!Directory.Exists(path)) {
 				Directory.CreateDirectory(path);
 			}
-			File.WriteAllBytes(path + "\\" + t.ToString() + ".png", b);
+			File.WriteAllBytes(path + "\\" + t.ToString() + ".jpg", b);
 			saved = true;
 		}
 
@@ -78,9 +78,9 @@ namespace XLMultiplayer {
 				if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing"))
 					Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing");
 
-				File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png", file);
+				File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".jpg", file);
 
-				this.file = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".png";
+				this.file = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".jpg";
 				saved = true;
 				debugWriter.WriteLine("Saved texture in queue");
 			}
@@ -88,12 +88,12 @@ namespace XLMultiplayer {
 	}
 
 	public class MultiplayerFrameBufferObject {
-		public Vector3[] topHalfVectors = null;
-		public Quaternion[] topHalfQuaternions = null;
-		public Vector3[] bottomHalfVectors = null;
-		public Quaternion[] bottomHalfQuaternions = null;
+		public Vector3[] vectors = null;
+		public Quaternion[] quaternions = null;
 
 		public int animFrame = 0;
+
+		public bool key = false;
 
 		public float frameTime;
 		public float deltaTime = 0;
@@ -241,7 +241,7 @@ namespace XLMultiplayer {
 				RenderTexture.active = currentRT;
 			}
 
-			return texture2D == null ? new byte[1] { 0 } : texture2D.EncodeToPNG();
+			return texture2D == null ? new byte[1] { 0 } : texture2D.EncodeToJPG(80);
 		}
 
 		public void SetPlayerTexture(Texture tex, MPTextureType texType, bool useFull) {
@@ -604,78 +604,90 @@ namespace XLMultiplayer {
 			return packed;
 		}
 
-		public byte[] PackTransformInfoArray(ReplayEditor.TransformInfo[] T, int start) {
-			byte[] packed = new byte[T.Length * 14 - (start * 14)];
+		public byte[] PackTransformInfoArray(List<ReplayEditor.ReplayRecordedFrame> frames, int start, bool useKey) {
+			ReplayEditor.TransformInfo[] T = frames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count - 1].transformInfos;
+			ReplayEditor.TransformInfo[] TPrevious = frames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count - 2].transformInfos;
+
+			byte[] packed = new byte[useKey ? T.Length * 12 - (start * 12) : T.Length * 24 - (start * 24)];
 
 			for (int i = 0; i < T.Length - start; i++) {
-				Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].position.x)), 0, packed, i * 14, 2);
-				Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].position.y)), 0, packed, i * 14 + 2, 2);
-				Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].position.z)), 0, packed, i * 14 + 4, 2);
-				if (Quaternion.Angle(T[i + start].rotation, Quaternion.identity) < 0.01f) {
-					for(int c = 6; c < 14; c++) {
-						packed[i * 14 + c] = 0;
-					}
+				float x = useKey ? T[i + start].position.x : T[i + start].position.x - TPrevious[i + start].position.x;
+				float y = useKey ? T[i + start].position.y : T[i + start].position.y - TPrevious[i + start].position.y;
+				float z = useKey ? T[i + start].position.z : T[i + start].position.z - TPrevious[i + start].position.z;
+				
+				Vector3 rotationVec = T[i + start].rotation.eulerAngles;
+				Vector3 prevRotVec = TPrevious[i + start].rotation.eulerAngles;
+				float rx = useKey ? rotationVec.x : rotationVec.x - prevRotVec.x;
+				float ry = useKey ? rotationVec.y : rotationVec.y - prevRotVec.y;
+				float rz = useKey ? rotationVec.z : rotationVec.z - prevRotVec.z;
+
+				if(!useKey && GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
+					x = 0f;
+					y = 0f;
+					z = 0f;
+					rx = 0f;
+					ry = 0f;
+					rz = 0f;
+				}
+
+				if (!useKey) {
+					Array.Copy(BitConverter.GetBytes(x), 0, packed, i * 24, 4);
+					Array.Copy(BitConverter.GetBytes(y), 0, packed, i * 24 + 4, 4);
+					Array.Copy(BitConverter.GetBytes(z), 0, packed, i * 24 + 8, 4);
+
+					Array.Copy(BitConverter.GetBytes(rx), 0, packed, i * 24 + 12, 4);
+					Array.Copy(BitConverter.GetBytes(ry), 0, packed, i * 24 + 16, 4);
+					Array.Copy(BitConverter.GetBytes(rz), 0, packed, i * 24 + 20, 4);
 				} else {
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].rotation.x)), 0, packed, i * 14 + 6, 2);
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].rotation.y)), 0, packed, i * 14 + 8, 2);
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].rotation.z)), 0, packed, i * 14 + 10, 2);
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(T[i + start].rotation.w)), 0, packed, i * 14 + 12, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(x)), 0, packed, i * 12, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(y)), 0, packed, i * 12 + 2, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(z)), 0, packed, i * 12 + 4, 2);
+
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(rx)), 0, packed, i * 12 + 6, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(ry)), 0, packed, i * 12 + 8, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(rz)), 0, packed, i * 12 + 10, 2);
 				}
 			}
 
 			return packed;
 		}
 
-		System.Diagnostics.Stopwatch averageWatch = null;
-		bool timing = false;
-		double totalMS = 0;
-		int ticks = 0;
+		int framesSinceKey = 5;
 
 		public byte[] PackAnimator() {
-			if (!timing) {
-				timing = true;
-				averageWatch = System.Diagnostics.Stopwatch.StartNew();
+			framesSinceKey++;
+
+			bool useKey = false;
+
+			if (framesSinceKey >= 5) {
+				framesSinceKey = 0;
+				useKey = true;
 			}
-			var watch = System.Diagnostics.Stopwatch.StartNew();
-			//byte[][] packed = new byte[2][];
 
-			byte[] transforms = PackTransformInfoArray(ReplayEditor.ReplayRecorder.Instance.RecordedFrames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count - 1].transformInfos, 8);
-
-			byte[] packed = new byte[956];
-			//packed[0][0] = 0;
-			Array.Copy(transforms, 0, packed, 0, 952);
-			Array.Copy(BitConverter.GetBytes(ReplayEditor.ReplayRecorder.Instance.RecordedFrames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count-1].time), 0, packed, 952, 4);
-			//packed[0][957] = 0;
-
-			//packed[1] = new byte[954];
-			//packed[1][0] = 1;
-			//Array.Copy(transforms, 952, packed[1], 1, 952);
-			//packed[1][953] = 1;
-			watch.Stop();
-			if (averageWatch.ElapsedMilliseconds >= 5000 && averageWatch.IsRunning) {
-				double averageMS = totalMS / ticks;
-				debugWriter.WriteLine("Average function time of " + averageMS.ToString() + " over " + ticks + " ticks");
-				averageWatch.Stop();
-			}
-			totalMS += watch.Elapsed.TotalMilliseconds;
-			ticks++;
-			//debugWriter.WriteLine(watch.Elapsed.TotalMilliseconds);
+			byte[] transforms = PackTransformInfoArray(ReplayEditor.ReplayRecorder.Instance.RecordedFrames, 8, useKey);
+			
+			byte[] packed = new byte[transforms.Length + 5];
+			packed[0] = useKey ? (byte)1 : (byte)0;
+			Array.Copy(transforms, 0, packed, 1, transforms.Length);
+			Array.Copy(BitConverter.GetBytes(ReplayEditor.ReplayRecorder.Instance.RecordedFrames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count-1].time), 0, packed, transforms.Length + 1, 4);
+			
 			return packed;
 		}
 
 		public void UnpackAnimator(byte[] recBuffer) {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
 
-			byte[] buffer = new byte[recBuffer.Length - 4];
+			byte[] buffer = new byte[recBuffer.Length - 5];
 			if (receivedPacketSequence < currentAnimationPacket - 5) {
 				return;
 			} else {
-				Array.Copy(recBuffer, 4, buffer, 0, recBuffer.Length - 4);
+				Array.Copy(recBuffer, 5, buffer, 0, recBuffer.Length - 5);
 				currentAnimationPacket = receivedPacketSequence > currentAnimationPacket ? receivedPacketSequence : currentAnimationPacket;
 			}
 
 			MultiplayerFrameBufferObject currentBufferObject = new MultiplayerFrameBufferObject();
 
+			currentBufferObject.key = recBuffer[4] == (byte)1 ? true : false;
 			currentBufferObject.animFrame = receivedPacketSequence;
 			currentBufferObject.frameTime = BitConverter.ToSingle(buffer, buffer.Length - 4);
 
@@ -683,64 +695,37 @@ namespace XLMultiplayer {
 			List<Quaternion> quaternions = new List<Quaternion>();
 
 			for (int i = 0; i < 68; i++) {
-				Vector3 readVector = new Vector3();
-				bool zeroVector = true;
-				if(buffer[i * 14] == 0) {
-					for(int c = 0; c < 6; c++) {
-						if(buffer[i * 14 + c] != 0) {
-							zeroVector = false;
-							break;
-						}
-					}
-				} else {
-					zeroVector = false;
-				}
-				if (!zeroVector) {
-					readVector.x = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14));
-					readVector.y = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 2));
-					readVector.z = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 4));
-				} else {
-					readVector = Vector3.zero;
-				}
+				if (currentBufferObject.key) {
+					Vector3 readVector = new Vector3();
+					readVector.x = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12));
+					readVector.y = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 2));
+					readVector.z = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 4));
 
-				Quaternion readQuaternion = new Quaternion();
-				bool zeroQuaternion = true;
-				if (buffer[i * 14 + 6] == 0) {
-					for (int c = 6; c < 14; c++) {
-						if (buffer[i * 14 + c] != 0) {
-							zeroQuaternion = false;
-							break;
-						}
-					}
-				} else {
-					zeroQuaternion = false;
-				}
-				if (!zeroQuaternion) {
-					readQuaternion.x = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 6));
-					readQuaternion.y = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 8));
-					readQuaternion.z = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 10));
-					readQuaternion.w = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 14 + 12));
-				} else {
-					readQuaternion = Quaternion.identity;
-				}
+					Quaternion readQuaternion = new Quaternion();
+					readQuaternion.eulerAngles = new Vector3(SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 6)),
+													SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 8)),
+													SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 10)));
 
-				vectors.Add(readVector);
-				quaternions.Add(readQuaternion);
-			}
-			
-			currentBufferObject.topHalfVectors = new Vector3[34];
-			currentBufferObject.topHalfQuaternions = new Quaternion[34];
-			for (int i = 0; i < 34; i++) {
-				currentBufferObject.topHalfVectors[i] = vectors[i];
-				currentBufferObject.topHalfQuaternions[i] = quaternions[i];
+					vectors.Add(readVector);
+					quaternions.Add(readQuaternion);
+				} else {
+					Vector3 readVector = new Vector3();
+					readVector.x = BitConverter.ToSingle(buffer, i * 24);
+					readVector.y = BitConverter.ToSingle(buffer, i * 24 + 4);
+					readVector.z = BitConverter.ToSingle(buffer, i * 24 + 8);
+
+					Quaternion readQuaternion = new Quaternion();
+					readQuaternion.eulerAngles = new Vector3(BitConverter.ToSingle(buffer, i * 24 + 12),
+													BitConverter.ToSingle(buffer, i * 24 + 16),
+													BitConverter.ToSingle(buffer, i * 24 + 20));
+
+					vectors.Add(readVector);
+					quaternions.Add(readQuaternion);
+				}
 			}
 
-			currentBufferObject.bottomHalfVectors = new Vector3[34];
-			currentBufferObject.bottomHalfQuaternions = new Quaternion[34];
-			for (int i = 34; i < 68; i++) {
-				currentBufferObject.bottomHalfVectors[i - 34] = vectors[i];
-				currentBufferObject.bottomHalfQuaternions[i - 34] = quaternions[i];
-			}
+			currentBufferObject.vectors = vectors.ToArray();
+			currentBufferObject.quaternions = quaternions.ToArray();
 			
 			this.animationFrames.Add(currentBufferObject);
 			this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
@@ -749,7 +734,7 @@ namespace XLMultiplayer {
 		public void LerpNextFrame(bool recursive = false, float offset = 0) {
 			if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) return;
 			if (!startedAnimating && animationFrames.Count > 5) {
-				if (this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
+				if (this.animationFrames[0].vectors == null || !this.animationFrames[0].key) {
 					this.animationFrames.RemoveAt(0);
 					LerpNextFrame();
 				}
@@ -765,13 +750,8 @@ namespace XLMultiplayer {
 				startedAnimating = true;
 
 				for (int i = 0; i < 68; i++) {
-					if (i < 34) {
-						this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].topHalfVectors[i];
-						this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].topHalfQuaternions[i];
-					} else {
-						this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].bottomHalfVectors[i - 34];
-						this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].bottomHalfQuaternions[i - 34];
-					}
+					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].vectors[i];
+					this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].quaternions[i];
 				}
 
 				this.previousFrameTime = this.animationFrames[0].frameTime;
@@ -789,13 +769,13 @@ namespace XLMultiplayer {
 			if (this.animationFrames.Count >= 10) {
 				while (this.animationFrames.Count > 6) {
 					this.animationFrames.RemoveAt(0);
-					if (this.animationFrames[0].topHalfVectors != null) this.previousFrameTime = this.animationFrames[0].frameTime;
+					if (this.animationFrames[0].vectors != null) this.previousFrameTime = this.animationFrames[0].frameTime;
 					if (this.animationFrames.Count == 6) break;
 					//debugWriter.WriteLine("Removing frame currently still " + this.animationFrames.Count + " Frames behind");
 				}
 			}
 
-			if (this.animationFrames[0].topHalfVectors == null || this.animationFrames[0].bottomHalfVectors == null) {
+			if (this.animationFrames[0].vectors == null) {
 				this.animationFrames.RemoveAt(0);
 
 				//debugWriter.WriteLine("Skipping frame");
@@ -813,29 +793,26 @@ namespace XLMultiplayer {
 				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions, recursive ? offset : Time.unscaledDeltaTime);
 
 			for (int i = 0; i < 68; i++) {
-				if (i < 34) {
-					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].localPosition, this.animationFrames[0].topHalfVectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
-					this.hips.GetComponentsInChildren<Transform>()[i].localRotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].localRotation, this.animationFrames[0].topHalfQuaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
-				} else {
-					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].localPosition, this.animationFrames[0].bottomHalfVectors[i - 34], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
-					this.hips.GetComponentsInChildren<Transform>()[i].localRotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].localRotation, this.animationFrames[0].bottomHalfQuaternions[i - 34], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
-				}
+				this.hips.GetComponentsInChildren<Transform>()[i].localPosition = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].localPosition, this.animationFrames[0].vectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+				this.hips.GetComponentsInChildren<Transform>()[i].localRotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].localRotation, this.animationFrames[0].quaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
 			}
 
 			if (this.animationFrames[0].timeSinceStart >= this.animationFrames[0].deltaTime) {
 				for (int i = 0; i < 68; i++) {
-					if (i < 34) {
-						this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].topHalfVectors[i];
-						this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].topHalfQuaternions[i];
-					} else {
-						this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].bottomHalfVectors[i - 34];
-						this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].bottomHalfQuaternions[i - 34];
-					}
+					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].vectors[i];
+					this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].quaternions[i];
 				}
 
 				while (positionFrames.Count > 0 && positionFrames[0].positionFrame <= animationFrames[0].animFrame) {
 					LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions, 9999999);
 					positionFrames.RemoveAt(0);
+				}
+
+				if (!this.animationFrames[1].key) {
+					for(int i = 0; i < 68; i++) {
+						this.animationFrames[1].vectors[i] = this.animationFrames[0].vectors[i] + this.animationFrames[1].vectors[i];
+						this.animationFrames[1].quaternions[i].eulerAngles = this.animationFrames[0].quaternions[i].eulerAngles + this.animationFrames[1].quaternions[i].eulerAngles;
+					}
 				}
 
 				//debugWriter.WriteLine("Next frame currently " + this.animationFrames.Count + " frames delayed, called recursively: " + recursive.ToString() + " offset: " + offset.ToString() + " frame time: " + this.animationFrames[0].deltaTime);

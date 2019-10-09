@@ -255,7 +255,7 @@ namespace XLMultiplayer {
 			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.pantsMP.size.y), 0, prebuffer, 10, 4);
 			prebuffer[14] = 0;
-			client.tcpConnection.SendFile(path + "Pants.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			client.tcpConnection.SendFile(path + "Pants.jpg", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
 			prebuffer = new byte[15];
 			Array.Copy(BitConverter.GetBytes(this.ourController.shirtMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
@@ -271,7 +271,7 @@ namespace XLMultiplayer {
 				}
 			}
 			prebuffer[14] = useHoodie ? (byte)1 : (byte)0;
-			client.tcpConnection.SendFile(path + "Shirt.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			client.tcpConnection.SendFile(path + "Shirt.jpg", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
 			prebuffer = new byte[15];
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
@@ -280,7 +280,7 @@ namespace XLMultiplayer {
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.shoesMP.size.y), 0, prebuffer, 10, 4);
 			prebuffer[14] = 0;
-			client.tcpConnection.SendFile(path + "Shoes.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			client.tcpConnection.SendFile(path + "Shoes.jpg", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
 			prebuffer = new byte[15];
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
@@ -289,7 +289,7 @@ namespace XLMultiplayer {
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.boardMP.size.y), 0, prebuffer, 10, 4);
 			prebuffer[14] = 0;
-			client.tcpConnection.SendFile(path + "Board.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			client.tcpConnection.SendFile(path + "Board.jpg", prebuffer, null, TransmitFileOptions.UseSystemThread);
 
 			prebuffer = new byte[15];
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.bytes.Length + prebuffer.Length - 4), 0, prebuffer, 0, 4);
@@ -298,7 +298,7 @@ namespace XLMultiplayer {
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.x), 0, prebuffer, 6, 4);
 			Array.Copy(BitConverter.GetBytes(this.ourController.hatMP.size.y), 0, prebuffer, 10, 4);
 			prebuffer[14] = 0;
-			client.tcpConnection.SendFile(path + "Hat.png", prebuffer, null, TransmitFileOptions.UseSystemThread);
+			client.tcpConnection.SendFile(path + "Hat.jpg", prebuffer, null, TransmitFileOptions.UseSystemThread);
 		}
 
 		private void AddPlayer(byte playerID) {

@@ -119,6 +119,8 @@ namespace XLMultiplayer {
 		}
 
 		long animDataSent = 0;
+		int largestPacket = 0;
+		int packetsSinceDebug = 0;
 
 		public void SendUnreliable(byte[] buffer, OpCode opCode) {
 			try {
@@ -134,15 +136,21 @@ namespace XLMultiplayer {
 
 				Array.Copy(packetData, 0, packet, 5, packetData.Length);
 
+				largestPacket = Math.Max(largestPacket, packet.Length);
+
 				udpConnection.Send(packet, packet.Length);
 
-				if(opCode == OpCode.Position) {
+				if (opCode == OpCode.Position) {
 					positionPackets++;
 				} else {
+					packetsSinceDebug++;
 					animationPackets++;
 					animDataSent += packet.Length;
 					float average = animDataSent / animationPackets;
-					debugWriter.WriteLine(opCode.ToString() + " average packet data length " + average + " current packet " + buffer.Length.ToString() + " uncompressed, " + packet.Length + " compressed");
+					if (packetsSinceDebug > 300) {
+						debugWriter.WriteLine(opCode.ToString() + " average packet data length " + average + " largest packet " + largestPacket.ToString() + " current packet " + buffer.Length.ToString() + " uncompressed, " + packet.Length + " compressed");
+						packetsSinceDebug = 0;
+					}
 				}
 			} catch (Exception e) {
 				debugWriter.WriteLine(e.ToString());
