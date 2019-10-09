@@ -508,55 +508,14 @@ namespace XLMultiplayer {
 		}
 
 		private string RemoveMarkup(string msg) {
-			string old = msg;
-			msg = msg.Trim();
-			msg = Regex.Replace(msg, "<b>", "", RegexOptions.IgnoreCase);
-			msg = Regex.Replace(msg, "<i>", "", RegexOptions.IgnoreCase);
-			msg = Regex.Replace(msg, "</b>", "", RegexOptions.IgnoreCase);
-			msg = Regex.Replace(msg, "</i>", "", RegexOptions.IgnoreCase);
-			msg = Regex.Replace(msg, "</color>", "", RegexOptions.IgnoreCase);
-			msg = Regex.Replace(msg, "</size>", "", RegexOptions.IgnoreCase);
-			msg = Regex.Replace(msg, "</material>", "", RegexOptions.IgnoreCase);
+			string old;
 
-			int startIndex = msg.IndexOf("<size", StringComparison.CurrentCultureIgnoreCase);
+            do{
+                old = msg;
+                msg = Regex.Replace(msg.Trim(), "</?(?:b|i|color|size|material|quad)[^>]*>", "", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+            } while (msg.Equals(old));
 
-			if (startIndex >= 0) {
-				int endIndex = msg.IndexOf(">", startIndex);
-
-				if (endIndex != -1)
-					msg = msg.Remove(startIndex, endIndex - startIndex + 1);
-			}
-
-			startIndex = msg.IndexOf("<color", StringComparison.CurrentCultureIgnoreCase);
-
-			if (startIndex >= 0) {
-				int endIndex = msg.IndexOf(">", startIndex);
-
-				if (endIndex != -1)
-					msg = msg.Remove(startIndex, endIndex - startIndex + 1);
-			}
-
-			startIndex = msg.IndexOf("<material", StringComparison.CurrentCultureIgnoreCase);
-
-			if (startIndex >= 0) {
-				int endIndex = msg.IndexOf(">", startIndex);
-
-				if (endIndex != -1)
-					msg = msg.Remove(startIndex, endIndex - startIndex + 1);
-			}
-
-			startIndex = msg.IndexOf("<quad", StringComparison.CurrentCultureIgnoreCase);
-
-			if (startIndex >= 0) {
-				int endIndex = msg.IndexOf(">", startIndex);
-				if(endIndex != -1)
-					msg = msg.Remove(startIndex, endIndex - startIndex + 1);
-			}
-
-			if (msg.Equals(old))
-				return msg;
-			else
-				return RemoveMarkup(msg);
+			return msg;
 		}
 	}
 }
