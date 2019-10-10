@@ -5,6 +5,7 @@ using Harmony12;
 using System.Reflection.Emit;
 using System.Collections.Generic;
 using System.Reflection;
+using UnityEngine.SceneManagement;
 
 namespace XLMultiplayer
 {

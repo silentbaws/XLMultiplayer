@@ -14,7 +14,6 @@ namespace XLMultiplayer {
 
 		// GUI stuff
 		public bool showUI { get; private set; }
-		private GameObject master;
 		private bool setUp;
 		private Rect windowRect = new Rect(300f, 50f, 300f, 400f);
 		private GUIStyle windowStyle;
@@ -37,58 +36,61 @@ namespace XLMultiplayer {
 			log("Started requesting servers");
 
 			while (true) {
-				log("Requesting servers");
+				if (showUI) {
+					log("Requesting servers");
 
-				UnityWebRequest www = UnityWebRequest.Get(mainServer);
-				yield return www.SendWebRequest();
+					UnityWebRequest www = UnityWebRequest.Get(mainServer);
+					yield return www.SendWebRequest();
 
-				if (www.isNetworkError || www.isHttpError) {
-					log($"Error getting servers: {www.error}");
-				}
-				else {
-					var responseString = www.downloadHandler.text;
-					responseString = responseString.Remove(0, 1).Remove(responseString.Length - 2, 1).Replace("\\\"", "\"");
+					if (www.isNetworkError || www.isHttpError) {
+						log($"Error getting servers: {www.error}");
+					} else {
+						var responseString = www.downloadHandler.text;
+						responseString = responseString.Remove(0, 1).Remove(responseString.Length - 2, 1).Replace("\\\"", "\"");
 
-					log($"response: '{responseString}'");
-					
-					JArray a = JArray.Parse(responseString);
+						log($"response: '{responseString}'");
 
-					servers.Clear();
-					foreach (JObject o in a.Children<JObject>()) {
-						foreach (JProperty p in o.Properties()) {
-							if(p.Name == "fields") {
-								Server newServer = new Server();
-								foreach(JObject o2 in p.Children<JObject>()) {
-									foreach(JProperty p2 in o2.Properties()) {
-										switch (p2.Name) {
-											case "name":
-												newServer.name = (string)p2.Value;
-												break;
-											case "IP":
-												newServer.ip = (string)p2.Value;
-												break;
-											case "port":
-												newServer.port = (string)p2.Value;
-												break;
-											case "version":
-												newServer.version = (string)p2.Value;
-												break;
-											case "maxPlayers":
-												newServer.playerMax = (int)p2.Value;
-												break;
-											case "currentPlayers":
-												newServer.playerCurrent = (int)p2.Value;
-												break;
+						JArray a = JArray.Parse(responseString);
+
+						servers.Clear();
+						foreach (JObject o in a.Children<JObject>()) {
+							foreach (JProperty p in o.Properties()) {
+								if (p.Name == "fields") {
+									Server newServer = new Server();
+									foreach (JObject o2 in p.Children<JObject>()) {
+										foreach (JProperty p2 in o2.Properties()) {
+											switch (p2.Name) {
+												case "name":
+													newServer.name = (string)p2.Value;
+													break;
+												case "IP":
+													newServer.ip = (string)p2.Value;
+													break;
+												case "port":
+													newServer.port = (string)p2.Value;
+													break;
+												case "version":
+													newServer.version = (string)p2.Value;
+													break;
+												case "maxPlayers":
+													newServer.playerMax = (int)p2.Value;
+													break;
+												case "currentPlayers":
+													newServer.playerCurrent = (int)p2.Value;
+													break;
+											}
 										}
 									}
+									servers.Add(newServer);
 								}
-								servers.Add(newServer);
 							}
 						}
 					}
-				}
 
-				yield return new WaitForSeconds(30);
+					yield return new WaitForSeconds(30);
+				} else {
+					yield return new WaitForSeconds(1);
+				}
 			}
 		}
 

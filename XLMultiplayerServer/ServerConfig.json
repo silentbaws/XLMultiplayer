@@ -1,5 +1,7 @@
 ﻿{
   "Max_Players": 5,
   "Port": 7777,
-  "Server_Name":  "Hello Test Server"
+  "Server_Name": "Hello Test Server",
+  "Enforce_Map": true,
+  "API_Key": ""
 }

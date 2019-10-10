@@ -6,6 +6,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -17,6 +18,9 @@ public enum OpCode : byte {
 	Texture = 4,
 	Chat = 5,
 	VersionNumber = 6,
+	MapHash = 7,
+	MapVote = 8,
+	MapList = 9,
 	StillAlive = 254,
 	Disconnect = 255
 }
@@ -115,6 +119,23 @@ public class MultiplayerSkin {
 	}
 }
 
+public class CurrentMap {
+	public static string name = "California Skatepark";
+	public static string hash = "1";
+
+	public static byte[] GetMapBytes() {
+		byte[] value = new byte[name.Length + hash.Length + 13];
+
+		Array.Copy(BitConverter.GetBytes(value.Length - 4), 0, value, 0, 4);
+		value[4] = (byte)OpCode.MapHash;
+		Array.Copy(BitConverter.GetBytes(name.Length), 0, value, 5, 4);
+		Array.Copy(ASCIIEncoding.ASCII.GetBytes(name), 0, value, 9, name.Length);
+		Array.Copy(BitConverter.GetBytes(hash.Length), 0, value, 9 + name.Length, 4);
+		Array.Copy(ASCIIEncoding.ASCII.GetBytes(hash), 0, value, 9 + name.Length + 4, hash.Length);
+
+		return value;
+	}
+}
 
 public class ServerConfig {
 	[JsonProperty("Max_Players")]
@@ -123,6 +144,10 @@ public class ServerConfig {
 	public static int PORT;
 	[JsonProperty("Server_Name")]
 	public static string SERVER_NAME;
+	[JsonProperty("Enforce_Map")]
+	public static bool ENFORCE_MAP;
+	[JsonProperty("API_Key")]
+	public static string API_KEY;
 }
 
 public class Server {
@@ -134,7 +159,11 @@ public class Server {
 
 	public static UdpClient udpClient;
 
-	const string versionNumber = "0.4.3";
+	const string versionNumber = "0.5.0";
+
+	public static Dictionary<string, string> mapList;
+
+	public static byte[] mapListBytes;
 
 	public class StateObject {
 		public Socket workSocket = null;
@@ -321,6 +350,8 @@ public class Server {
 												client.SendReliable(buffer);
 											}
 										}
+
+										client.SendReliable(Server.mapListBytes);
 									}
 									break;
 								case OpCode.Chat:
@@ -381,6 +412,34 @@ public class Server {
 		BeginReceivingUDP();
 	}
 
+	public static byte[] GetMapList() {
+		List<byte> mapListBytes = new List<byte>();
+
+		mapListBytes.AddRange(new byte[] { 0, 0, 0, 0 });
+		mapListBytes.Add((byte)OpCode.MapList);
+
+		foreach (var item in mapList) {
+			byte[] hashLength = BitConverter.GetBytes(item.Key.Length);
+			byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(item.Key);
+			byte[] nameLength = BitConverter.GetBytes(item.Value.Length);
+			byte[] nameBytes = ASCIIEncoding.ASCII.GetBytes(item.Value);
+
+			mapListBytes.AddRange(hashLength);
+			mapListBytes.AddRange(hashBytes);
+			mapListBytes.AddRange(nameLength);
+			mapListBytes.AddRange(nameBytes);
+		}
+
+		byte[] mapListLength = BitConverter.GetBytes(mapListBytes.Count - 4);
+
+		mapListBytes[0] = mapListLength[0];
+		mapListBytes[1] = mapListLength[1];
+		mapListBytes[2] = mapListLength[2];
+		mapListBytes[3] = mapListLength[3];
+
+		return mapListBytes.ToArray();
+	}
+
 	public void StartListening() {
 		try {
 			Console.WriteLine("Started listening on game server");
@@ -395,7 +454,7 @@ public class Server {
 
 	public async void StartAnnouncing() {
 		var client = new HttpClient();
-		while (true) {
+		while (true && ServerConfig.API_KEY != "") {
 			try {
 				int currentPlayers = 0;
 				foreach(Client c in clients) {
@@ -533,13 +592,51 @@ public class Server {
 		}
 	}
 
+	static string CalculateMD5(string filename) {
+		using (var md5 = MD5.Create()) {
+			using (var stream = File.OpenRead(filename)) {
+				var hash = md5.ComputeHash(stream);
+				return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+			}
+		}
+	}
+
 	public static int Main(String[] args) {
+		string sep = Path.DirectorySeparatorChar.ToString();
 		JsonConvert.DeserializeObject<ServerConfig>(File.ReadAllText(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json"));
 
-		Console.WriteLine("Creating game server on port {0}, with a maximum of {1} players", ServerConfig.PORT, ServerConfig.MAX_PLAYERS);
+		Console.WriteLine("Creating game server on port {0}, with a maximum of {1} players. Enforcing maps is {2}", ServerConfig.PORT, ServerConfig.MAX_PLAYERS, ServerConfig.ENFORCE_MAP);
 
 		clients = new Client[ServerConfig.MAX_PLAYERS];
 		players = new Player[ServerConfig.MAX_PLAYERS];
+
+		if (ServerConfig.ENFORCE_MAP) {
+			Server.mapList = new Dictionary<string, string>();
+
+			mapList.Add("0", "Courthouse");
+			mapList.Add("1", "California Skatepark");
+
+			if(Directory.Exists(Directory.GetCurrentDirectory() + sep + "Maps")) {
+				string[] files = Directory.GetFiles(Directory.GetCurrentDirectory() + sep + "Maps");
+				if(files.Length < 1) {
+					Console.WriteLine("\nWARNING\nWARNING: FAILED TO FIND ANY CUSTOM MAPS IN THE MAPS DIRECTORY ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\nWARNING\n");
+				} else {
+					Console.WriteLine("Begin hashing maps\n");
+					foreach (string file in files) {
+						string hash = CalculateMD5(file);
+						Server.mapList.Add(hash, Path.GetFileName(file));
+						Console.WriteLine("Adding map: " + Path.GetFileName(file) + "    with hash: " + hash + "     to servers map list\n");
+					}
+					Console.WriteLine("Finished hashing maps");
+					mapListBytes = Server.GetMapList();
+				}
+			} else {
+				Console.WriteLine("Failed to find Directory " + Directory.GetCurrentDirectory() + sep + "Maps");
+				Console.Write("Press any key to close the server...");
+				Console.In.Read();
+				return 0;
+			}
+		}
 
 		Server server = new Server(ServerConfig.PORT);
 		while (true) {
@@ -550,27 +647,6 @@ public class Server {
 					client.ReceiveTCP.Disconnect(client.timedOut);
 				}
 			}
-
-			//int i = 0;
-			//foreach(Client client in clients) {
-			//	if (client != null) {
-			//		if (client.reliableSocket == null || client.aliveWatch == null || client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 5000 || client.timedOut || client.ReceiveTCP == null) {
-			//			if (client.ReceiveTCP != null && client.reliableSocket != null && client.reliableSocket.Connected) {
-			//				Console.WriteLine("Disconnecting cunt {0}", i);
-			//				client.reliableSocket.Disconnect(false);
-			//			} else {
-			//				Console.WriteLine("Setting player {0} to null", i);
-			//				if (client.reliableSocket != null) {
-			//					try { client.reliableSocket.Close(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-			//					clients[i] = null;
-			//					players[i] = null;
-			//					break;
-			//				}
-			//			}
-			//		}
-			//	}
-			//	i++;
-			//}
 
 			foreach (Client client in clients) {
 				if (client != null && client.newConnection && client.reliableSocket.Connected) {

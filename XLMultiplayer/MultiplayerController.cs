@@ -13,7 +13,7 @@ using System.Text.RegularExpressions;
 using System.Collections;
 
 namespace XLMultiplayer {
-	public enum OpCode : byte{
+	public enum OpCode : byte {
 		Connect = 0,
 		Settings = 1,
 		Position = 2,
@@ -21,6 +21,9 @@ namespace XLMultiplayer {
 		Texture = 4,
 		Chat = 5,
 		VersionNumber = 6,
+		MapHash = 7,
+		MapVote = 8,
+		MapList = 9,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -46,7 +49,7 @@ namespace XLMultiplayer {
 	public class MultiplayerController : MonoBehaviour {
 		public bool runningClient = false;
 
-		public static byte tickRate = 32;
+		public static byte tickRate = 30;
 
 		public MultiplayerPlayerController ourController;
 		public List<MultiplayerPlayerController> otherControllers = new List<MultiplayerPlayerController>();
@@ -61,12 +64,6 @@ namespace XLMultiplayer {
 		public Thread aliveThread;
 
 		public bool isConnected = false;
-
-		public static RuntimeAnimatorController goofyAnim = Traverse.Create(SettingsManager.Instance).Field("_goofyAnim").GetValue<RuntimeAnimatorController>();
-		public static RuntimeAnimatorController regularAnim = Traverse.Create(SettingsManager.Instance).Field("_regularAnim").GetValue<RuntimeAnimatorController>();
-		public static RuntimeAnimatorController goofySteezeAnim = Traverse.Create(SettingsManager.Instance).Field("_goofySteezeAnim").GetValue<RuntimeAnimatorController>();
-		public static RuntimeAnimatorController regularSteezeAnim = Traverse.Create(SettingsManager.Instance).Field("_regularSteezeAnim").GetValue<RuntimeAnimatorController>();
-
 		List<float> previousFrameTimes = new List<float> ();
 
 		public static List<string> chatMessages = new List<string>();
@@ -165,7 +162,21 @@ namespace XLMultiplayer {
 					debugWriter.WriteLine(parent.name);
 					parent = parent.parent;
 				}
+
+				//Load map with path
+				//LevelSelectionController levelSelectionController = GameManagement.GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
+				//GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(true);
+				//levelSelectionController.StartCoroutine(levelSelectionController.LoadLevel(levelSelectionController.CustomLevels.Find(l => l.path.Equals("C:\\Users\\davisellwood\\Documents\\SkaterXL\\Maps\\Industrial Zone by Jean-Olive v2"))));
+				//StartCoroutine(CloseAfterLoad());
 			}
+		}
+
+		private IEnumerator CloseAfterLoad() {
+			while (GameManagement.GameStateMachine.Instance.IsLoading) {
+				yield return new WaitForEndOfFrame();
+			}
+			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(false);
+			yield break;
 		}
 
 		private void UpdateClient() {
