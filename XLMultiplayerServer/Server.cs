@@ -10,6 +10,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
+//TODO: Refactor all of this, it's really bad
+//TODO: Refactor the whole mod tbh it's a dumpster fire rn
+
 public enum OpCode : byte {
 	Connect = 0,
 	Settings = 1,
@@ -124,14 +127,13 @@ public class CurrentMap {
 	public static string hash = "1";
 
 	public static byte[] GetMapBytes() {
-		byte[] value = new byte[name.Length + hash.Length + 13];
-
-		Array.Copy(BitConverter.GetBytes(value.Length - 4), 0, value, 0, 4);
-		value[4] = (byte)OpCode.MapHash;
-		Array.Copy(BitConverter.GetBytes(name.Length), 0, value, 5, 4);
-		Array.Copy(ASCIIEncoding.ASCII.GetBytes(name), 0, value, 9, name.Length);
-		Array.Copy(BitConverter.GetBytes(hash.Length), 0, value, 9 + name.Length, 4);
-		Array.Copy(ASCIIEncoding.ASCII.GetBytes(hash), 0, value, 9 + name.Length + 4, hash.Length);
+		byte[] value = new byte[name.Length + hash.Length + 9];
+		
+		value[0] = (byte)OpCode.MapHash;
+		Array.Copy(BitConverter.GetBytes(name.Length), 0, value, 1, 4);
+		Array.Copy(ASCIIEncoding.ASCII.GetBytes(name), 0, value, 5, name.Length);
+		Array.Copy(BitConverter.GetBytes(hash.Length), 0, value, 5 + name.Length, 4);
+		Array.Copy(ASCIIEncoding.ASCII.GetBytes(hash), 0, value, 5 + name.Length + 4, hash.Length);
 
 		return value;
 	}
@@ -186,6 +188,8 @@ public class Server {
 		public long lastAlive = 0;
 		public Stopwatch aliveWatch;
 		public Stopwatch versionWatch;
+
+		public string currentVote = "current";
 
 		public bool timedOut = false;
 
@@ -351,13 +355,20 @@ public class Server {
 											}
 										}
 
-										client.SendReliable(Server.mapListBytes);
+										if (ServerConfig.ENFORCE_MAP) {
+											client.SendReliable(CurrentMap.GetMapBytes());
+											client.SendReliable(Server.mapListBytes);
+										}
 									}
 									break;
 								case OpCode.Chat:
 									Console.WriteLine("Chat Message");
 									if (state.buffer.Length != 1)
 										SendToAllTCP(state.buffer, client.connectionId);
+									break;
+								case OpCode.MapVote:
+									string mapHash = ASCIIEncoding.ASCII.GetString(state.buffer, 1, state.buffer.Length - 1);
+									client.currentVote = mapHash;
 									break;
 							}
 
@@ -414,8 +425,7 @@ public class Server {
 
 	public static byte[] GetMapList() {
 		List<byte> mapListBytes = new List<byte>();
-
-		mapListBytes.AddRange(new byte[] { 0, 0, 0, 0 });
+		
 		mapListBytes.Add((byte)OpCode.MapList);
 
 		foreach (var item in mapList) {
@@ -430,14 +440,21 @@ public class Server {
 			mapListBytes.AddRange(nameBytes);
 		}
 
-		byte[] mapListLength = BitConverter.GetBytes(mapListBytes.Count - 4);
-
-		mapListBytes[0] = mapListLength[0];
-		mapListBytes[1] = mapListLength[1];
-		mapListBytes[2] = mapListLength[2];
-		mapListBytes[3] = mapListLength[3];
-
 		return mapListBytes.ToArray();
+	}
+
+	private static void ChangeMap(string hash) {
+		if (hash != "current") {
+			CurrentMap.hash = hash;
+			CurrentMap.name = mapList[hash];
+		}
+
+		foreach (Client client in clients) {
+			if (client != null) {
+				client.currentVote = "current";
+				if(hash != "current") client.SendReliable(CurrentMap.GetMapBytes());
+			}
+		}
 	}
 
 	public void StartListening() {
@@ -601,6 +618,9 @@ public class Server {
 		}
 	}
 
+	private static bool votingInitialized = false;
+	private static Stopwatch votingTimer = new Stopwatch();
+
 	public static int Main(String[] args) {
 		string sep = Path.DirectorySeparatorChar.ToString();
 		JsonConvert.DeserializeObject<ServerConfig>(File.ReadAllText(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json"));
@@ -636,10 +656,54 @@ public class Server {
 				Console.In.Read();
 				return 0;
 			}
+		} else {
+			CurrentMap.name = "No set map";
+			CurrentMap.hash = "-1";
 		}
 
 		Server server = new Server(ServerConfig.PORT);
 		while (true) {
+			int currentPlayers = 0;
+			int votesForMapChange = 0;
+			if (!votingInitialized) {
+				foreach(Client client in clients) {
+					if(client != null) {
+						currentPlayers++;
+						if(!client.currentVote.Equals("current", StringComparison.CurrentCultureIgnoreCase)) {
+							votesForMapChange++;
+						}
+					}
+				}
+				if(votesForMapChange > Math.Floor(currentPlayers / 2f)) {
+					votingInitialized = true;
+					votingTimer.Restart();
+					SendToAllTCP(new byte[] { (byte)OpCode.MapVote }, 255);
+				}
+			} else {
+				if(votingTimer.ElapsedMilliseconds > 30000) {
+					votingInitialized = false;
+					List<Tuple<string, int>> votes = new List<Tuple<string, int>>();
+					foreach(Client client in clients) {
+						if(client != null) {
+							int index = votes.FindIndex(vote => vote.Item1.Equals(client.currentVote));
+							if(index != -1) {
+								votes[index] = Tuple.Create(votes[index].Item1, votes[index].Item2 + 1);
+							} else {
+								if (client.currentVote != "current") votes.Add(Tuple.Create(client.currentVote, 1));
+							}
+						}
+					}
+
+					int topVoteIndex = 0;
+					for (int i = 1; i < votes.Count; i++) {
+						if(votes[i].Item2 > votes[topVoteIndex].Item2) {
+							topVoteIndex = i;
+						}
+					}
+
+					ChangeMap(votes[topVoteIndex].Item1);
+				}
+			}
 
 			foreach (Client client in clients) {
 				if (client != null && (client.aliveWatch.ElapsedMilliseconds - client.lastAlive > 10000 || (client.versionWatch != null && client.versionWatch.ElapsedMilliseconds > 5000 && !client.receivedVersion))) {

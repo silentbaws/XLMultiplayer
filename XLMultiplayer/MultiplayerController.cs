@@ -72,8 +72,8 @@ namespace XLMultiplayer {
 		}
 
 		private void Update() {
-			if (Input.GetKeyDown(KeyCode.F5)) {
-
+			if(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0) {
+				GameManagement.GameStateMachine.Instance.RequestPauseState();
 			}
 
 			if(previousFrameTimes.Count == 0)
@@ -93,7 +93,7 @@ namespace XLMultiplayer {
 
 			if (client == null) return;
 
-			if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 + previousFrameTimes.Max() && ((IsInvoking("SendUpdate") && !Application.isLoadingLevel && textureQueue.Count == 0) || !client.tcpConnection.Connected)) {
+			if (client.elapsedTime.ElapsedMilliseconds - client.lastAlive > 5000 + previousFrameTimes.Max() && ((IsInvoking("SendUpdate") && textureQueue.Count == 0) || !client.tcpConnection.Connected)) {
 				bool loadedAll = true;
 				foreach (MultiplayerPlayerController controller in this.otherControllers) {
 					if (!controller.shirtMP.loaded) {
@@ -153,6 +153,8 @@ namespace XLMultiplayer {
 				this.ourController.username = user;
 				this.runningClient = true;
 
+				MultiplayerUtils.serverMapDictionary.Clear();
+
 				client = new NetworkClient(serverIP, port, this, this.debugWriter);
 
 				FullBodyBipedIK biped = Traverse.Create(PlayerController.Instance.ikController).Field("_finalIk").GetValue<FullBodyBipedIK>();
@@ -162,13 +164,30 @@ namespace XLMultiplayer {
 					debugWriter.WriteLine(parent.name);
 					parent = parent.parent;
 				}
-
-				//Load map with path
-				//LevelSelectionController levelSelectionController = GameManagement.GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
-				//GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(true);
-				//levelSelectionController.StartCoroutine(levelSelectionController.LoadLevel(levelSelectionController.CustomLevels.Find(l => l.path.Equals("C:\\Users\\davisellwood\\Documents\\SkaterXL\\Maps\\Industrial Zone by Jean-Olive v2"))));
-				//StartCoroutine(CloseAfterLoad());
 			}
+		}
+
+		public void StartLoadMap(string path) {
+			this.StartCoroutine(LoadMap(path));
+		}
+
+		public IEnumerator LoadMap(string path) {
+			while (!IsInvoking("SendUpdate")) {
+				yield return new WaitForEndOfFrame();
+			}
+			//Load map with path
+			LevelSelectionController levelSelectionController = GameManagement.GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
+			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(true);
+			LevelInfo target = levelSelectionController.Levels.Find(level => level.path.Equals(path));
+			if(target == null) {
+				target = levelSelectionController.CustomLevels.Find(level => level.path.Equals(path));
+			}
+			if(target == null) {
+				Main.statusMenu.DisplayNoMap(path);
+			}
+			levelSelectionController.StartCoroutine(levelSelectionController.LoadLevel(target));
+			StartCoroutine(CloseAfterLoad());
+			yield break;
 		}
 
 		private IEnumerator CloseAfterLoad() {
@@ -415,7 +434,7 @@ namespace XLMultiplayer {
 					debugWriter.WriteLine("Processing settings from {0}", playerID);
 					foreach (MultiplayerPlayerController controller in otherControllers) {
 						if (controller.playerID == playerID) {
-							controller.username = Encoding.ASCII.GetString(newBuffer, 1, newBuffer.Length - 1);
+							controller.username = ASCIIEncoding.ASCII.GetString(newBuffer, 1, newBuffer.Length - 1);
 							debugWriter.WriteLine(controller.username);
 							MultiplayerController.chatMessages.Add("Player <color=\"yellow\">" + controller.username + "{" + controller.playerID + "}</color> <b><color=\"green\">CONNECTED</color></b>");
 						}
@@ -505,7 +524,7 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
+		public void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
 			if (!reliable) {
 				client.SendUnreliable(msg, opCode);
 			}else if(reliable && client.tcpConnection.Connected) {

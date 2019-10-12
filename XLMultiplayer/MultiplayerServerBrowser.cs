@@ -78,6 +78,9 @@ namespace XLMultiplayer {
 												case "currentPlayers":
 													newServer.playerCurrent = (int)p2.Value;
 													break;
+												case "mapName":
+													newServer.mapName = (string)p2.Value;
+													break;
 											}
 										}
 									}
@@ -114,7 +117,7 @@ namespace XLMultiplayer {
 
 				foreach (var s in servers) {
 					Label($"<b>{s.name}  v{s.version}</b>\n", title);
-					Label($"<b>IP:</b> {s.ip}      <b>port:</b> {s.port}      <b>players:</b> {s.playerCurrent}/{s.playerMax}", center);
+					Label($"<b>IP:</b> {s.ip}      <b>port:</b> {s.port}\n<b>map: {s.mapName}      </b><b>players:</b> {s.playerCurrent}/{s.playerMax}", center);
 					if (Button($"Connect with username \"{Main.menu.username}\"")) {
 						this.Close();
 						Main.menu.CreateMultiplayerManager();
@@ -142,6 +145,7 @@ namespace XLMultiplayer {
 			public string ip;
 			public string port;
 			public string version;
+			public string mapName;
 			public int playerMax;
 			public int playerCurrent;
 		}

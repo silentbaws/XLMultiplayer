@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Text;
 
 namespace XLMultiplayer {
 	class MultiplayerStatusMenu : MonoBehaviour {
@@ -43,6 +44,17 @@ namespace XLMultiplayer {
 		bool displayInvalidVersion = false;
 		string serverVersion = "";
 
+		float invalidMapTimer = 0.0f;
+		bool displayInvalidMap = false;
+		string serverMap = "";
+
+		bool showVoteMenu = false;
+		Vector2 scrollPosition = Vector2.zero;
+		Rect mapVoteRect = new Rect(20, 10, 250, 420);
+
+		bool showMapVote = false;
+		Stopwatch voteWatch = new Stopwatch();
+
 		public void Start() {
 			InitializeMenu();
 
@@ -54,6 +66,12 @@ namespace XLMultiplayer {
 			colorTexture.SetPixel(0, 0, new Color(1, 1, 1, 1));
 
 			colorTexture.Apply();
+		}
+
+		public void OnDestroy() {
+			UnityEngine.Object.Destroy(statusCanvas);
+			UnityEngine.Object.Destroy(connectedTexture);
+			UnityEngine.Object.Destroy(disconnectedTexture);
 		}
 
 		public void InitializeMenu() {
@@ -107,12 +125,33 @@ namespace XLMultiplayer {
 				showStatus = !showStatus;
 			}
 
+			if (Input.GetKeyDown(KeyCode.M)) {
+				showVoteMenu = !showVoteMenu;
+				if(showVoteMenu)
+					XLShredLib.ModMenu.Instance.ShowCursor(Main.modId);
+				else
+					XLShredLib.ModMenu.Instance.HideCursor(Main.modId);
+			}
+
+			if(voteWatch.ElapsedMilliseconds > 5000) {
+				showMapVote = false;
+				voteWatch.Stop();
+			}
+
 			if (displayInvalidVersion)
 				invalidVersionTimer += Time.unscaledDeltaTime;
 
 			if(invalidVersionTimer > 10.0f) {
 				displayInvalidVersion = false;
 				invalidVersionTimer = 0.0f;
+			}
+
+			if (displayInvalidMap)
+				invalidMapTimer += Time.unscaledDeltaTime;
+
+			if (invalidMapTimer > 25.0f) {
+				displayInvalidMap = false;
+				invalidMapTimer = 0.0f;
 			}
 
 			if (this.connectedImage != null && this.disconnectedImage != null) {
@@ -132,13 +171,62 @@ namespace XLMultiplayer {
 			}
 		}
 
+		public void StartVotePopup() {
+			showMapVote = true;
+			voteWatch = Stopwatch.StartNew();
+		}
+
 		public void DisplayInvalidVersion(string serverVersion) {
 			displayInvalidVersion = true;
 			invalidVersionTimer = 0.0f;
 			this.serverVersion = serverVersion;
 		}
 
+		public void DisplayNoMap(string mapName) {
+			displayInvalidMap = true;
+			invalidMapTimer = 0.0f;
+			this.serverMap = mapName;
+		}
+
+		public void DrawVoteMenu(int windowID) {
+			GUI.DragWindow(new Rect(0, 0, 10000, 20));
+
+			//Rect mapVoteRect = new Rect(20, 10, 250, 420);
+
+			GUIStyle style = new GUIStyle(GUI.skin.verticalScrollbar);
+			scrollPosition = GUI.BeginScrollView(new Rect(0, 20, 250, 320), scrollPosition, new Rect(0, 0, 250, 30 * MultiplayerUtils.serverMapDictionary.Count), false, true, GUIStyle.none, style);
+
+			int count = 0;
+			foreach(var item in MultiplayerUtils.serverMapDictionary) {
+				GUI.backgroundColor = Color.grey;
+				if (MultiplayerUtils.currentVote == item.Key)
+					GUI.backgroundColor = Color.green;
+
+				if(GUI.Button(new Rect(10, 30*count, 220, 25), item.Value)) {
+					byte[] mapVote = ASCIIEncoding.ASCII.GetBytes(item.Key);
+					Main.menu.multiplayerManager.SendBytes(OpCode.MapVote, mapVote, true);
+					MultiplayerUtils.currentVote = item.Key;
+				}
+				count++;
+			}
+
+			GUI.EndScrollView();
+			GUI.Label(new Rect(10, 345, 230, 65), "Your vote is on the current map by default.\nDon't see a map you like on the list? Ask the host to add it.");
+		}
+
 		public void OnGUI() {
+			if (showMapVote) {
+				GUIStyle text = new GUIStyle();
+				text.normal.textColor = Color.yellow;
+
+				GUI.Label(new Rect(0, 0, Screen.width, Screen.height), "Map voting has begun, more than half the server has requested a map change. You have 30 seconds to vote.", text);
+			}
+
+			if (showVoteMenu) {
+				GUI.backgroundColor = Color.black;
+				mapVoteRect = GUI.Window(3, mapVoteRect, DrawVoteMenu, "Map Vote");
+			}
+
 			if (displayInvalidVersion) {
 				Rect rect = new Rect(Screen.width*0.35f, 0, Screen.width*0.55f, 400);
 
@@ -148,6 +236,17 @@ namespace XLMultiplayer {
 				style.alignment = TextAnchor.UpperCenter;
 				
 				GUI.Label(rect, "Tried to connect to server with different version than client\n Client version: " + Main.modEntry.Version.ToString() + "\nServer Version: " + serverVersion, style);
+			}
+
+			if (displayInvalidMap) {
+				Rect rect = new Rect(Screen.width * 0.35f, 0, Screen.width * 0.55f, 400);
+
+				GUIStyle style = new GUIStyle();
+				style.fontSize = 24;
+				style.wordWrap = true;
+				style.alignment = TextAnchor.UpperCenter;
+
+				GUI.Label(rect, "Tried to connect to server using a map you don't have. If you have the map either the client hasn't hashed all your maps, it's a different version from the servers, or it has a '.' in the name\nServer Map: " + serverMap, style);
 			}
 
 			if (showStatus && Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) {

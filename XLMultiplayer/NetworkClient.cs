@@ -262,9 +262,20 @@ namespace XLMultiplayer {
 								debugWriter.WriteLine("Adding player settings to queue");
 								bufferObjects.Add(new BufferObject(state.buffer, state.buffer.Length));
 							} else if (state.buffer[0] == (byte)OpCode.MapList) {
+								MultiplayerUtils.LoadServerMaps(state.buffer);
+							} else if (state.buffer[0] == (byte)OpCode.MapHash) {
+								string returnMap = MultiplayerUtils.ChangeMap(state.buffer);
+								if (returnMap != "") {
+									Main.statusMenu.DisplayNoMap(returnMap);
+									Main.menu.multiplayerManager.KillConnection();
+								}
+							} else if (state.buffer[0] == (byte)OpCode.MapVote) {
+								if(state.buffer[state.buffer.Length - 1] == 255) {
+									Main.statusMenu.StartVotePopup();
+								}
 							} else if (state.buffer[0] == (byte)OpCode.Disconnect) {
 								Main.menu.multiplayerManager.ProcessMessage(state.buffer, state.buffer.Length);
-							}
+							} 
 
 							BeginReceivingTCP();
 						} else {

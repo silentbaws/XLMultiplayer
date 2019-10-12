@@ -33,10 +33,12 @@ namespace XLMultiplayer
 				statusMenu = new GameObject().AddComponent<MultiplayerStatusMenu>();
 				UnityEngine.Object.DontDestroyOnLoad(menu.gameObject);
 				UnityEngine.Object.DontDestroyOnLoad(statusMenu.gameObject);
+				MultiplayerUtils.StartMapLoading();
 			} else {
 				menu.EndMultiplayer();
 				UnityEngine.Object.Destroy(menu.gameObject);
 				UnityEngine.Object.Destroy(statusMenu.gameObject);
+				MultiplayerUtils.StopMapLoading();
 			}
 
 			return true;
