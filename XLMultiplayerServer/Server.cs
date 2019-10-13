@@ -485,6 +485,7 @@ public class Server {
 					{ "currentPlayers", currentPlayers.ToString() },
 					{ "serverPort", ServerConfig.PORT.ToString() },
 					{ "serverVersion", versionNumber },
+					{ "apiKey", ServerConfig.API_KEY },
 					{ "mapName", CurrentMap.name }
 				};
 
