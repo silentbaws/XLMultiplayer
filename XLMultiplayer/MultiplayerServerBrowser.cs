@@ -117,7 +117,7 @@ namespace XLMultiplayer {
 
 				foreach (var s in servers) {
 					Label($"<b>{s.name}  v{s.version}</b>\n", title);
-					Label($"<b>IP:</b> {s.ip}      <b>port:</b> {s.port}\n<b>map: {s.mapName}      </b><b>players:</b> {s.playerCurrent}/{s.playerMax}", center);
+					Label($"<b>IP:</b> {s.ip}      <b>port:</b> {s.port}\n<b>map:</b> {s.mapName}      <b>players:</b> {s.playerCurrent}/{s.playerMax}", center);
 					if (Button($"Connect with username \"{Main.menu.username}\"")) {
 						this.Close();
 						Main.menu.CreateMultiplayerManager();

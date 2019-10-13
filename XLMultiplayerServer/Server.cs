@@ -161,7 +161,7 @@ public class Server {
 
 	public static UdpClient udpClient;
 
-	const string versionNumber = "0.5.0";
+	const string versionNumber = "0.5.1";
 
 	public static Dictionary<string, string> mapList;
 
@@ -484,7 +484,8 @@ public class Server {
 					{ "serverName", ServerConfig.SERVER_NAME },
 					{ "currentPlayers", currentPlayers.ToString() },
 					{ "serverPort", ServerConfig.PORT.ToString() },
-					{ "serverVersion", versionNumber }
+					{ "serverVersion", versionNumber },
+					{ "mapName", CurrentMap.name }
 				};
 
 				Console.WriteLine(currentPlayers.ToString());
@@ -648,8 +649,8 @@ public class Server {
 						Console.WriteLine("Adding map: " + Path.GetFileName(file) + "    with hash: " + hash + "     to servers map list\n");
 					}
 					Console.WriteLine("Finished hashing maps");
-					mapListBytes = Server.GetMapList();
 				}
+				mapListBytes = Server.GetMapList();
 			} else {
 				Console.WriteLine("Failed to find Directory " + Directory.GetCurrentDirectory() + sep + "Maps");
 				Console.Write("Press any key to close the server...");
@@ -674,6 +675,12 @@ public class Server {
 						}
 					}
 				}
+
+				if(currentPlayers == 0) {
+					CurrentMap.name = "California skatepark";
+					CurrentMap.hash = "1";
+				}
+
 				if(votesForMapChange > Math.Floor(currentPlayers / 2f)) {
 					votingInitialized = true;
 					votingTimer.Restart();

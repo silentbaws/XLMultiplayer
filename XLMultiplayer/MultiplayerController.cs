@@ -72,7 +72,7 @@ namespace XLMultiplayer {
 		}
 
 		private void Update() {
-			if(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0) {
+			if(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0 && isConnected) {
 				GameManagement.GameStateMachine.Instance.RequestPauseState();
 			}
 
@@ -366,6 +366,9 @@ namespace XLMultiplayer {
 			if (IsInvoking("SendUpdate"))
 				CancelInvoke("SendUpdate");
 			MultiplayerController.chatMessages.Clear();
+			if (MultiplayerUtils.serverMapDictionary != null) {
+				MultiplayerUtils.serverMapDictionary.Clear();
+			}
 			if(Main.statusMenu != null) {
 				Main.statusMenu.previousMessageCount = 0;
 				Main.statusMenu.chat = "";
@@ -543,7 +546,7 @@ namespace XLMultiplayer {
 			do {
 				old = msg;
 				msg = Regex.Replace(msg.Trim(), "</?(?:b|i|color|size|material|quad)[^>]*>", "", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-			} while (msg.Equals(old));
+			} while (!msg.Equals(old));
 
 			return msg;
 		}
