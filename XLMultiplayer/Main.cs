@@ -32,7 +32,7 @@ namespace XLMultiplayer
 
 			if (enabled) {
 				harmonyInstance = HarmonyInstance.Create(modEntry.Info.Id);
-				//harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());
+				harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());
 
 				menu = new GameObject().AddComponent<MultiplayerMenu>();
 				statusMenu = new GameObject().AddComponent<MultiplayerStatusMenu>();
@@ -40,7 +40,7 @@ namespace XLMultiplayer
 				UnityEngine.Object.DontDestroyOnLoad(statusMenu.gameObject);
 				MultiplayerUtils.StartMapLoading();
 			} else {
-				//harmonyInstance.UnpatchAll(harmonyInstance.Id);
+				harmonyInstance.UnpatchAll(harmonyInstance.Id);
 				menu.EndMultiplayer();
 				UnityEngine.Object.Destroy(menu.gameObject);
 				UnityEngine.Object.Destroy(statusMenu.gameObject);
@@ -51,7 +51,7 @@ namespace XLMultiplayer
 		}
 	}
 
-	//This doesn't work for some reason, well it works for the local client but remote clients are just balls? wtf... Idk just keep it clamped to 0 for now I guess
+	//This works but remote client replay desyncs, look into that
 	[HarmonyPatch(typeof(ReplayEditor.ReplayPlaybackController), "SetPlaybackTime")]
 	static class ReplaySetPlaybackTimePatch {
 
@@ -66,19 +66,25 @@ namespace XLMultiplayer
 		static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions) {
 			foreach (CodeInstruction instruction in instructions) {
 				if(instruction.opcode == OpCodes.Ldc_R4) {
-					yield return new CodeInstruction(OpCodes.Ldarg_0);
-					yield return new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(ReplaySetPlaybackTimeExentions), nameof(ReplaySetPlaybackTimeExentions.GetFrameZeroTime)));
+					//BIG SHOUTOUT BLENDERMF
+					CodeInstruction c = new CodeInstruction(OpCodes.Ldarg_0);
+					yield return c;
+
+					c = new CodeInstruction(OpCodes.Call, AccessTools.Property(typeof(ReplayEditor.ReplayPlaybackController), "ClipFrames").GetMethod);
+					yield return c;
+
+					c = new CodeInstruction(OpCodes.Ldc_I4_0);
+					yield return c;
+
+					c = new CodeInstruction(OpCodes.Callvirt, AccessTools.Property(typeof(List<ReplayEditor.ReplayRecordedFrame>), "Item").GetMethod);
+					yield return c;
+
+					c = new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(ReplayEditor.ReplayRecordedFrame), "time"));
+					yield return c;
 				} else {
-					UnityModManager.Logger.Log(instruction.ToString());
 					yield return instruction;
 				}
 			}
-		}
-	}
-
-	static class ReplaySetPlaybackTimeExentions {
-		public static float GetFrameZeroTime(this ReplayEditor.ReplayPlaybackController controller) {
-			return controller.ClipFrames[0].time;
 		}
 	}
 }

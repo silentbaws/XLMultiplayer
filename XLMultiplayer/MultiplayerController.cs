@@ -93,11 +93,12 @@ namespace XLMultiplayer {
 						Traverse.Create(controller.replayController).Property("ClipFrames").SetValue((from f in controller.recordedFrames select f.Copy()).ToList());
 						Traverse.Create(controller.replayController).Field("m_audioEventPlayers").SetValue(new List<ReplayAudioEventPlayer>());
 						{ // Subtract Start Time
-							float firstFrameGameTime = ReplayEditorController.Instance.playbackController.ClipFrames[0].time;
+							float firstFrameGameTime = ReplayRecorder.Instance.RecordedFrames[0].time;
 							controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f)
 							{
 								f.time -= firstFrameGameTime;
 							});
+							UnityModManagerNet.UnityModManager.Logger.Log(controller.replayController.ClipFrames[0].time + " " + ReplayEditorController.Instance.playbackController.ClipFrames[0].time + " " + firstFrameGameTime);
 							controller.replayController.ClipEndTime = controller.replayController.ClipFrames[controller.replayController.ClipFrames.Count - 1].time;
 						}
 						controller.replayController.StartCoroutine("UpdateAnimationClip");
