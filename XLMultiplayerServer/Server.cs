@@ -614,7 +614,15 @@ public class Server {
 	static string CalculateMD5(string filename) {
 		using (var md5 = MD5.Create()) {
 			using (var stream = File.OpenRead(filename)) {
-				var hash = md5.ComputeHash(stream);
+				byte[] hash = null;
+				long size = new System.IO.FileInfo(filename).Length;
+				if (size > 10485760) {
+					byte[] bytes = new byte[10485760];
+					stream.Read(bytes, 0, 10485760);
+					hash = md5.ComputeHash(bytes);
+				} else {
+					hash = md5.ComputeHash(stream);
+				}
 				return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
 			}
 		}
@@ -646,8 +654,12 @@ public class Server {
 					Console.WriteLine("Begin hashing maps\n");
 					foreach (string file in files) {
 						string hash = CalculateMD5(file);
-						Server.mapList.Add(hash, Path.GetFileName(file));
-						Console.WriteLine("Adding map: " + Path.GetFileName(file) + "    with hash: " + hash + "     to servers map list\n");
+						try {
+							Server.mapList.Add(hash, Path.GetFileName(file));
+							Console.WriteLine("Adding map: " + Path.GetFileName(file) + ", with hash: " + hash + " to servers map list\n");
+						} catch (ArgumentException) {
+							Console.WriteLine("**WARNING** MAP " + Path.GetFileName(file) + " HASH OVERLAPS WITH " + Server.mapList[hash] + " PLEASE DM ME TO LET ME KNOW\n");
+						}
 					}
 					Console.WriteLine("Finished hashing maps");
 				}

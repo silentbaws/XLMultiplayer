@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,10 +17,21 @@ namespace XLMultiplayer {
 
 		public static string currentVote = "current";
 
+		private static Stopwatch hashingWatch;
+		private static int duplicates = 0;
+
 		private static string CalculateMD5(string filename) {
 			using (var md5 = MD5.Create()) {
 				using (var stream = File.OpenRead(filename)) {
-					var hash = md5.ComputeHash(stream);
+					byte[] hash = null;
+					long size = new System.IO.FileInfo(filename).Length;
+					if (size > 10485760) {
+						byte[] bytes = new byte[10485760];
+						stream.Read(bytes, 0, 10485760);
+						hash = md5.ComputeHash(bytes);
+					} else {
+						hash = md5.ComputeHash(stream);
+					}
 					return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
 				}
 			}
@@ -76,12 +88,14 @@ namespace XLMultiplayer {
 					mapsDictionary.Add(fileHash, files[i]);
 				} catch (ArgumentException) {
 					mapsDictionary[fileHash] = files[i];
+					duplicates++;
 				}
 				i++;
 				if (i == files.Length) {
 					loadedMaps = true;
 					loadingMaps = false;
-					UnityModManagerNet.UnityModManager.Logger.Log($"[XLMultiplayer] Finished loading {files.Length} maps");
+					hashingWatch.Stop();
+					UnityModManagerNet.UnityModManager.Logger.Log($"[XLMultiplayer] Finished loading {files.Length} maps in {hashingWatch.ElapsedMilliseconds}ms with {duplicates} duplicates");
 					break;
 				}
 			}
@@ -92,6 +106,9 @@ namespace XLMultiplayer {
 				UnityModManagerNet.UnityModManager.Logger.Log($"[XLMultiplayer] Starting thread to hash all maps");
 				loadingThread = new Thread(LoadMapHashes);
 				loadingThread.IsBackground = true;
+
+				hashingWatch = Stopwatch.StartNew();
+
 				loadingThread.Start();
 			}
 		}

@@ -11,6 +11,7 @@ using RootMotion.FinalIK;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Collections;
+using ReplayEditor;
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -68,10 +69,43 @@ namespace XLMultiplayer {
 
 		public static List<string> chatMessages = new List<string>();
 
+		bool replayStarted = false;
+
 		private void Start() {
 		}
 
 		private void Update() {
+			if(GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
+				if (replayStarted) {
+					foreach (MultiplayerPlayerController controller in otherControllers) {
+						controller.replayController.enabled = false;
+						controller.usernameObject.GetComponent<Renderer>().enabled = true;
+					}
+				}
+				replayStarted = false;
+			} else {
+				if (!replayStarted) {
+					replayStarted = true;
+
+					foreach(MultiplayerPlayerController controller in otherControllers) {
+						controller.replayController.enabled = true;
+						controller.EnsureQuaternionListContinuity();
+						Traverse.Create(controller.replayController).Property("ClipFrames").SetValue((from f in controller.recordedFrames select f.Copy()).ToList());
+						Traverse.Create(controller.replayController).Field("m_audioEventPlayers").SetValue(new List<ReplayAudioEventPlayer>());
+						{ // Subtract Start Time
+							float firstFrameGameTime = ReplayEditorController.Instance.playbackController.ClipFrames[0].time;
+							controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f)
+							{
+								f.time -= firstFrameGameTime;
+							});
+							controller.replayController.ClipEndTime = controller.replayController.ClipFrames[controller.replayController.ClipFrames.Count - 1].time;
+						}
+						controller.replayController.StartCoroutine("UpdateAnimationClip");
+						controller.usernameObject.GetComponent<Renderer>().enabled = false;
+					}
+				}
+			}
+
 			if(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0 && isConnected) {
 				GameManagement.GameStateMachine.Instance.RequestPauseState();
 			}
@@ -123,13 +157,16 @@ namespace XLMultiplayer {
 			//Use new frame buffer
 			foreach (MultiplayerPlayerController controller in this.otherControllers) {
 				if(controller != null) {
-					controller.LerpNextFrame();
+					if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
+						controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
+						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
+					}
+					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
 				}
 			}
 		}
 
 		public void SendUpdate() {
-			this.SendPlayerPosition();
 			this.SendPlayerAnimator();
 		}
 
@@ -353,10 +390,6 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void SendPlayerPosition() {
-			this.SendBytes(OpCode.Position, this.ourController.PackTransforms(), false);
-		}
-
 		private void SendPlayerAnimator() {
 			byte[] packed = this.ourController.PackAnimator();
 			this.SendBytes(OpCode.Animation, packed, false);
@@ -421,12 +454,6 @@ namespace XLMultiplayer {
 			byte playerID = buffer[bufferSize - 1];
 
 			switch (opCode) {
-				case OpCode.Position:
-					foreach (MultiplayerPlayerController controller in otherControllers) {
-						if (controller.playerID == playerID)
-							controller.UnpackTransforms(newBuffer);
-					}
-					break;
 				case OpCode.Animation:
 					foreach (MultiplayerPlayerController controller in otherControllers) {
 						if (controller.playerID == playerID)

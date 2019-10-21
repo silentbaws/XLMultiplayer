@@ -6,6 +6,7 @@ using UnityModManagerNet;
 using RootMotion.FinalIK;
 using Harmony12;
 using System.Linq;
+using ReplayEditor;
 
 //TODO: ITS ALL SPAGHETTI
 
@@ -120,6 +121,7 @@ namespace XLMultiplayer {
 		public GameObject board { get; private set; }
 
 		public Transform hips;
+		private Transform[] bones;
 
 		public GameObject hatObject, shirtObject, pantsObject, shoesObject, headArmsObject;
 		
@@ -128,7 +130,7 @@ namespace XLMultiplayer {
 
 		public string username = "IT ALL BROKE";
 
-		private GameObject usernameObject;
+		public GameObject usernameObject;
 		private TextMesh usernameText;
 
 		private StreamWriter debugWriter;
@@ -136,7 +138,6 @@ namespace XLMultiplayer {
 		public byte playerID;
 
 		private int currentAnimationPacket = -1;
-		private int currentPositionPacket = -1;
 
 		List<MultiplayerPositionFrameBufferObject> positionFrames = new List<MultiplayerPositionFrameBufferObject>();
 
@@ -145,6 +146,11 @@ namespace XLMultiplayer {
 		float previousFrameTime = 0;
 
 		private bool waitingForDelay = false;
+		private bool speedDelay = false;
+
+		public ReplayPlaybackController replayController;
+
+		public List<ReplayRecordedFrame> recordedFrames = new List<ReplayRecordedFrame>();
 
 		public CharacterCustomizer characterCustomizer {
 			get {
@@ -337,6 +343,29 @@ namespace XLMultiplayer {
 				}
 				writer.WriteLine("└─>" + t.name + (t.GetComponents<Rigidbody>().Length != 0 ? "<Contains rigidbody>" : ""));
 			}
+
+			writer.WriteLine("\nBEGIN RECORDED TRANSFORMS\n");
+
+			foreach (Transform t in ReplayEditor.ReplayRecorder.Instance.RecordedTransforms) {
+				Transform parent = t.parent;
+				while (parent != null) {
+					writer.Write("\t");
+					parent = parent.parent;
+				}
+				writer.WriteLine("└─>" + t.name);
+			}
+
+			writer.WriteLine("\nBEGIN PLAYBACK TRANSFORMS\n");
+
+			foreach (Transform t in ReplayEditorController.Instance.playbackController.playbackTransforms) {
+				Transform parent = t.parent;
+				while (parent != null) {
+					writer.Write("\t");
+					parent = parent.parent;
+				}
+				writer.WriteLine("└─>" + t.name);
+			}
+
 			writer.Close();
 			this.debugWriter.WriteLine("Finished writing to hierarchy.txt");
 
@@ -372,7 +401,6 @@ namespace XLMultiplayer {
 					break;
 				}
 			}
-			//SET textures from player here
 
 			if (!foundSkater) {
 				this.debugWriter.WriteLine("Failed to find skater");
@@ -419,9 +447,14 @@ namespace XLMultiplayer {
 			this.player.name = "New Player";
 			this.player.transform.SetParent(null);
 			this.player.transform.position = PlayerController.Instance.transform.position;
+			this.player.transform.rotation = PlayerController.Instance.transform.rotation;
 			debugWriter.WriteLine("Created New Player");
 
-			UnityEngine.Object.DestroyImmediate(this.player.GetComponentInChildren<ReplayEditor.ReplayPlaybackController>());
+			this.replayController = this.player.GetComponentInChildren<ReplayPlaybackController>();
+
+			this.bones = replayController.playbackTransforms.ToArray();
+
+			//UnityEngine.Object.DestroyImmediate(this.player.GetComponentInChildren<ReplayEditor.ReplayPlaybackController>());
 
 			foreach (MonoBehaviour m in this.player.GetComponentsInChildren<MonoBehaviour>()) {
 				if(m.GetType() == typeof(ReplayEditor.ReplayAudioEventPlayer)) {
@@ -432,9 +465,11 @@ namespace XLMultiplayer {
 			this.player.SetActive(true);
 
 			this.board = this.player.transform.Find("Skateboard").gameObject;
+			this.board.transform.position = new Vector3(1111111, 111111111, 11111111);
 			this.board.name = "New Player Board";
 
 			this.skater = this.player.transform.Find("NewSkater").gameObject;
+			this.skater.transform.position = new Vector3(1111111, 111111111, 11111111);
 			this.skater.name = "New Player Skater";
 
 			this.hips = this.skater.transform.Find("Skater_Joints").Find("Skater_root");
@@ -458,7 +493,7 @@ namespace XLMultiplayer {
 			characterCustomizer.ClothingParent = this.hips.Find("Skater_pelvis");
 			characterCustomizer.RootBone = this.hips;
 			Traverse.Create(characterCustomizer).Field("_bonesDict").SetValue(this.hips.GetComponentsInChildren<Transform>().ToDictionary((Transform t) => t.name));
-			
+
 			characterCustomizer.LoadCustomizations(PlayerController.Instance.characterCustomizer.CurrentCustomizations);
 
 			debugWriter.WriteLine("Added gear back");
@@ -535,78 +570,9 @@ namespace XLMultiplayer {
 			return newGear;
 		}
 
-		public byte[] PackTransforms() {
-			Transform[] T = new Transform[] { this.player.transform, this.board.transform, this.skater.transform };
-			
-			byte[] TPacked = this.PackTransformArray(T);
-
-			return TPacked;
-		}
-
-		int outoforder = 0;
-		int total = 0;
-
-		public void UnpackTransforms(byte[] recBuffer) {
-			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
-			total++;
-			byte[] buffer = new byte[recBuffer.Length - 4];
-			if (receivedPacketSequence < currentPositionPacket - 5) {
-				outoforder++;
-				return;
-			} else {
-				currentPositionPacket = Math.Max(receivedPacketSequence, currentPositionPacket);
-				Array.Copy(recBuffer, 4, buffer, 0, recBuffer.Length - 4);
-			}
-
-			List<Vector3> vectors = new List<Vector3>();
-			List<Quaternion> quaternions = new List<Quaternion>();
-
-			for (int i = 0; i < 3; i++) {
-				Vector3 readVector = new Vector3();
-				readVector.x = BitConverter.ToSingle(buffer, i * 28);
-				readVector.y = BitConverter.ToSingle(buffer, i * 28 + 4);
-				readVector.z = BitConverter.ToSingle(buffer, i * 28 + 8);
-				Quaternion readQuaternion = new Quaternion();
-				readQuaternion.x = BitConverter.ToSingle(buffer, i * 28 + 12);
-				readQuaternion.y = BitConverter.ToSingle(buffer, i * 28 + 16);
-				readQuaternion.z = BitConverter.ToSingle(buffer, i * 28 + 20);
-				readQuaternion.w = BitConverter.ToSingle(buffer, i * 28 + 24);
-
-				vectors.Add(readVector);
-				quaternions.Add(readQuaternion);
-			}
-
-			SetTransforms(vectors.ToArray(), quaternions.ToArray(), receivedPacketSequence);
-		}
-
-		public void SetTransforms(Vector3[] vectors, Quaternion[] quaternions, int posFrame) {
-			MultiplayerPositionFrameBufferObject newPositionObject = new MultiplayerPositionFrameBufferObject();
-			newPositionObject.vectors = vectors;
-			newPositionObject.quaternions = quaternions;
-			newPositionObject.positionFrame = posFrame;
-
-			positionFrames.Add(newPositionObject);
-
-			this.positionFrames = this.positionFrames.OrderBy(f => f.positionFrame).ToList();
-		}
-
-		public byte[] PackTransformArray(Transform[] T) {
-			byte[] packed = new byte[T.Length * 28];
-			for (int i = 0; i < T.Length; i++) {
-				Array.Copy(BitConverter.GetBytes(T[i].position.x), 0, packed, i * 28, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].position.y), 0, packed, i * 28 + 4, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].position.z), 0, packed, i * 28 + 8, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.x), 0, packed, i * 28 + 12, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.y), 0, packed, i * 28 + 16, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.z), 0, packed, i * 28 + 20, 4);
-				Array.Copy(BitConverter.GetBytes(T[i].rotation.w), 0, packed, i * 28 + 24, 4);
-			}
-			return packed;
-		}
-
-		public byte[] PackTransformInfoArray(List<ReplayEditor.ReplayRecordedFrame> frames, int start, bool useKey) {
-			ReplayEditor.TransformInfo[] T = frames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count - 1].transformInfos;
-			ReplayEditor.TransformInfo[] TPrevious = frames[ReplayEditor.ReplayRecorder.Instance.RecordedFrames.Count - 2].transformInfos;
+		public byte[] PackTransformInfoArray(List<ReplayRecordedFrame> frames, int start, bool useKey) {
+			TransformInfo[] T = frames[ReplayRecorder.Instance.RecordedFrames.Count - 1].transformInfos;
+			TransformInfo[] TPrevious = frames[ReplayRecorder.Instance.RecordedFrames.Count - 2].transformInfos;
 
 			byte[] packed = new byte[useKey ? T.Length * 12 - (start * 12) : T.Length * 24 - (start * 24)];
 
@@ -664,7 +630,7 @@ namespace XLMultiplayer {
 				useKey = true;
 			}
 
-			byte[] transforms = PackTransformInfoArray(ReplayEditor.ReplayRecorder.Instance.RecordedFrames, 8, useKey);
+			byte[] transforms = PackTransformInfoArray(ReplayEditor.ReplayRecorder.Instance.RecordedFrames, 0, useKey);
 			
 			byte[] packed = new byte[transforms.Length + 5];
 			packed[0] = useKey ? (byte)1 : (byte)0;
@@ -685,16 +651,22 @@ namespace XLMultiplayer {
 				currentAnimationPacket = receivedPacketSequence > currentAnimationPacket ? receivedPacketSequence : currentAnimationPacket;
 			}
 
+			if (animationFrames.Find(f => f.animFrame == receivedPacketSequence) != null) {
+				debugWriter.WriteLine("Duped frame of animation for player: " + this.username);
+				return;
+			}
+
 			MultiplayerFrameBufferObject currentBufferObject = new MultiplayerFrameBufferObject();
 
 			currentBufferObject.key = recBuffer[4] == (byte)1 ? true : false;
 			currentBufferObject.animFrame = receivedPacketSequence;
+
 			currentBufferObject.frameTime = BitConverter.ToSingle(buffer, buffer.Length - 4);
 
 			List<Vector3> vectors = new List<Vector3>();
 			List<Quaternion> quaternions = new List<Quaternion>();
 
-			for (int i = 0; i < 68; i++) {
+			for (int i = 0; i < 77; i++) {
 				if (currentBufferObject.key) {
 					Vector3 readVector = new Vector3();
 					readVector.x = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12));
@@ -731,27 +703,22 @@ namespace XLMultiplayer {
 			this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
 		}
 
-		public void LerpNextFrame(bool recursive = false, float offset = 0) {
+		public void LerpNextFrame(bool inReplay, bool recursive = false, float offset = 0, int recursionLevel = 0) {
 			if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) return;
 			if (!startedAnimating && animationFrames.Count > 5) {
 				if (this.animationFrames[0].vectors == null || !this.animationFrames[0].key) {
 					this.animationFrames.RemoveAt(0);
-					LerpNextFrame();
+					LerpNextFrame(inReplay);
 				}
 
-				//debugWriter.WriteLine("Starting animation of other player with " + this.animationFrames.Count + " frame delay");
-
-				while (this.animationFrames.Count > 6) {
-					this.animationFrames.RemoveAt(0);
-					if (this.animationFrames.Count == 6) break;
-					//debugWriter.WriteLine("Removing frame currently still " + this.animationFrames.Count + " Frames behind");
-				}
+				if(this.animationFrames.Count > 6)
+					this.animationFrames.RemoveRange(0, (this.animationFrames.Count - 6));
 
 				startedAnimating = true;
 
-				for (int i = 0; i < 68; i++) {
-					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].vectors[i];
-					this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].quaternions[i];
+				for (int i = 0; i < 77; i++) {
+					bones[i].localPosition = this.animationFrames[0].vectors[i];
+					bones[i].localRotation = this.animationFrames[0].quaternions[i];
 				}
 
 				this.previousFrameTime = this.animationFrames[0].frameTime;
@@ -760,85 +727,140 @@ namespace XLMultiplayer {
 			}
 			if (!startedAnimating) return;
 
-			if(this.animationFrames.Count < 3 || this.waitingForDelay) {
+			int frameDelay = 0;
+
+			if (this.animationFrames.Count < 2) return;
+
+			if(this.animationFrames.Count < 4 || this.waitingForDelay) {
 				this.waitingForDelay = !(this.animationFrames.Count > 5);
-				//debugWriter.WriteLine("Waiting for 6 frame delay");
-				return;
 			}
 
-			if (this.animationFrames.Count >= 10) {
-				while (this.animationFrames.Count > 6) {
-					this.animationFrames.RemoveAt(0);
-					if (this.animationFrames[0].vectors != null) this.previousFrameTime = this.animationFrames[0].frameTime;
-					if (this.animationFrames.Count == 6) break;
-					//debugWriter.WriteLine("Removing frame currently still " + this.animationFrames.Count + " Frames behind");
+			if (this.animationFrames.Count >= 10 || this.speedDelay) {
+				if(this.animationFrames.Count > 50) {
+					this.animationFrames.RemoveRange(0, this.animationFrames.Count - 20);
 				}
+
+				this.speedDelay = !(this.animationFrames.Count < 7);
+			}
+
+			if(this.waitingForDelay || this.speedDelay) {
+				frameDelay = this.animationFrames.Count - 6;
 			}
 
 			if (this.animationFrames[0].vectors == null) {
 				this.animationFrames.RemoveAt(0);
 
-				//debugWriter.WriteLine("Skipping frame");
-				return;
+				LerpNextFrame(inReplay);
 			}
 
 			if (this.animationFrames[0].deltaTime == 0) {
 				this.animationFrames[0].deltaTime = this.animationFrames[0].frameTime - this.previousFrameTime;
+
+				if(this.animationFrames[0].deltaTime == 0.0f) {
+					this.animationFrames[0].deltaTime = 1f / 30f;
+				}
+
+				if(frameDelay != 0) {
+					debugWriter.Write("Adjusting current animation frame time from: " + this.animationFrames[0].deltaTime);
+					this.animationFrames[0].deltaTime = frameDelay < 0 ? this.animationFrames[0].deltaTime * Mathf.Max(Mathf.Abs(frameDelay), 2) : this.animationFrames[0].deltaTime / Mathf.Min(Mathf.Max(frameDelay, 2), 6);
+					debugWriter.WriteLine("  To: " + this.animationFrames[0].deltaTime);
+
+					if(this.animationFrames[0].deltaTime > 0.14f) {
+						debugWriter.WriteLine("Capping current frame to 140ms");
+						this.animationFrames[0].deltaTime = 0.14f;
+					}
+				}
 			}
 
 			if (!recursive) this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
 			else this.animationFrames[0].timeSinceStart = offset;
 
-			if (positionFrames.Count > 0 && positionFrames[0].positionFrame <= animationFrames[0].animFrame + 1)
-				LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions, recursive ? offset : Time.unscaledDeltaTime);
-
-			for (int i = 0; i < 68; i++) {
-				this.hips.GetComponentsInChildren<Transform>()[i].localPosition = Vector3.Lerp(this.hips.GetComponentsInChildren<Transform>()[i].localPosition, this.animationFrames[0].vectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
-				this.hips.GetComponentsInChildren<Transform>()[i].localRotation = Quaternion.Slerp(this.hips.GetComponentsInChildren<Transform>()[i].localRotation, this.animationFrames[0].quaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+			if (!inReplay) {
+				for (int i = 0; i < 77; i++) {
+					bones[i].localPosition = Vector3.Lerp(bones[i].localPosition, this.animationFrames[0].vectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+					bones[i].localRotation = Quaternion.Slerp(bones[i].localRotation, this.animationFrames[0].quaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+				}
 			}
 
+			this.player.transform.position = PlayerController.Instance.transform.position;
+			this.player.transform.rotation = PlayerController.Instance.transform.rotation;
+
+			this.usernameText.text = this.username;
+			this.usernameObject.transform.position = this.skater.transform.position + this.skater.transform.up;
+			this.usernameObject.transform.LookAt(Camera.main.transform);
+
 			if (this.animationFrames[0].timeSinceStart >= this.animationFrames[0].deltaTime) {
-				for (int i = 0; i < 68; i++) {
-					this.hips.GetComponentsInChildren<Transform>()[i].localPosition = this.animationFrames[0].vectors[i];
-					this.hips.GetComponentsInChildren<Transform>()[i].localRotation = this.animationFrames[0].quaternions[i];
+				//30FPS 120Seconds
+				if(this.recordedFrames.Count > 30 * 120) {
+					this.recordedFrames.RemoveAt(0);
+					this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), Time.time));
+				} else {
+					this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), Time.time));
 				}
 
-				while (positionFrames.Count > 0 && positionFrames[0].positionFrame <= animationFrames[0].animFrame) {
-					LerpPosition(positionFrames[0].vectors, positionFrames[0].quaternions, 9999999);
-					positionFrames.RemoveAt(0);
+				if (!inReplay) {
+					for (int i = 0; i < 77; i++) {
+						bones[i].localPosition = this.animationFrames[0].vectors[i];
+						bones[i].localRotation = this.animationFrames[0].quaternions[i];
+					}
 				}
 
 				if (!this.animationFrames[1].key) {
-					for(int i = 0; i < 68; i++) {
+					for(int i = 0; i < 77; i++) {
 						this.animationFrames[1].vectors[i] = this.animationFrames[0].vectors[i] + this.animationFrames[1].vectors[i];
 						this.animationFrames[1].quaternions[i].eulerAngles = this.animationFrames[0].quaternions[i].eulerAngles + this.animationFrames[1].quaternions[i].eulerAngles;
 					}
 				}
-
-				//debugWriter.WriteLine("Next frame currently " + this.animationFrames.Count + " frames delayed, called recursively: " + recursive.ToString() + " offset: " + offset.ToString() + " frame time: " + this.animationFrames[0].deltaTime);
 
 				float oldTime = this.animationFrames[0].timeSinceStart;
 				float oldDelta = this.animationFrames[0].deltaTime;
 
 				this.previousFrameTime = this.animationFrames[0].frameTime;
 				this.animationFrames.RemoveAt(0);
-				this.LerpNextFrame(true, oldTime - oldDelta);
+				if(recursionLevel < 4) {
+					this.LerpNextFrame(inReplay, true, oldTime - oldDelta, recursionLevel+1);
+				}
 			}
 		}
 
-		private void LerpPosition(Vector3[] vectors, Quaternion[] quaternions, float deltaTime) {
-			this.player.transform.position = Vector3.Lerp(this.player.transform.position, vectors[0], deltaTime / this.animationFrames[0].deltaTime);
-			this.player.transform.rotation = Quaternion.Slerp(this.player.transform.rotation, quaternions[0], deltaTime / this.animationFrames[0].deltaTime);
+		TransformInfo[] BufferToInfo(MultiplayerFrameBufferObject frame) {
+			TransformInfo[] info = new TransformInfo[replayController.playbackTransforms.Count];
 
-			this.board.transform.position = Vector3.Lerp(this.board.transform.position, vectors[1], deltaTime / this.animationFrames[0].deltaTime);
-			this.board.transform.rotation = Quaternion.Slerp(this.board.transform.rotation, quaternions[1], deltaTime / this.animationFrames[0].deltaTime);
+			for(int i = 0; i < info.Length; i++) {
+				info[i] = new TransformInfo(this.skater.transform);
+				info[i].position = frame.vectors[i];
+				info[i].rotation = frame.quaternions[i];
+			}
 
-			this.skater.transform.position = Vector3.Lerp(this.skater.transform.position, vectors[2], deltaTime / this.animationFrames[0].deltaTime);
-			this.skater.transform.rotation = Quaternion.Slerp(this.skater.transform.rotation, quaternions[2], deltaTime / this.animationFrames[0].deltaTime);
+			return info;
+		}
 
-			this.usernameText.text = this.username;
-			this.usernameObject.transform.position = this.player.transform.position + this.player.transform.up;
-			this.usernameObject.transform.LookAt(Camera.main.transform);
+		public void EnsureQuaternionListContinuity() {
+			float[] array = Enumerable.Repeat<float>(0f, bones.Length).ToArray<float>();
+			float[] array2 = Enumerable.Repeat<float>(0f, bones.Length).ToArray<float>();
+			float[] array3 = Enumerable.Repeat<float>(0f, bones.Length).ToArray<float>();
+			float[] array4 = Enumerable.Repeat<float>(0f, bones.Length).ToArray<float>();
+			for (int i = 0; i < this.recordedFrames.Count; i++) {
+				ReplayRecordedFrame replayRecordedFrame = this.recordedFrames[i];
+				for (int j = 0; j < bones.Length; j++) {
+					Quaternion rotation = replayRecordedFrame.transformInfos[j].rotation;
+					float num = rotation.x;
+					float num2 = rotation.y;
+					float num3 = rotation.z;
+					float num4 = rotation.w;
+					if (array[j] * num + array2[j] * num2 + array3[j] * num3 + array4[j] * num4 < 0f) {
+						num = -num;
+						num2 = -num2;
+						num3 = -num3;
+						num4 = -num4;
+						this.recordedFrames[i].transformInfos[j].rotation = new Quaternion(num, num2, num3, num4);
+					}
+					array[j] = num;
+					array2[j] = num2;
+					array3[j] = num3;
+					array4[j] = num4;
+				}
+			}
 		}
 	}
 }
