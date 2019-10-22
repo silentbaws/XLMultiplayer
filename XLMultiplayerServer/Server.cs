@@ -161,7 +161,7 @@ public class Server {
 
 	public static UdpClient udpClient;
 
-	const string versionNumber = "0.5.1";
+	const string versionNumber = "0.6.0";
 
 	public static Dictionary<string, string> mapList;
 
