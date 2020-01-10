@@ -69,12 +69,6 @@ namespace XLMultiplayer {
 		}
 
 		private static void LoadMapHashes() {
-			string mapsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL\\Maps\\";
-			string[] files = Directory.GetFiles(mapsFolder);
-
-			int i = 0;
-			loadingMaps = true;
-
 			if (!mapsDictionary.ContainsKey("0")) {
 				mapsDictionary.Add("0", "Assets/_Scenes/Prototyping testing courthouse 2.unity");
 			}
@@ -82,7 +76,24 @@ namespace XLMultiplayer {
 				mapsDictionary.Add("1", "Assets/_Scenes/Encinitas_scene.unity");
 			}
 
-			while (loadingMaps) {
+			string mapsFolder = "";
+			string[] files = null;
+			int i = 0;
+
+			try {
+				mapsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL\\Maps\\";
+				files = Directory.GetFiles(mapsFolder);
+				
+				loadingMaps = true;
+			} catch (Exception) {
+				UnityModManagerNet.UnityModManager.Logger.Log("Failed to find maps folder or retrieve files from folder");
+			}
+
+			if(files == null || files.Length < 1) {
+				UnityModManagerNet.UnityModManager.Logger.Log("**WARNING** XLMultiplayer COULD NOT find any maps in " + Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL\\Maps\\");
+			}
+
+			while (loadingMaps && files != null && files.Length > 0) {
 				string fileHash = CalculateMD5(files[i]);
 				try {
 					mapsDictionary.Add(fileHash, files[i]);

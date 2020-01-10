@@ -111,9 +111,16 @@ namespace XLMultiplayer {
 					lastAlive = elapsedTime.ElapsedMilliseconds;
 				}
 				sentAlive++;
-
-				udpConnection.Send(buffer, buffer.Length);
-			} catch (Exception e) {
+				try {
+					udpConnection.Send(buffer, buffer.Length);
+				} catch (Exception ex) when (ex is ObjectDisposedException || ex is NullReferenceException) {
+					if (tcpConnection.Connected) {
+						debugWriter.WriteLine("udpClient null or disposed");
+						udpConnection = new UdpClient();
+						udpConnection.Connect(this.ipEndPoint);
+					}
+				}
+		} catch (Exception e) {
 				debugWriter.WriteLine("Error sending alive message {0}", e.ToString());
 			}
 		}
@@ -138,7 +145,17 @@ namespace XLMultiplayer {
 
 				largestPacket = Math.Max(largestPacket, packet.Length);
 
-				udpConnection.Send(packet, packet.Length);
+				try {
+					udpConnection.Send(packet, packet.Length);
+				} catch (Exception ex) when (ex is ObjectDisposedException || ex is NullReferenceException) {
+					if (tcpConnection.Connected) {
+						debugWriter.WriteLine("udpClient null or disposed");
+						udpConnection = new UdpClient();
+						udpConnection.Connect(this.ipEndPoint);
+						SendUnreliable(buffer, opCode);
+						return;
+					}
+				}
 
 				if (opCode == OpCode.Position) {
 					positionPackets++;

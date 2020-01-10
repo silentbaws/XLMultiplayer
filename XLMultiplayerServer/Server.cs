@@ -606,7 +606,15 @@ public class Server {
 
 			BeginReceivingUDP();
 		} catch (Exception e) {
-			Console.WriteLine(e.ToString());
+			if (udpClient == null) {
+				udpClient = new UdpClient();
+				udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+				udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, ServerConfig.PORT));
+				udpClient.DontFragment = true;
+				Console.WriteLine("Reinitialize udp client");
+			} else {
+				Console.WriteLine(e.ToString());
+			}
 			BeginReceivingUDP();
 		}
 	}
