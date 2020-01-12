@@ -154,6 +154,7 @@
   <ItemGroup>
     <Compile Include="Half.cs" />
     <Compile Include="HalfHelper.cs" />
+    <Compile Include="Main.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
