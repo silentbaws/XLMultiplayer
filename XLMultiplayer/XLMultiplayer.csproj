@@ -39,6 +39,14 @@
   <PropertyGroup>
     <StartupObject />
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <PlatformTarget>x64</PlatformTarget>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <PlatformTarget>x64</PlatformTarget>
+    <OutputPath>bin\x64\Release\</OutputPath>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony12, Version=1.2.0.1, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -134,6 +142,9 @@
       <HintPath>..\References\UnityModManager\UnityModManager.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="ValveSockets">
+      <HintPath>..\ValveSockets\ValveSockets.dll</HintPath>
+    </Reference>
     <Reference Include="XLShredLib, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\References\XLShredLib.dll</HintPath>
@@ -152,6 +163,10 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="..\ValveSockets\GameNetworkingSockets.dll">
+      <Link>GameNetworkingSockets.dll</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Background.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
