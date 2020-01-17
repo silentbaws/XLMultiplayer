@@ -158,8 +158,10 @@
     <Compile Include="Main.cs" />
     <Compile Include="MultiplayerController.cs" />
     <Compile Include="MultiplayerLocalPlayerController.cs" />
+    <Compile Include="MultiplayerMenu.cs" />
     <Compile Include="MultiplayerPlayerController.cs" />
     <Compile Include="MultiplayerRemotePlayerController.cs" />
+    <Compile Include="MultiplayerServerBrowser.cs" />
     <Compile Include="MultiplayerTexture.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

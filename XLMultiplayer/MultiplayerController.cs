@@ -1,24 +1,44 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using UnityEngine;
 using Valve.Sockets;
 
 namespace XLMultiplayer {
 	class MultiplayerController : MonoBehaviour{
-		NetworkingSockets client = null;
-		StatusCallback status = null;
-		uint connection;
-		const int maxMessages = 100;
-		NetworkingMessage[] netMessages;
+		// Valve Sockets stuff
+		private NetworkingSockets client = null;
+		private StatusCallback status = null;
+		private uint connection;
+		private const int maxMessages = 100;
+		private NetworkingMessage[] netMessages;
 
-		StreamWriter debugWriter;
+		private StreamWriter debugWriter;
+
+		private MultiplayerLocalPlayerController playerController;
+		private List<MultiplayerRemotePlayerController> remoteControllers = new List<MultiplayerRemotePlayerController>();
+
+		// Open replay editor on start to prevent null references to replay editor instance
+		public void Start() {
+			if (ReplayEditor.ReplayEditorController.Instance == null) {
+				GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(true);
+				StartCoroutine(TurnOffReplay());
+			}
+		}
+
+		// Turn off replay editor as soon as it's instance is not null
+		private IEnumerator TurnOffReplay() {
+			while (ReplayEditor.ReplayEditorController.Instance == null)
+				yield return new WaitForEndOfFrame();
+
+			GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(false);
+			yield break;
+		}
 
 		public void ConnectToServer(string ip, ushort port) {
+			// Create a debug log file
 			int i = 0;
 			while (this.debugWriter == null) {
 				string filename = "Multiplayer Debug Client" + (i == 0 ? "" : " " + i.ToString()) + ".txt";
@@ -45,11 +65,13 @@ namespace XLMultiplayer {
 						break;
 
 					case ConnectionState.Connected:
-						//Client connected to server
-						
-						// Send textures on connection
+						// Client connected to server
 
 						// Start new send update thread
+
+						// Encode Textures coroutine
+
+						// Send textures on connection
 						break;
 
 					case ConnectionState.ClosedByPeer:

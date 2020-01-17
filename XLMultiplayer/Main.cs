@@ -15,6 +15,9 @@ namespace XLMultiplayer {
 
 		public static HarmonyInstance harmonyInstance;
 
+		public static MultiplayerMenu menu;
+		public static MultiplayerController multiplayerController;
+
 		static void Load(UnityModManager.ModEntry modEntry) {
 			Main.modEntry = modEntry;
 			Main.modId = modEntry.Info.Id;
@@ -35,6 +38,8 @@ namespace XLMultiplayer {
 				//Unpatch the replay editor
 				harmonyInstance.UnpatchAll(harmonyInstance.Id);
 
+				multiplayerController.DisconnectFromServer();
+				menu.CloseMultiplayerMenu();
 			}
 
 			return true;

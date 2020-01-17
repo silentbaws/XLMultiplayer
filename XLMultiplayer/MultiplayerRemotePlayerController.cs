@@ -7,9 +7,12 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 namespace XLMultiplayer {
-	class MultiplayerRemotePlayerController : MultiplayerPlayerController {
-		public MultiplayerRemotePlayerController(StreamWriter writer) : base(writer) {
-		}
+	public class MultiplayerRemotePlayerController : MultiplayerPlayerController {
+		public GameObject skater { get; private set; }
+		public GameObject skaterMeshObjects { get; private set; }
+		public GameObject board { get; private set; }
+
+		public MultiplayerRemotePlayerController(StreamWriter writer) : base(writer) {  }
 
 		override public void ConstructPlayer() {
 
@@ -25,7 +28,7 @@ namespace XLMultiplayer {
 			return newGear;
 		}
 
-		public void SetTexture(Texture tex, MPTextureType texType, bool useFull) {
+		override public void SetTexture(Texture tex, MPTextureType texType, bool useFull) {
 			// Apply textures to player
 		}
 
