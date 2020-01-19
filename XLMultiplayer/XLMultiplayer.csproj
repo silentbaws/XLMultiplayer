@@ -162,6 +162,7 @@
     <Compile Include="MultiplayerPlayerController.cs" />
     <Compile Include="MultiplayerRemotePlayerController.cs" />
     <Compile Include="MultiplayerServerBrowser.cs" />
+    <Compile Include="MultiplayerStatusMenu.cs" />
     <Compile Include="MultiplayerTexture.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

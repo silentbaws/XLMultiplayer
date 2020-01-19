@@ -16,6 +16,7 @@ namespace XLMultiplayer {
 		public static HarmonyInstance harmonyInstance;
 
 		public static MultiplayerMenu menu;
+		public static MultiplayerStatusMenu statusMenu;
 		public static MultiplayerController multiplayerController;
 
 		static void Load(UnityModManager.ModEntry modEntry) {

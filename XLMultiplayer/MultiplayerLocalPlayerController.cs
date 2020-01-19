@@ -7,6 +7,12 @@ using UnityEngine;
 
 namespace XLMultiplayer {
 	public class MultiplayerLocalPlayerController : MultiplayerPlayerController {
+		private CharacterCustomizer _characterCustomizer;
+
+		private bool startedEncoding = false;
+		private bool copiedTextures = false;
+
+		private int framesSinceKey = 5;
 
 		// Get the character customizer
 		public CharacterCustomizer characterCustomizer {
@@ -24,11 +30,6 @@ namespace XLMultiplayer {
 				return Traverse.Create(characterCustomizer).Field("equippedGear").GetValue() as List<Tuple<CharacterGear, GameObject>>;
 			}
 		}
-
-		private CharacterCustomizer _characterCustomizer;
-
-		private bool startedEncoding = false;
-		private bool copiedTextures = false;
 
 		public MultiplayerLocalPlayerController(StreamWriter writer) : base(writer) {  }
 
@@ -75,16 +76,40 @@ namespace XLMultiplayer {
 			this.debugWriter.WriteLine("Constructing Local Player");
 
 			this.player = PlayerController.Instance.skaterController.skaterTransform.gameObject;
+			bool foundBoard = false;
+
+			this.debugWriter.WriteLine("Found player, looking for board texture");
+
+			//Get the the board from the skater
+			foreach(Transform transform in PlayerController.Instance.gameObject.GetComponentInChildren<Transform>()) {
+				if (transform.gameObject.name.Equals("Skateboard")) {
+					foreach (Transform t2 in transform.GetComponentsInChildren<Transform>()) {
+						if (t2.name.Equals(SkateboardMaterials[0])) {
+							this.boardMPTex = new MultiplayerTexture(t2.GetComponent<Renderer>().material.GetTexture(MainDeckTextureName), MPTextureType.Board, this.debugWriter);
+							foundBoard = true;
+							break;
+						}
+					}
+				}
+
+				if (foundBoard) {
+					break;
+				}
+			}
+
+			this.debugWriter.WriteLine("Got board texture, grabbing clothing textures");
 
 			foreach (Tuple<CharacterGear, GameObject> tup in gearList) {
 				switch (tup.Item1.categoryName) {
 					case "Shirt":
-						this.shirtMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter);
-						this.shirtMPTex.useFull = false;
+						this.shirtMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter) {
+							useFull = false
+						};
 						break;
 					case "Hoodie":
-						this.shirtMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter);
-						this.shirtMPTex.useFull = true;
+						this.shirtMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter) {
+							useFull = true
+						};
 						break;
 					case "Hat":
 						this.hatMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Hat, this.debugWriter);
@@ -102,11 +127,72 @@ namespace XLMultiplayer {
 		}
 
 		public byte[] PackTransformInfoArray(List<ReplayRecordedFrame> frames, int start, bool useKey) {
-			return null;
+			TransformInfo[] T = frames[ReplayRecorder.Instance.RecordedFrames.Count - 1].transformInfos;
+			TransformInfo[] TPrevious = frames[ReplayRecorder.Instance.RecordedFrames.Count - 2].transformInfos;
+
+			byte[] packed = new byte[useKey ? T.Length * 12 - (start * 12) : T.Length * 24 - (start * 24)];
+
+			for (int i = 0; i < T.Length - start; i++) {
+				float x = useKey ? T[i + start].position.x : T[i + start].position.x - TPrevious[i + start].position.x;
+				float y = useKey ? T[i + start].position.y : T[i + start].position.y - TPrevious[i + start].position.y;
+				float z = useKey ? T[i + start].position.z : T[i + start].position.z - TPrevious[i + start].position.z;
+
+				Vector3 rotationVec = T[i + start].rotation.eulerAngles;
+				Vector3 prevRotVec = TPrevious[i + start].rotation.eulerAngles;
+				float rx = useKey ? rotationVec.x : rotationVec.x - prevRotVec.x;
+				float ry = useKey ? rotationVec.y : rotationVec.y - prevRotVec.y;
+				float rz = useKey ? rotationVec.z : rotationVec.z - prevRotVec.z;
+
+				if (!useKey && GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
+					x = 0f;
+					y = 0f;
+					z = 0f;
+					rx = 0f;
+					ry = 0f;
+					rz = 0f;
+				}
+
+				if (!useKey) {
+					Array.Copy(BitConverter.GetBytes(x), 0, packed, i * 24, 4);
+					Array.Copy(BitConverter.GetBytes(y), 0, packed, i * 24 + 4, 4);
+					Array.Copy(BitConverter.GetBytes(z), 0, packed, i * 24 + 8, 4);
+
+					Array.Copy(BitConverter.GetBytes(rx), 0, packed, i * 24 + 12, 4);
+					Array.Copy(BitConverter.GetBytes(ry), 0, packed, i * 24 + 16, 4);
+					Array.Copy(BitConverter.GetBytes(rz), 0, packed, i * 24 + 20, 4);
+				} else {
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(x)), 0, packed, i * 12, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(y)), 0, packed, i * 12 + 2, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(z)), 0, packed, i * 12 + 4, 2);
+
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(rx)), 0, packed, i * 12 + 6, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(ry)), 0, packed, i * 12 + 8, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(rz)), 0, packed, i * 12 + 10, 2);
+				}
+			}
+
+			return packed;
 		}
 
 		public byte[] PackAnimations() {
-			return null;
+			framesSinceKey++;
+			bool useKey = false;
+
+			// Use key frame every 5 frames
+			if(framesSinceKey >= 5) {
+				useKey = true;
+				framesSinceKey = 0;
+			}
+
+			byte[] transforms = PackTransformInfoArray(ReplayRecorder.Instance.RecordedFrames, 0, useKey);
+
+			byte[] packed = new byte[transforms.Length + 5];
+
+			packed[0] = useKey ? (byte)0 : (byte)1;
+			Array.Copy(transforms, 0, packed, 1, transforms.Length);
+			Array.Copy(BitConverter.GetBytes(ReplayRecorder.Instance.RecordedFrames[ReplayRecorder.Instance.RecordedFrames.Count - 1].time), 0, packed, transforms.Length + 1, 4);
+
+			return packed;
 		}
 	}
 }
