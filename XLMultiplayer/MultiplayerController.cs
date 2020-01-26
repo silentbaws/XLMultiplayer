@@ -7,6 +7,21 @@ using UnityEngine;
 using Valve.Sockets;
 
 namespace XLMultiplayer {
+	public enum OpCode : byte {
+		Connect = 0,
+		Settings = 1,
+		Position = 2,
+		Animation = 3,
+		Texture = 4,
+		Chat = 5,
+		VersionNumber = 6,
+		MapHash = 7,
+		MapVote = 8,
+		MapList = 9,
+		StillAlive = 254,
+		Disconnect = 255
+	}
+
 	class MultiplayerController : MonoBehaviour{
 		// Valve Sockets stuff
 		private NetworkingSockets client = null;
@@ -87,6 +102,11 @@ namespace XLMultiplayer {
 			};
 
 			netMessages = new NetworkingMessage[maxMessages];
+		}
+
+		public void SendTextures() {
+			// Send this
+			playerController.shirtMPTex.GetSendData();
 		}
 
 		public void Update() {

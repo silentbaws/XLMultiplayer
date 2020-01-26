@@ -7,8 +7,6 @@ using UnityEngine;
 
 namespace XLMultiplayer {
 	public class MultiplayerLocalPlayerController : MultiplayerPlayerController {
-		private CharacterCustomizer _characterCustomizer;
-
 		public MultiplayerLocalTexture shirtMPTex;
 		public MultiplayerLocalTexture pantsMPTex;
 		public MultiplayerLocalTexture shoesMPTex;
@@ -16,28 +14,15 @@ namespace XLMultiplayer {
 		public MultiplayerLocalTexture boardMPTex;
 
 		private bool startedEncoding = false;
-		private bool copiedTextures = false;
 
 		private int framesSinceKey = 5;
 
-		// Get the character customizer
-		public CharacterCustomizer characterCustomizer {
-			get {
-				if (_characterCustomizer == null) {
-					_characterCustomizer = this.player.GetComponentInChildren<CharacterCustomizer>();
-				}
-				return _characterCustomizer;
-			}
-		}
-
-		// Get the gear list on the character customizer
-		public List<Tuple<CharacterGear, GameObject>> gearList {
-			get {
-				return Traverse.Create(characterCustomizer).Field("equippedGear").GetValue() as List<Tuple<CharacterGear, GameObject>>;
-			}
-		}
-
 		public MultiplayerLocalPlayerController(StreamWriter writer) : base(writer) {  }
+
+		private System.Collections.IEnumerator IncrementLoading() {
+			Main.statusMenu.loadingStatus++;
+			yield return new WaitForEndOfFrame();
+		}
 
 		public System.Collections.IEnumerator EncodeTextures() {
 			if (!this.startedEncoding) {
@@ -47,30 +32,25 @@ namespace XLMultiplayer {
 				yield return new WaitForEndOfFrame();
 
 				this.shirtMPTex.ConvertAndSaveTexture();
-				Main.statusMenu.loadingStatus++;
-				yield return new WaitForEndOfFrame();
+				IncrementLoading();
 
 				this.pantsMPTex.ConvertAndSaveTexture();
-				Main.statusMenu.loadingStatus++;
-				yield return new WaitForEndOfFrame();
+				IncrementLoading();
 
 				this.shoesMPTex.ConvertAndSaveTexture();
-				Main.statusMenu.loadingStatus++;
-				yield return new WaitForEndOfFrame();
+				IncrementLoading();
 
 				this.hatMPTex.ConvertAndSaveTexture();
-				Main.statusMenu.loadingStatus++;
-				yield return new WaitForEndOfFrame();
+				IncrementLoading();
 
 				this.boardMPTex.ConvertAndSaveTexture();
-				Main.statusMenu.loadingStatus++;
+				IncrementLoading();
+
+				IncrementLoading();
 				yield return new WaitForEndOfFrame();
 
-				copiedTextures = true;
-				Main.statusMenu.loadingStatus++;
-				yield return new WaitForEndOfFrame();
-				yield return new WaitForEndOfFrame();
 				// TODO: Send multiplayer textures
+
 				yield return new WaitForEndOfFrame();
 
 				Main.statusMenu.isLoading = false;

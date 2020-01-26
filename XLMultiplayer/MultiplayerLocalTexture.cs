@@ -1,13 +1,16 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using UnityEngine;
 using UnityModManagerNet;
 
 namespace XLMultiplayer {
 	public class MultiplayerLocalTexture : MultiplayerTexture {
-		public MultiplayerLocalTexture(Texture tex, MPTextureType texType, StreamWriter sw) : base(tex, texType, sw) { }
+		public MultiplayerLocalTexture(Texture tex, MPTextureType texType, StreamWriter sw) : base(tex, texType, sw) {
+			ConvertTexture(tex, texType);
+		}
 		public MultiplayerLocalTexture(MPTextureType texType, StreamWriter sw) : base(texType, sw) { }
 
-		private byte[] ConvertTexture(Texture t, MPTextureType texType) {
+		private void ConvertTexture(Texture t, MPTextureType texType) {
 			Texture2D texture2D = null;
 			if (t.width <= 4096 && t.height <= 4096) {
 				texture2D = new Texture2D(t.width, t.height, TextureFormat.RGB24, false);
@@ -27,18 +30,18 @@ namespace XLMultiplayer {
 				RenderTexture.active = currentRT;
 			}
 
-			return texture2D == null ? new byte[1] { 0 } : texture2D.EncodeToJPG(80);
+			this.bytes = texture2D == null ? new byte[1] { 0 } : texture2D.EncodeToJPG(80);
 		}
 		
-		public void ConvertAndSaveTexture() {
-			bytes = ConvertTexture(texture, textureType);
+		public byte[] GetSendData() {
+			byte[] sendBuffer = new byte[this.bytes.Length + 3];
 
-			string path = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp";
-			if (!Directory.Exists(path)) {
-				Directory.CreateDirectory(path);
-			}
-			File.WriteAllBytes(path + "\\" + textureType.ToString() + ".jpg", bytes);
-			this.saved = true;
+			Array.Copy(this.bytes, 0, sendBuffer, 3, this.bytes.Length);
+			sendBuffer[0] = (byte)OpCode.Texture;
+			sendBuffer[1] = (byte)this.textureType;
+			sendBuffer[2] = useFull ? (byte)1 : (byte)0;
+
+			return sendBuffer;
 		}
 	}
 }
