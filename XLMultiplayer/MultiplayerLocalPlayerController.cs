@@ -31,19 +31,19 @@ namespace XLMultiplayer {
 				Main.statusMenu.loadingStatus = 0;
 				yield return new WaitForEndOfFrame();
 
-				this.shirtMPTex.ConvertAndSaveTexture();
+				this.shirtMPTex.ConvertTexture();
 				IncrementLoading();
 
-				this.pantsMPTex.ConvertAndSaveTexture();
+				this.pantsMPTex.ConvertTexture();
 				IncrementLoading();
 
-				this.shoesMPTex.ConvertAndSaveTexture();
+				this.shoesMPTex.ConvertTexture();
 				IncrementLoading();
 
-				this.hatMPTex.ConvertAndSaveTexture();
+				this.hatMPTex.ConvertTexture();
 				IncrementLoading();
 
-				this.boardMPTex.ConvertAndSaveTexture();
+				this.boardMPTex.ConvertTexture();
 				IncrementLoading();
 
 				IncrementLoading();

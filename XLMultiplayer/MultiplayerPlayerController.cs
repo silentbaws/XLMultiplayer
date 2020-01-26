@@ -8,6 +8,8 @@ namespace XLMultiplayer {
 	public class MultiplayerPlayerController {
 		public GameObject player { get; protected set; }
 
+		public string username;
+
 		protected StreamWriter debugWriter;
 
 		protected readonly string[] SkateboardMaterials = new string[] { "GripTape", "Deck", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };

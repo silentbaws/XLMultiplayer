@@ -5,20 +5,18 @@ using UnityModManagerNet;
 
 namespace XLMultiplayer {
 	public class MultiplayerLocalTexture : MultiplayerTexture {
-		public MultiplayerLocalTexture(Texture tex, MPTextureType texType, StreamWriter sw) : base(tex, texType, sw) {
-			ConvertTexture(tex, texType);
-		}
+		public MultiplayerLocalTexture(Texture tex, MPTextureType texType, StreamWriter sw) : base(tex, texType, sw) { }
 		public MultiplayerLocalTexture(MPTextureType texType, StreamWriter sw) : base(texType, sw) { }
 
-		private void ConvertTexture(Texture t, MPTextureType texType) {
+		public void ConvertTexture() {
 			Texture2D texture2D = null;
-			if (t.width <= 4096 && t.height <= 4096) {
-				texture2D = new Texture2D(t.width, t.height, TextureFormat.RGB24, false);
+			if (this.texture.width <= 4096 && this.texture.height <= 4096) {
+				texture2D = new Texture2D(this.texture.width, this.texture.height, TextureFormat.RGB24, false);
 
 				RenderTexture currentRT = RenderTexture.active;
 
-				RenderTexture renderTexture = new RenderTexture(t.width, t.height, 32);
-				Graphics.Blit(t, renderTexture);
+				RenderTexture renderTexture = new RenderTexture(this.texture.width, this.texture.height, 32);
+				Graphics.Blit(this.texture, renderTexture);
 
 				RenderTexture.active = renderTexture;
 				texture2D.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);

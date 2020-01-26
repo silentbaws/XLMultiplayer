@@ -17,9 +17,9 @@ namespace XLMultiplayer {
 		// TODO: Redo byte math
 		public void SaveTexture(int connectionId, byte[] buffer) {
 			this.debugWriter.WriteLine("Saving texture in queue");
-			this.useFull = buffer[11] == 1 ? true : false;
-			byte[] file = new byte[buffer.Length - 12];
-			Array.Copy(buffer, 12, file, 0, file.Length);
+			this.useFull = buffer[2] == 1 ? true : false;
+			byte[] file = new byte[buffer.Length - 3];
+			Array.Copy(buffer, 3, file, 0, file.Length);
 
 			if (file.Length == 1) {
 				this.useTexture = false;
@@ -41,10 +41,10 @@ namespace XLMultiplayer {
 				byte[] data = File.ReadAllBytes(this.fileLocation);
 				this.texture2d = new Texture2D(1, 1, TextureFormat.RGBA32, false);
 				this.texture2d.LoadImage(data);
-				controller.SetTexture(texture2d, textureType, useFull);
+				controller.SetPlayerTexture(texture2d, textureType, useFull);
 				loaded = true;
 			} else if (textureType == MPTextureType.Shirt) {
-				controller.SetTexture(null, MPTextureType.Shirt, useFull);
+				controller.SetPlayerTexture(null, MPTextureType.Shirt, useFull);
 			}
 		}
 	}

@@ -31,8 +31,7 @@ namespace XLMultiplayer {
 		public GameObject skaterMeshObjects { get; private set; }
 		public GameObject board { get; private set; }
 
-		public string username;
-		private GameObject usernameObject;
+		public GameObject usernameObject;
 		private TextMesh usernameText;
 
 		private int currentAnimationPacket = -1;

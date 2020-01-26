@@ -1,10 +1,14 @@
-﻿using System;
+﻿using ReplayEditor;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using Valve.Sockets;
+
+// TODO: Maybe send meshes? They're pretty small my dude
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -30,10 +34,14 @@ namespace XLMultiplayer {
 		private const int maxMessages = 100;
 		private NetworkingMessage[] netMessages;
 
+		private bool isConnected = false;
+
 		private StreamWriter debugWriter;
 
 		private MultiplayerLocalPlayerController playerController;
 		private List<MultiplayerRemotePlayerController> remoteControllers = new List<MultiplayerRemotePlayerController>();
+
+		private bool replayStarted = false;
 
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
@@ -52,7 +60,7 @@ namespace XLMultiplayer {
 			yield break;
 		}
 
-		public void ConnectToServer(string ip, ushort port) {
+		public void ConnectToServer(string ip, ushort port, string user) {
 			// Create a debug log file
 			int i = 0;
 			while (this.debugWriter == null) {
@@ -64,44 +72,100 @@ namespace XLMultiplayer {
 					i++;
 				}
 			}
+			this.debugWriter.AutoFlush = true;
+			this.debugWriter.WriteLine("Attempting to connect to server ip {0} on port {1}", ip, port.ToString());
+
+			MultiplayerUtils.serverMapDictionary.Clear();
+			
+			this.playerController = new MultiplayerLocalPlayerController(debugWriter);
+			this.playerController.ConstructPlayer();
+			this.playerController.username = user;
 
 			Library.Initialize();
 
 			client = new NetworkingSockets();
 
-			Address addy = new Address();
-			addy.SetAddress(ip, port);
+			Address remoteAddress = new Address();
+			remoteAddress.SetAddress(ip, port);
 
-			connection = client.Connect(ref addy);
+			connection = client.Connect(ref remoteAddress);
 
-			status = (info, context) => {
-				switch (info.connectionInfo.state) {
-					case ConnectionState.None:
-						break;
-
-					case ConnectionState.Connected:
-						// Client connected to server
-
-						// Start new send update thread
-
-						// Encode Textures coroutine
-
-						// Send textures on connection
-						break;
-
-					case ConnectionState.ClosedByPeer:
-						//Client disconnected from server
-						DisconnectFromServer();
-						break;
-
-					case ConnectionState.ProblemDetectedLocally:
-						//Client unable to connect
-						DisconnectFromServer();
-						break;
-				}
-			};
+			status = StatusCallback;
 
 			netMessages = new NetworkingMessage[maxMessages];
+		}
+
+		private void StatusCallback(StatusInfo info, IntPtr context) {
+			switch (info.connectionInfo.state) {
+				case ConnectionState.None:
+					break;
+
+				case ConnectionState.Connected:
+					ConnectionCallback();
+					break;
+
+				case ConnectionState.ClosedByPeer:
+					//Client disconnected from server
+					this.debugWriter.WriteLine("Disconnected from server");
+					DisconnectFromServer();
+					break;
+
+				case ConnectionState.ProblemDetectedLocally:
+					//Client unable to connect
+					this.debugWriter.WriteLine("Unable to connect to server");
+					DisconnectFromServer();
+					break;
+			}
+		}
+
+		// Called when player connects to server
+		private void ConnectionCallback() {
+			this.debugWriter.WriteLine("Successfully connected to server");
+			isConnected = true;
+
+			byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
+
+			// TODO: Send username bytes
+			
+			// TODO: Start new send update thread(Is this necessary? Maybe put UpdateClient on new thread?)
+
+			// TODO: Invoke SendUpdate
+
+			this.playerController.EncodeTextures();
+
+			SendTextures();
+		}
+
+		public void StartLoadMap(string path) {
+			this.StartCoroutine(LoadMap(path));
+		}
+
+		public IEnumerator LoadMap(string path) {
+			while (!IsInvoking("SendUpdate")) {
+				yield return new WaitForEndOfFrame();
+			}
+			//Load map with path
+			LevelSelectionController levelSelectionController = GameManagement.GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
+			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(true);
+			LevelInfo target = levelSelectionController.Levels.Find(level => level.path.Equals(path));
+			if (target == null) {
+				target = levelSelectionController.CustomLevels.Find(level => level.path.Equals(path));
+			}
+			if (target == null) {
+				Main.statusMenu.DisplayNoMap(path);
+			}
+			levelSelectionController.StartCoroutine(levelSelectionController.LoadLevel(target));
+			StartCoroutine(CloseAfterLoad());
+			yield break;
+		}
+
+		private IEnumerator CloseAfterLoad() {
+			while (GameManagement.GameStateMachine.Instance.IsLoading) {
+				yield return new WaitForEndOfFrame();
+			}
+			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(false);
+			Main.menu.CloseMultiplayerMenu();
+			yield break;
 		}
 
 		public void SendTextures() {
@@ -113,14 +177,36 @@ namespace XLMultiplayer {
 			if (client == null) return;
 
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
-				// Turn on username renderer and turn off replay controllersS
+				if (replayStarted) {
+					foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
+						controller.replayController.enabled = false;
+						controller.usernameObject.GetComponent<Renderer>().enabled = true;
+					}
+				}
+				replayStarted = false;
 			} else {
-				// Setup replay state on transition to replay state
+				if (!replayStarted) {
+					replayStarted = true;
+				}
+			}
+
+			// Don't allow use of map selection
+			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0 && isConnected) {
+				GameManagement.GameStateMachine.Instance.RequestPlayState();
 			}
 
 			UpdateClient();
 
-			// Lerp frames
+			// Lerp frames using frame buffer
+			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
+				if (controller != null) {
+					if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
+						controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
+						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
+					}
+					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
+				}
+			}
 		}
 
 		private void UpdateClient() {
