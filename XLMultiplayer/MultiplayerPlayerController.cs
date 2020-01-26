@@ -4,12 +4,6 @@ using UnityEngine;
 namespace XLMultiplayer {
 	public class MultiplayerPlayerController {
 		public GameObject player { get; protected set; }
-		
-		public MultiplayerTexture shirtMPTex;
-		public MultiplayerTexture pantsMPTex;
-		public MultiplayerTexture shoesMPTex;
-		public MultiplayerTexture hatMPTex;
-		public MultiplayerTexture boardMPTex;
 
 		protected StreamWriter debugWriter;
 
@@ -25,10 +19,6 @@ namespace XLMultiplayer {
 		// Override for local/remote players
 		public virtual void ConstructPlayer() {
 			
-		}
-
-		public virtual void SetTexture(Texture tex, MPTextureType texType, bool useFull) {
-			// Apply textures to player
 		}
 	}
 }

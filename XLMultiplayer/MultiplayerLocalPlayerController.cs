@@ -9,6 +9,12 @@ namespace XLMultiplayer {
 	public class MultiplayerLocalPlayerController : MultiplayerPlayerController {
 		private CharacterCustomizer _characterCustomizer;
 
+		public MultiplayerLocalTexture shirtMPTex;
+		public MultiplayerLocalTexture pantsMPTex;
+		public MultiplayerLocalTexture shoesMPTex;
+		public MultiplayerLocalTexture hatMPTex;
+		public MultiplayerLocalTexture boardMPTex;
+
 		private bool startedEncoding = false;
 		private bool copiedTextures = false;
 
@@ -85,7 +91,7 @@ namespace XLMultiplayer {
 				if (transform.gameObject.name.Equals("Skateboard")) {
 					foreach (Transform t2 in transform.GetComponentsInChildren<Transform>()) {
 						if (t2.name.Equals(SkateboardMaterials[0])) {
-							this.boardMPTex = new MultiplayerTexture(t2.GetComponent<Renderer>().material.GetTexture(MainDeckTextureName), MPTextureType.Board, this.debugWriter);
+							this.boardMPTex = new MultiplayerLocalTexture(t2.GetComponent<Renderer>().material.GetTexture(MainDeckTextureName), MPTextureType.Board, this.debugWriter);
 							foundBoard = true;
 							break;
 						}
@@ -102,23 +108,23 @@ namespace XLMultiplayer {
 			foreach (Tuple<CharacterGear, GameObject> tup in gearList) {
 				switch (tup.Item1.categoryName) {
 					case "Shirt":
-						this.shirtMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter) {
+						this.shirtMPTex = new MultiplayerLocalTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter) {
 							useFull = false
 						};
 						break;
 					case "Hoodie":
-						this.shirtMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter) {
+						this.shirtMPTex = new MultiplayerLocalTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter) {
 							useFull = true
 						};
 						break;
 					case "Hat":
-						this.hatMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Hat, this.debugWriter);
+						this.hatMPTex = new MultiplayerLocalTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Hat, this.debugWriter);
 						break;
 					case "Pants":
-						this.pantsMPTex = new MultiplayerTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Pants, this.debugWriter);
+						this.pantsMPTex = new MultiplayerLocalTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Pants, this.debugWriter);
 						break;
 					case "Shoes":
-						this.shoesMPTex = new MultiplayerTexture(tup.Item2.transform.Find("Shoe_R").GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shoes, this.debugWriter);
+						this.shoesMPTex = new MultiplayerLocalTexture(tup.Item2.transform.Find("Shoe_R").GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shoes, this.debugWriter);
 						break;
 				}
 			}

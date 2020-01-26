@@ -11,6 +11,12 @@ namespace XLMultiplayer {
 		public GameObject skater { get; private set; }
 		public GameObject skaterMeshObjects { get; private set; }
 		public GameObject board { get; private set; }
+		
+		public MultiplayerRemoteTexture shirtMPTex;
+		public MultiplayerRemoteTexture pantsMPTex;
+		public MultiplayerRemoteTexture shoesMPTex;
+		public MultiplayerRemoteTexture hatMPTex;
+		public MultiplayerRemoteTexture boardMPTex;
 
 		public MultiplayerRemotePlayerController(StreamWriter writer) : base(writer) {  }
 
@@ -28,7 +34,7 @@ namespace XLMultiplayer {
 			return newGear;
 		}
 
-		override public void SetTexture(Texture tex, MPTextureType texType, bool useFull) {
+		public void SetTexture(Texture tex, MPTextureType texType, bool useFull) {
 			// Apply textures to player
 		}
 
