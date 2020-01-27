@@ -3,8 +3,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using UnityEngine;
 using Valve.Sockets;
 
@@ -43,9 +45,16 @@ namespace XLMultiplayer {
 
 		private bool replayStarted = false;
 
+		private int sentAnimUpdates = 0;
+		private float previousSentAnimationTime = -1;
+
+		private int tickRate = 30;
+		private Thread updateThread;
+
+
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
-			if (ReplayEditor.ReplayEditorController.Instance == null) {
+			if (ReplayEditorController.Instance == null) {
 				GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(true);
 				StartCoroutine(TurnOffReplay());
 			}
@@ -53,7 +62,7 @@ namespace XLMultiplayer {
 
 		// Turn off replay editor as soon as it's instance is not null
 		private IEnumerator TurnOffReplay() {
-			while (ReplayEditor.ReplayEditorController.Instance == null)
+			while (ReplayEditorController.Instance == null)
 				yield return new WaitForEndOfFrame();
 
 			GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(false);
@@ -126,10 +135,12 @@ namespace XLMultiplayer {
 			byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
 
 			// TODO: Send username bytes
-			
-			// TODO: Start new send update thread(Is this necessary? Maybe put UpdateClient on new thread?)
 
-			// TODO: Invoke SendUpdate
+			// TODO: Start new send alive thread(Is this necessary? Maybe put UpdateClient on new thread?)
+
+			updateThread = new Thread(UpdateThreadFunction);
+			updateThread.IsBackground = true;
+			updateThread.Start();
 
 			this.playerController.EncodeTextures();
 
@@ -141,7 +152,7 @@ namespace XLMultiplayer {
 		}
 
 		public IEnumerator LoadMap(string path) {
-			while (!IsInvoking("SendUpdate")) {
+			while (updateThread == null || !updateThread.IsAlive) {
 				yield return new WaitForEndOfFrame();
 			}
 			//Load map with path
@@ -168,9 +179,9 @@ namespace XLMultiplayer {
 			yield break;
 		}
 
-		public void SendTextures() {
+		private void SendTextures() {
 			// Send this
-			playerController.shirtMPTex.GetSendData();
+			// playerController.shirtMPTex.GetSendData();
 		}
 
 		public void Update() {
@@ -219,6 +230,50 @@ namespace XLMultiplayer {
 			// Apply saved textures
 		}
 
+		private void UpdateThreadFunction() {
+			while (isConnected) {
+				SendUpdate();
+
+				Thread.Sleep((int)((1f/(float)this.tickRate)*1000));
+			}
+		}
+
+		private void SendUpdate() {
+			// Only send update if it's new transforms(don't waste bandwidth on duplicates)
+			if(this.playerController.currentAnimationTime != previousSentAnimationTime) {
+				previousSentAnimationTime = this.playerController.currentAnimationTime;
+
+				Tuple<byte[], bool> animationData = this.playerController.PackAnimations();
+				SendBytesAnimation(animationData.Item1, animationData.Item2);
+			}
+		}
+
+		// For things that encode the prebuffer during serialization
+		public void SendBytesRaw(byte[] msg, bool reliable) {
+		}
+
+		public void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
+			// Send bytes
+			byte[] sendMsg = new byte[msg.Length + 1];
+			sendMsg[0] = (byte)opCode;
+			Array.Copy(msg, 0, sendMsg, 1, msg.Length);
+			client.SendMessageToConnection(connection, msg, reliable ? SendType.Reliable : SendType.Unreliable);
+		}
+
+		private void SendBytesAnimation(byte[] msg, bool reliable) {
+			byte[] packetSequence = BitConverter.GetBytes(sentAnimUpdates);
+			byte[] packetData = Compress(msg);
+			byte[] packet = new byte[packetData.Length + packetSequence.Length + 1];
+
+			packet[0] = (byte)OpCode.Animation;
+			Array.Copy(packetSequence, 0, packet, 1, 4);
+			Array.Copy(packetData, 0, packet, 5, packetData.Length);
+
+			client.SendMessageToConnection(connection, packet, reliable ? SendType.Reliable : SendType.Unreliable);
+
+			sentAnimUpdates++;
+		}
+
 		private string RemoveMarkup(string msg) {
 			string old;
 
@@ -228,6 +283,23 @@ namespace XLMultiplayer {
 			} while (!msg.Equals(old));
 
 			return msg;
+		}
+
+		public static byte[] Compress(byte[] data) {
+			MemoryStream output = new MemoryStream();
+			using (DeflateStream dstream = new DeflateStream(output, CompressionLevel.Optimal)) {
+				dstream.Write(data, 0, data.Length);
+			}
+			return output.ToArray();
+		}
+
+		public static byte[] Decompress(byte[] data) {
+			MemoryStream compressedStream = new MemoryStream(data);
+			MemoryStream output = new MemoryStream();
+			using (DeflateStream dstream = new DeflateStream(compressedStream, CompressionMode.Decompress)) {
+				dstream.CopyTo(output);
+			}
+			return output.ToArray();
 		}
 
 		private void CleanupSockets() {
@@ -240,6 +312,12 @@ namespace XLMultiplayer {
 
 		public void DisconnectFromServer() {
 			client.CloseConnection(connection);
+
+			isConnected = false;
+
+			if(updateThread != null && updateThread.IsAlive) {
+				updateThread.Join();
+			}
 
 			CleanupSockets();
 		}

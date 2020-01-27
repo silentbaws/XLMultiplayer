@@ -17,6 +17,8 @@ namespace XLMultiplayer {
 
 		private int framesSinceKey = 5;
 
+		public float currentAnimationTime { get; private set; }
+
 		public MultiplayerLocalPlayerController(StreamWriter writer) : base(writer) {  }
 
 		private System.Collections.IEnumerator IncrementLoading() {
@@ -116,6 +118,8 @@ namespace XLMultiplayer {
 			TransformInfo[] T = frames[ReplayRecorder.Instance.RecordedFrames.Count - 1].transformInfos;
 			TransformInfo[] TPrevious = frames[ReplayRecorder.Instance.RecordedFrames.Count - 2].transformInfos;
 
+			currentAnimationTime = frames[frames.Count].time;
+
 			byte[] packed = new byte[useKey ? T.Length * 12 - (start * 12) : T.Length * 24 - (start * 24)];
 
 			for (int i = 0; i < T.Length - start; i++) {
@@ -160,7 +164,7 @@ namespace XLMultiplayer {
 			return packed;
 		}
 
-		public byte[] PackAnimations() {
+		public Tuple<byte[], bool> PackAnimations() {
 			framesSinceKey++;
 			bool useKey = false;
 
@@ -178,7 +182,7 @@ namespace XLMultiplayer {
 			Array.Copy(transforms, 0, packed, 1, transforms.Length);
 			Array.Copy(BitConverter.GetBytes(ReplayRecorder.Instance.RecordedFrames[ReplayRecorder.Instance.RecordedFrames.Count - 1].time), 0, packed, transforms.Length + 1, 4);
 
-			return packed;
+			return new Tuple<byte[], bool>(packed, useKey);
 		}
 	}
 }
