@@ -84,11 +84,11 @@ namespace XLMultiplayer {
 			this.player.SetActive(true);
 
 			this.board = this.player.transform.Find("Skateboard").gameObject;
-			this.board.transform.position = new Vector3(1111111, 111111111, 11111111);
+			this.board.transform.position = new Vector3(0, 0, 0);
 			this.board.name = "New Player Board";
 
 			this.skater = this.player.transform.Find("NewSkater").gameObject;
-			this.skater.transform.position = new Vector3(1111111, 111111111, 11111111);
+			this.skater.transform.position = new Vector3(0, 0, 0);
 			this.skater.name = "New Player Skater";
 
 			Transform hips = this.skater.transform.Find("Skater_Joints").Find("Skater_root");
@@ -117,44 +117,44 @@ namespace XLMultiplayer {
 
 			debugWriter.WriteLine("Added gear back");
 
-			bool foundHat = false, foundShirt = false, foundPants = false, foundShoes = false;
+			//bool foundHat = false, foundShirt = false, foundPants = false, foundShoes = false;
 
-			foreach(Tuple<CharacterGear, GameObject> GearItem in gearList) {
-				switch (GearItem.Item1.categoryName) {
-					case "Hat":
-						foundHat = true;
-						break;
-					case "Hoodie":
-						foundShirt = true;
-						break;
-					case "Shirt":
-						foundShirt = true;
-						break;
-					case "Pants":
-						foundPants = true;
-						break;
-					case "Shoes":
-						foundShoes = true;
-						break;
-				}
-			}
+			//foreach(Tuple<CharacterGear, GameObject> GearItem in gearList) {
+			//	switch (GearItem.Item1.categoryName) {
+			//		case "Hat":
+			//			foundHat = true;
+			//			break;
+			//		case "Hoodie":
+			//			foundShirt = true;
+			//			break;
+			//		case "Shirt":
+			//			foundShirt = true;
+			//			break;
+			//		case "Pants":
+			//			foundPants = true;
+			//			break;
+			//		case "Shoes":
+			//			foundShoes = true;
+			//			break;
+			//	}
+			//}
 
-			if (!foundHat) {
-				CharacterGear newHat = CreateGear(GearCategory.Hat, "Hat", "PAX_1");
-				characterCustomizer.LoadGear(newHat);
-			}
-			if (!foundPants) {
-				CharacterGear newPants = CreateGear(GearCategory.Pants, "Pants", "PAX_1");
-				characterCustomizer.LoadGear(newPants);
-			}
-			if (!foundShirt) {
-				CharacterGear newShirt = CreateGear(GearCategory.Shirt, "Shirt", "PAX_1");
-				characterCustomizer.LoadGear(newShirt);
-			}
-			if (!foundShoes) {
-				CharacterGear newShoes = CreateGear(GearCategory.Shoes, "Shoes", "PAX_1");
-				characterCustomizer.LoadGear(newShoes);
-			}
+			//if (!foundHat) {
+			//	CharacterGear newHat = CreateGear(GearCategory.Hat, "Hat", "PAX_1");
+			//	characterCustomizer.LoadGear(newHat);
+			//}
+			//if (!foundPants) {
+			//	CharacterGear newPants = CreateGear(GearCategory.Pants, "Pants", "PAX_1");
+			//	characterCustomizer.LoadGear(newPants);
+			//}
+			//if (!foundShirt) {
+			//	CharacterGear newShirt = CreateGear(GearCategory.Shirt, "Shirt", "PAX_1");
+			//	characterCustomizer.LoadGear(newShirt);
+			//}
+			//if (!foundShoes) {
+			//	CharacterGear newShoes = CreateGear(GearCategory.Shoes, "Shoes", "PAX_1");
+			//	characterCustomizer.LoadGear(newShoes);
+			//}
 
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
@@ -311,6 +311,7 @@ namespace XLMultiplayer {
 
 		// TODO: refactor all this shit, I'm sure there's a better way
 		public void LerpNextFrame(bool inReplay, bool recursive = false, float offset = 0, int recursionLevel = 0) {
+			this.debugWriter.WriteLine(this.animationFrames.Count);
 			if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) return;
 			if (!startedAnimating && animationFrames.Count > 5) {
 				if (this.animationFrames[0].vectors == null || !this.animationFrames[0].key) {
@@ -383,6 +384,7 @@ namespace XLMultiplayer {
 			else this.animationFrames[0].timeSinceStart = offset;
 
 			if (!inReplay) {
+				this.debugWriter.WriteLine("lerping shit");
 				for (int i = 0; i < 77; i++) {
 					bones[i].localPosition = Vector3.Lerp(bones[i].localPosition, this.animationFrames[0].vectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
 					bones[i].localRotation = Quaternion.Slerp(bones[i].localRotation, this.animationFrames[0].quaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);

@@ -133,7 +133,7 @@ namespace XLMultiplayer {
 			this.debugWriter.WriteLine("Successfully connected to server");
 			isConnected = true;
 
-			byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
+			//byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
 
 			// TODO: Send username bytes
 
@@ -141,13 +141,15 @@ namespace XLMultiplayer {
 
 			// TODO: Send version number before updates and stuff
 
-			updateThread = new Thread(UpdateThreadFunction);
-			updateThread.IsBackground = true;
-			updateThread.Start();
+			//updateThread = new Thread(new ThreadStart(UpdateThreadFunction));
+			//updateThread.IsBackground = true;
+			//updateThread.Start();
 
-			this.playerController.EncodeTextures();
+			InvokeRepeating("SendUpdate", 0f, 1f / (float)this.tickRate);
+			
+			//this.playerController.EncodeTextures();
 
-			SendTextures();
+			//SendTextures();
 		}
 
 		public void StartLoadMap(string path) {
@@ -256,6 +258,8 @@ namespace XLMultiplayer {
 				Array.Copy(buffer, 1, newBuffer, 0, buffer.Length - 2);
 			}
 
+			this.debugWriter.WriteLine("Recieved message with opcode {0}, and length {1}", opCode, buffer.Length);
+
 			switch (opCode) {
 				case OpCode.Connect:
 					AddPlayer(playerID);
@@ -264,7 +268,16 @@ namespace XLMultiplayer {
 					RemovePlayer(playerID);
 					break;
 				case OpCode.Animation:
-					this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(Decompress(newBuffer));
+					byte[] packetData = new byte[newBuffer.Length - 4];
+					Array.Copy(newBuffer, 4, packetData, 0, packetData.Length);
+
+					byte[] decompressedData = Decompress(packetData);
+
+					byte[] animationData = new byte[decompressedData.Length + 4];
+					Array.Copy(newBuffer, 0, animationData, 0, 4);
+					Array.Copy(decompressedData, 0, animationData, 4, decompressedData.Length);
+
+					this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(animationData);
 					break;
 			}
 		}
@@ -280,6 +293,7 @@ namespace XLMultiplayer {
 			MultiplayerRemotePlayerController remotePlayer = this.remoteControllers.Find(p => p.playerID == playerID);
 			this.remoteControllers.Remove(remotePlayer);
 			UnityEngine.Object.Destroy(remotePlayer.skater);
+			UnityEngine.Object.Destroy(remotePlayer.board);
 		}
 
 		private void UpdateThreadFunction() {
@@ -290,13 +304,14 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void SendUpdate() {
-			// Only send update if it's new transforms(don't waste bandwidth on duplicates)
-			if(this.playerController.currentAnimationTime != previousSentAnimationTime) {
-				previousSentAnimationTime = this.playerController.currentAnimationTime;
+		public void SendUpdate() {
+			Tuple<byte[], bool> animationData = this.playerController.PackAnimations();
 
-				Tuple<byte[], bool> animationData = this.playerController.PackAnimations();
+			// Only send update if it's new transforms(don't waste bandwidth on duplicates)
+			if (this.playerController.currentAnimationTime != previousSentAnimationTime) {
 				SendBytesAnimation(animationData.Item1, animationData.Item2);
+
+				previousSentAnimationTime = this.playerController.currentAnimationTime;
 			}
 		}
 
@@ -373,6 +388,8 @@ namespace XLMultiplayer {
 			}
 
 			CleanupSockets();
+
+			UnityEngine.Object.Destroy(this);
 		}
 
 		public void OnDestroy() {

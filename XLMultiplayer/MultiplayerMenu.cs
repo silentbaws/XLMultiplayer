@@ -33,11 +33,11 @@ namespace XLMultiplayer {
 		}
 
 		public void EndMultiplayer() {
+			CloseMultiplayerMenu();
 			if (Main.multiplayerController != null) {
 				Destroy(Main.multiplayerController);
 				Destroy(this.multiplayerManagerObject);
 			}
-			CloseMultiplayerMenu();
 		}
 		
 		public void OpenMultiplayerMenu() {
@@ -200,6 +200,10 @@ namespace XLMultiplayer {
 		}
 
 		public void OnDestroy() {
+			EndMultiplayer();
+		}
+
+		public void OnApplicationQuit() {
 			EndMultiplayer();
 		}
 

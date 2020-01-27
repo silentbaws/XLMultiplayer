@@ -63,10 +63,6 @@ namespace XLMultiplayerServer {
 
 		private static void ProcessMessage(byte[] buffer, byte fromID, NetworkingSockets server) {
 			switch ((OpCode)buffer[0]) {
-				case OpCode.Connect:
-					break;
-				case OpCode.Disconnect:
-					break;
 				case OpCode.Animation:
 					bool reliable = buffer[buffer.Length - 1] == (byte)1 ? true : false;
 					buffer[buffer.Length - 1] = fromID;
@@ -109,12 +105,14 @@ namespace XLMultiplayerServer {
 								players[i] = new Player(i, info.connection, info.connectionInfo.address);
 
 								foreach(Player player in players) {
-									if(player != null) {
+									if(player != null && player != players[i]) {
+										server.SendMessageToConnection(players[i].connection, new byte[] { (byte)OpCode.Connect, player.playerID }, SendType.Reliable);
 										server.SendMessageToConnection(player.connection, new byte[] { (byte)OpCode.Connect, i }, SendType.Reliable);
 									}
 								}
 
 								openSlot = true;
+								break;
 							}
 						}
 
@@ -124,10 +122,11 @@ namespace XLMultiplayerServer {
 						break;
 
 					case ConnectionState.ClosedByPeer:
-						server.CloseConnection(info.connection);
+						Console.WriteLine("Client disconnected - ID: " + info.connection + ", IP: " + info.connectionInfo.address.GetIP());
+
 						Player removedPlayer = null;
 						foreach(Player player in players) {
-							if(player.connection == info.connection) {
+							if(player != null && player.connection == info.connection) {
 								removedPlayer = player;
 								break;
 							}
@@ -142,6 +141,7 @@ namespace XLMultiplayerServer {
 						}
 
 						players[removedPlayer.playerID] = null;
+						server.CloseConnection(info.connection);
 						break;
 				}
 			};
@@ -168,6 +168,8 @@ namespace XLMultiplayerServer {
 								break;
 							}
 						}
+
+						Console.WriteLine("Recieved packet from connection {0}, sending player null: {1}", netMessage.connection, sendingPlayer == null);
 
 						if (sendingPlayer != null)
 							ProcessMessage(messageData, sendingPlayer.playerID, server);

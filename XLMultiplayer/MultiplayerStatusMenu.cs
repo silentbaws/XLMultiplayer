@@ -156,21 +156,21 @@ namespace XLMultiplayer {
 				invalidMapTimer = 0.0f;
 			}
 
-			if (this.connectedImage != null && this.disconnectedImage != null) {
-				this.connectedImage.enabled = (Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) && showStatus;
-				this.disconnectedImage.enabled = (Main.menu.multiplayerManager == null || !Main.menu.multiplayerManager.runningClient) && showStatus;
-			}
-			if (connectedPlayers == null && Main.menu.multiplayerManager != null)
-				connectedPlayers = Main.menu.multiplayerManager.otherControllers;
-			if (Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.ourController != null)
-				playerNames = Main.menu.multiplayerManager.ourController.username + "(YOU)\n";
-			numPlayers = 0;
-			if (connectedPlayers != null) {
-				foreach (MultiplayerPlayerController player in connectedPlayers) {
-					playerNames += player.username + "\n";
-					numPlayers++;
-				}
-			}
+			//if (this.connectedImage != null && this.disconnectedImage != null) {
+			//	this.connectedImage.enabled = (Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) && showStatus;
+			//	this.disconnectedImage.enabled = (Main.menu.multiplayerManager == null || !Main.menu.multiplayerManager.runningClient) && showStatus;
+			//}
+			//if (connectedPlayers == null && Main.menu.multiplayerManager != null)
+			//	connectedPlayers = Main.menu.multiplayerManager.otherControllers;
+			//if (Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.ourController != null)
+			//	playerNames = Main.menu.multiplayerManager.ourController.username + "(YOU)\n";
+			//numPlayers = 0;
+			//if (connectedPlayers != null) {
+			//	foreach (MultiplayerPlayerController player in connectedPlayers) {
+			//		playerNames += player.username + "\n";
+			//		numPlayers++;
+			//	}
+			//}
 		}
 
 		public void StartVotePopup() {
@@ -206,7 +206,7 @@ namespace XLMultiplayer {
 
 				if (GUI.Button(new Rect(10, 30 * count, 220, 25), item.Value)) {
 					byte[] mapVote = ASCIIEncoding.ASCII.GetBytes(item.Key);
-					Main.menu.multiplayerManager.SendBytes(OpCode.MapVote, mapVote, true);
+					//Main.menu.multiplayerManager.SendBytes(OpCode.MapVote, mapVote, true);
 					MultiplayerUtils.currentVote = item.Key;
 				}
 				count++;
@@ -251,48 +251,48 @@ namespace XLMultiplayer {
 				GUI.Label(rect, "Tried to connect to server using a map you don't have. If you have the map either the client hasn't hashed all your maps, it's a different version from the servers, or it has a '.' in the name\nServer Map: " + serverMap, style);
 			}
 
-			if (showStatus && Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) {
-				Rect rect = new Rect(Screen.width - Screen.width * 0.2f, Screen.width * 0.1f, Screen.width * 0.2f - 5, (numPlayers + 1) * 25f);
+			//if (showStatus && Main.menu.multiplayerManager != null && Main.menu.multiplayerManager.runningClient) {
+			//	Rect rect = new Rect(Screen.width - Screen.width * 0.2f, Screen.width * 0.1f, Screen.width * 0.2f - 5, (numPlayers + 1) * 25f);
 
-				GUI.contentColor = Color.black;
-				GUIStyle nameStyle = new GUIStyle();
-				nameStyle.fontSize = 16;
-				nameStyle.alignment = TextAnchor.UpperRight;
-				GUI.Label(rect, playerNames, nameStyle);
+			//	GUI.contentColor = Color.black;
+			//	GUIStyle nameStyle = new GUIStyle();
+			//	nameStyle.fontSize = 16;
+			//	nameStyle.alignment = TextAnchor.UpperRight;
+			//	GUI.Label(rect, playerNames, nameStyle);
 
-				NetworkClient client = Main.menu.multiplayerManager.client;
+			//	NetworkClient client = Main.menu.multiplayerManager.client;
 
-				Rect rect2 = new Rect(0, Screen.height - 105, Screen.width, 100);
-				GUIStyle style = new GUIStyle();
-				style.fontSize = 16;
-				style.alignment = TextAnchor.LowerCenter;
+			//	Rect rect2 = new Rect(0, Screen.height - 105, Screen.width, 100);
+			//	GUIStyle style = new GUIStyle();
+			//	style.fontSize = 16;
+			//	style.alignment = TextAnchor.LowerCenter;
 
-				GUI.Label(rect2, "Ping: " + client.ping.ToString() + "\nPacket Loss: " + client.packetLoss.ToString() + "%", style);
+			//	GUI.Label(rect2, "Ping: " + client.ping.ToString() + "\nPacket Loss: " + client.packetLoss.ToString() + "%", style);
 
-				if (Main.menu.multiplayerManager.isConnected) {
-					GUI.backgroundColor = Color.black;
-					GUI.contentColor = Color.white;
+			//	if (Main.menu.multiplayerManager.isConnected) {
+			//		GUI.backgroundColor = Color.black;
+			//		GUI.contentColor = Color.white;
 
-					if (Input.GetKeyDown(KeyCode.T) && !GUI.GetNameOfFocusedControl().Equals("Text Chat")) {
-						GUI.FocusControl("Text Chat");
-						refocused = true;
-						refocusWatch.Reset();
-						refocusWatch.Start();
-					}
+			//		if (Input.GetKeyDown(KeyCode.T) && !GUI.GetNameOfFocusedControl().Equals("Text Chat")) {
+			//			GUI.FocusControl("Text Chat");
+			//			refocused = true;
+			//			refocusWatch.Reset();
+			//			refocusWatch.Start();
+			//		}
 
-					chatWindowRect = GUI.Window(2, chatWindowRect, DisplayChat, "Chat");
-					if (chatWindowRect.x < 0) {
-						chatWindowRect.x = 0;
-					} else if (chatWindowRect.x + chatWindowRect.width > Screen.width) {
-						chatWindowRect.x = Screen.width - chatWindowRect.width;
-					}
-					if (chatWindowRect.y < 0) {
-						chatWindowRect.y = 0;
-					} else if (chatWindowRect.y + chatWindowRect.height > Screen.height) {
-						chatWindowRect.y = Screen.height - chatWindowRect.height;
-					}
-				}
-			}
+			//		chatWindowRect = GUI.Window(2, chatWindowRect, DisplayChat, "Chat");
+			//		if (chatWindowRect.x < 0) {
+			//			chatWindowRect.x = 0;
+			//		} else if (chatWindowRect.x + chatWindowRect.width > Screen.width) {
+			//			chatWindowRect.x = Screen.width - chatWindowRect.width;
+			//		}
+			//		if (chatWindowRect.y < 0) {
+			//			chatWindowRect.y = 0;
+			//		} else if (chatWindowRect.y + chatWindowRect.height > Screen.height) {
+			//			chatWindowRect.y = Screen.height - chatWindowRect.height;
+			//		}
+			//	}
+			//}
 
 
 			if (isLoading) {
@@ -320,15 +320,15 @@ namespace XLMultiplayer {
 			style2.wordWrap = true;
 			style2.richText = true;
 
-			if (MultiplayerController.chatMessages.Count > 0) {
-				int difference = MultiplayerController.chatMessages.Count - previousMessageCount;
-				for (int i = MultiplayerController.chatMessages.Count - difference; i < MultiplayerController.chatMessages.Count; i++) {
-					chat += MultiplayerController.chatMessages[i] + "\n";
-				}
-				previousMessageCount = MultiplayerController.chatMessages.Count;
-				if (style2.CalcHeight(new GUIContent(chat), chatWindowRect.width - 26) > chatWindowRect.height - 43)
-					chatScrollPosition.y += difference * style2.lineHeight;
-			}
+			//if (MultiplayerController.chatMessages.Count > 0) {
+			//	int difference = MultiplayerController.chatMessages.Count - previousMessageCount;
+			//	for (int i = MultiplayerController.chatMessages.Count - difference; i < MultiplayerController.chatMessages.Count; i++) {
+			//		chat += MultiplayerController.chatMessages[i] + "\n";
+			//	}
+			//	previousMessageCount = MultiplayerController.chatMessages.Count;
+			//	if (style2.CalcHeight(new GUIContent(chat), chatWindowRect.width - 26) > chatWindowRect.height - 43)
+			//		chatScrollPosition.y += difference * style2.lineHeight;
+			//}
 
 			chatScrollPosition = GUI.BeginScrollView(new Rect(3, 20, chatWindowRect.width - 6, chatWindowRect.height - 43), chatScrollPosition, new Rect(3, 0, chatWindowRect.width - 26, style2.CalcHeight(new GUIContent(chat), chatWindowRect.width - 26) - style2.lineHeight), false, true, GUIStyle.none, style);
 			GUI.Label(new Rect(3, 0, chatWindowRect.width - 26, style2.CalcHeight(new GUIContent(chat), chatWindowRect.width - 26)), chat, style2);
@@ -361,7 +361,7 @@ namespace XLMultiplayer {
 			Event current = Event.current;
 			if (current.isKey && current.keyCode == KeyCode.Return && GUI.GetNameOfFocusedControl().Equals("Text Chat")) {
 				current.Use();
-				Main.menu.multiplayerManager.SendChatMessage(typedText);
+				//Main.menu.multiplayerManager.SendChatMessage(typedText);
 				typedText = "";
 				GUI.FocusControl(null);
 				GUI.UnfocusWindow();
