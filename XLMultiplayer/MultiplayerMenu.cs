@@ -28,14 +28,14 @@ namespace XLMultiplayer {
 					this.CloseMultiplayerMenu();
 				}
 			}
-			if (this.multiplayerMenuConnectText != null) this.multiplayerMenuConnectText.text = this.multiplayerManager == null || !this.multiplayerManager.runningClient ? "Connect To Server" : "Disconnect";
+			if (this.multiplayerMenuConnectText != null) this.multiplayerMenuConnectText.text = Main.multiplayerController == null ? "Connect To Server" : "Disconnect";
 			if (this.multiplayerMenuOpen) Cursor.visible = true;
 		}
 
 		public void EndMultiplayer() {
-			if (this.multiplayerManager != null) {
-				this.multiplayerManager.KillConnection();
-				Destroy(this.multiplayerManager);
+			if (Main.multiplayerController != null) {
+				Destroy(Main.multiplayerController);
+				Destroy(this.multiplayerManagerObject);
 			}
 			CloseMultiplayerMenu();
 		}
@@ -126,18 +126,18 @@ namespace XLMultiplayer {
 			this.multiplayerMenuConnectButton.targetGraphic = this.multiplayerMenuConnectButtonImage;
 
 			this.multiplayerMenuConnectButton.onClick.AddListener(delegate () {
-				if (this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient) {
+				if (this.multiplayerManagerObject == null) {
 					CreateMultiplayerManager();
-					this.multiplayerManager.ConnectToServer(ipAddress.Equals("IP Address") ? "127.0.0.1" : ipAddress, port.Equals("Port") ? 7777 : int.Parse(port), this.username);
+					Main.multiplayerController.ConnectToServer(ipAddress.Equals("IP Address") ? "127.0.0.1" : ipAddress, (ushort)(port.Equals("Port") ? 7777 : int.Parse(port)), this.username);
 				} else if (this.multiplayerManagerObject != null) {
-					this.multiplayerManager.KillConnection();
+					EndMultiplayer();
 				}
 			});
 
 			this.multiplayerMenuConnectTextObject = new GameObject();
 			this.multiplayerMenuConnectTextObject.transform.SetParent(this.multiplayerMenuConnectObject.transform, false);
 			this.multiplayerMenuConnectText = this.multiplayerMenuConnectTextObject.AddComponent<Text>();
-			this.multiplayerMenuConnectText.text = this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient ? "Connect To Server" : "Disconnect";
+			this.multiplayerMenuConnectText.text = this.multiplayerManagerObject == null ? "Connect To Server" : "Disconnect";
 			this.multiplayerMenuConnectText.transform.SetParent(this.multiplayerMenuCanvas.transform, false);
 			this.multiplayerMenuConnectText.rectTransform.sizeDelta = Vector2.zero;
 			this.multiplayerMenuConnectText.rectTransform.anchorMin = new Vector2(0.05f, 0.75f);
@@ -169,7 +169,7 @@ namespace XLMultiplayer {
 		}
 
 		private void OnGUI() {
-			if (this.multiplayerMenuOpen && (this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient)) {
+			if (this.multiplayerMenuOpen && (this.multiplayerManagerObject == null)) {
 				Vector3[] vectors = new Vector3[4];
 				this.multiplayerMenuConnectButtonImage.rectTransform.GetWorldCorners(vectors);
 				float screenScale = Screen.height / 1080f;
@@ -180,7 +180,7 @@ namespace XLMultiplayer {
 				Rect rect3 = new Rect(rect.x, rect.y + rect.height + 5, rect.width, rect.height);
 				username = GUI.TextField(rect3, username, 16);
 
-				if (this.multiplayerManagerObject == null || !this.multiplayerManager.runningClient) {
+				if (this.multiplayerManagerObject == null) {
 					Rect openBrowser = new Rect(rect.x, rect3.y + rect3.height + 5, rect.width, 40);
 					if (GUI.Button(openBrowser, "Open server browser")) {
 						if (!serverBrowser.showUI) {
@@ -195,7 +195,7 @@ namespace XLMultiplayer {
 			if (this.multiplayerManagerObject == null) {
 				this.multiplayerManagerObject = new GameObject();
 				this.multiplayerManagerObject.transform.parent = this.transform;
-				this.multiplayerManager = this.multiplayerManagerObject.AddComponent<MultiplayerController>();
+				Main.multiplayerController = this.multiplayerManagerObject.AddComponent<MultiplayerController>();
 			}
 		}
 

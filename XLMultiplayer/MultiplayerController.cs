@@ -233,7 +233,7 @@ namespace XLMultiplayer {
 					ref NetworkingMessage netMessage = ref netMessages[i];
 
 					byte[] messageData = new byte[netMessage.length];
-					Marshal.Copy(netMessage.data, messageData, 0, messageData.Length);
+					netMessage.CopyTo(messageData);
 
 					ProcessMessage(messageData);
 
@@ -277,7 +277,9 @@ namespace XLMultiplayer {
 		}
 
 		private void RemovePlayer(byte playerID) {
-			this.remoteControllers.RemoveAll(p => p.playerID == playerID);
+			MultiplayerRemotePlayerController remotePlayer = this.remoteControllers.Find(p => p.playerID == playerID);
+			this.remoteControllers.Remove(remotePlayer);
+			UnityEngine.Object.Destroy(remotePlayer.skater);
 		}
 
 		private void UpdateThreadFunction() {
@@ -313,11 +315,12 @@ namespace XLMultiplayer {
 		private void SendBytesAnimation(byte[] msg, bool reliable) {
 			byte[] packetSequence = BitConverter.GetBytes(sentAnimUpdates);
 			byte[] packetData = Compress(msg);
-			byte[] packet = new byte[packetData.Length + packetSequence.Length + 1];
+			byte[] packet = new byte[packetData.Length + packetSequence.Length + 2];
 
 			packet[0] = (byte)OpCode.Animation;
 			Array.Copy(packetSequence, 0, packet, 1, 4);
 			Array.Copy(packetData, 0, packet, 5, packetData.Length);
+			packet[packet.Length - 1] = reliable ? (byte)1 : (byte)0;
 
 			client.SendMessageToConnection(connection, packet, reliable ? SendType.Reliable : SendType.Unreliable);
 
