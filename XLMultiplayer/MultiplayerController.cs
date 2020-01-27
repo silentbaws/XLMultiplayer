@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -138,6 +139,8 @@ namespace XLMultiplayer {
 
 			// TODO: Start new send alive thread(Is this necessary? Maybe put UpdateClient on new thread?)
 
+			// TODO: Send version number before updates and stuff
+
 			updateThread = new Thread(UpdateThreadFunction);
 			updateThread.IsBackground = true;
 			updateThread.Start();
@@ -223,11 +226,58 @@ namespace XLMultiplayer {
 		private void UpdateClient() {
 			client.DispatchCallback(status);
 
-			// Read messages
+			int netMessagesCount = client.ReceiveMessagesOnConnection(connection, netMessages, maxMessages);
+
+			if (netMessagesCount > 0) {
+				for (int i = 0; i < netMessagesCount; i++) {
+					ref NetworkingMessage netMessage = ref netMessages[i];
+
+					byte[] messageData = new byte[netMessage.length];
+					Marshal.Copy(netMessage.data, messageData, 0, messageData.Length);
+
+					ProcessMessage(messageData);
+
+					netMessage.Destroy();
+				}
+			}
 
 			// Save textures from queue
 
 			// Apply saved textures
+		}
+
+		private void ProcessMessage(byte[] buffer) {
+			OpCode opCode = (OpCode)buffer[0];
+			byte playerID = buffer[buffer.Length - 1];
+
+			byte[] newBuffer = new byte[buffer.Length - 2];
+
+			if(newBuffer.Length != 0) {
+				Array.Copy(buffer, 1, newBuffer, 0, buffer.Length - 2);
+			}
+
+			switch (opCode) {
+				case OpCode.Connect:
+					AddPlayer(playerID);
+					break;
+				case OpCode.Disconnect:
+					RemovePlayer(playerID);
+					break;
+				case OpCode.Animation:
+					this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(Decompress(newBuffer));
+					break;
+			}
+		}
+
+		private void AddPlayer(byte playerID) {
+			MultiplayerRemotePlayerController newPlayer = new MultiplayerRemotePlayerController(this.debugWriter);
+			newPlayer.ConstructPlayer();
+			newPlayer.playerID = playerID;
+			this.remoteControllers.Add(newPlayer);
+		}
+
+		private void RemovePlayer(byte playerID) {
+			this.remoteControllers.RemoveAll(p => p.playerID == playerID);
 		}
 
 		private void UpdateThreadFunction() {

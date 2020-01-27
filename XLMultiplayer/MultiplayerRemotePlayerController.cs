@@ -54,6 +54,8 @@ namespace XLMultiplayer {
 
 		public ReplayPlaybackController replayController;
 
+		public byte playerID = 255;
+
 		public MultiplayerRemotePlayerController(StreamWriter writer) : base(writer) {  }
 
 		//TODO: half this stuff probably isn't needed
