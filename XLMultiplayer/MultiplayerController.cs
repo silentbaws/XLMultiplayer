@@ -150,7 +150,7 @@ namespace XLMultiplayer {
 
 				// Re-order 25% of packets and add 200ms delay on reordered packets
 				float reorderPercent = 25f;
-				int reorderTime = 100;
+				int reorderTime = 30;
 				utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&reorderPercent));
 				utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderTime, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&reorderTime));
 
@@ -159,7 +159,7 @@ namespace XLMultiplayer {
 				utils.SetConfiguratioValue(ConfigurationValue.FakePacketLagSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&pingTime));
 
 				// Simulate 2% packet loss
-				float lossPercent = 2f;
+				float lossPercent = 0.2f;
 				utils.SetConfiguratioValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
 			}
 			#endif

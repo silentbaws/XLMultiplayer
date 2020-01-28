@@ -492,18 +492,26 @@ namespace XLMultiplayer {
 			
 			this.replayAnimationFrames.RemoveRange(0, firstKey);
 
+			MultiplayerFrameBufferObject firstRealTime, lastRealTime;
+			firstRealTime = this.replayAnimationFrames.Find(f => f.realFrameTime != -1f);
+			lastRealTime = this.replayAnimationFrames.Last(f => f.realFrameTime != -1f);
+
+			if (firstRealTime == lastRealTime) return;
+
+			float averageFrameTime = (lastRealTime.animFrame - firstRealTime.animFrame) / (lastRealTime.realFrameTime - firstRealTime.realFrameTime);
+
 			ReplayRecordedFrame previousFrame = null;
 			for(int f = 0; f < this.replayAnimationFrames.Count; f++) {
 				MultiplayerFrameBufferObject frame = this.replayAnimationFrames[f];
 
 				if(f == 0) {
 					MultiplayerFrameBufferObject firstFrameWithTime = this.replayAnimationFrames.First(obj => obj.realFrameTime != -1f);
-					frame.realFrameTime = firstFrameWithTime.realFrameTime + (frame.animFrame - firstFrameWithTime.animFrame) * (1f / 30f);
+					frame.realFrameTime = firstFrameWithTime.realFrameTime + (frame.animFrame - firstFrameWithTime.animFrame) * averageFrameTime;
 				}
 
-				if(f > 0 && !frame.key && this.replayAnimationFrames[f - 1].animFrame != frame.animFrame - 1) {
-					continue;
-				}
+				//if(f > 0 && !frame.key && this.replayAnimationFrames[f - 1].animFrame != frame.animFrame - 1) {
+				//	continue;
+				//}
 
 				TransformInfo[] transforms = null;
 
