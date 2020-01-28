@@ -15,6 +15,7 @@ namespace XLMultiplayer {
 
 		public bool key = false;
 
+		public float realFrameTime = -1f;
 		public float frameTime;
 		public float deltaTime = 0;
 		public float timeSinceStart = 0;
@@ -37,13 +38,17 @@ namespace XLMultiplayer {
 		private int currentAnimationPacket = -1;
 		private Transform[] bones;
 
-		bool startedAnimating = false;
-		float previousFrameTime = 0;
+		private bool startedAnimating = false;
+		private float previousFrameTime = 0;
+		private float firstFrameTime = -1f;
+		private float startAnimTime = -1f;
+		public float lastReplayFrame = 1f;
 
 		private bool waitingForDelay = false;
 		private bool speedDelay = false;
 
 		List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
+		List<MultiplayerFrameBufferObject> replayAnimationFrames = new List<MultiplayerFrameBufferObject>();
 		public List<ReplayRecordedFrame> recordedFrames = new List<ReplayRecordedFrame>();
 
 		public MultiplayerRemoteTexture shirtMPTex;
@@ -249,17 +254,12 @@ namespace XLMultiplayer {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
 
 			byte[] buffer = new byte[recBuffer.Length - 5];
+			bool ordered = true;
 			if (receivedPacketSequence < currentAnimationPacket - 5) {
-				// TODO: Add packet to the old frames in place
-				return;
+				ordered = false;
 			} else {
 				Array.Copy(recBuffer, 5, buffer, 0, recBuffer.Length - 5);
-				currentAnimationPacket = receivedPacketSequence > currentAnimationPacket ? receivedPacketSequence : currentAnimationPacket;
-			}
-
-			if (animationFrames.Find(f => f.animFrame == receivedPacketSequence) != null) {
-				debugWriter.WriteLine("Duped frame of animation for player: " + this.username);
-				return;
+				currentAnimationPacket = Math.Max(currentAnimationPacket, receivedPacketSequence);
 			}
 
 			MultiplayerFrameBufferObject currentBufferObject = new MultiplayerFrameBufferObject();
@@ -268,6 +268,10 @@ namespace XLMultiplayer {
 			currentBufferObject.animFrame = receivedPacketSequence;
 
 			currentBufferObject.frameTime = BitConverter.ToSingle(buffer, buffer.Length - 4);
+
+			if (this.firstFrameTime != -1f && currentBufferObject.frameTime < this.firstFrameTime) {
+				return;
+			}
 
 			List<Vector3> vectors = new List<Vector3>();
 			List<Quaternion> quaternions = new List<Quaternion>();
@@ -305,13 +309,42 @@ namespace XLMultiplayer {
 			currentBufferObject.vectors = vectors.ToArray();
 			currentBufferObject.quaternions = quaternions.ToArray();
 
-			this.animationFrames.Add(currentBufferObject);
-			this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
+			if (ordered && this.animationFrames.Find(f => f.animFrame == currentBufferObject.animFrame) == null) {
+				this.animationFrames.Add(currentBufferObject);
+				this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
+			}
+
+			if ((this.replayAnimationFrames.Count > 0 && this.replayAnimationFrames[0] != null && this.replayAnimationFrames[0].animFrame > currentBufferObject.animFrame) ||
+				(this.replayAnimationFrames.Count > 0 && this.replayAnimationFrames.Find(f => f.animFrame == currentBufferObject.animFrame) != null) ||
+				(!currentBufferObject.key && this.replayAnimationFrames.Count < 1)) {
+				return;
+			}
+
+			if (this.startAnimTime == -1f && this.firstFrameTime == -1f && currentBufferObject.key) {
+				this.firstFrameTime = currentBufferObject.frameTime;
+				this.startAnimTime = Time.time;
+			}
+
+			if (this.replayAnimationFrames.Count > 30 * 120) {
+				this.replayAnimationFrames.RemoveAt(0);
+			}
+
+			MultiplayerFrameBufferObject replayFrameObject = new MultiplayerFrameBufferObject {
+				key = currentBufferObject.key,
+				frameTime = currentBufferObject.frameTime,
+				animFrame = currentBufferObject.animFrame,
+				vectors = new Vector3[currentBufferObject.vectors.Length],
+				quaternions = new Quaternion[currentBufferObject.quaternions.Length]
+			};
+			currentBufferObject.vectors.CopyTo(replayFrameObject.vectors, 0);
+			currentBufferObject.quaternions.CopyTo(replayFrameObject.quaternions, 0);
+
+			this.replayAnimationFrames.Add(replayFrameObject);
+			this.replayAnimationFrames = this.replayAnimationFrames.OrderBy(f => f.animFrame).ToList();
 		}
 
 		// TODO: refactor all this shit, I'm sure there's a better way
 		public void LerpNextFrame(bool inReplay, bool recursive = false, float offset = 0, int recursionLevel = 0) {
-			this.debugWriter.WriteLine(this.animationFrames.Count);
 			if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) return;
 			if (!startedAnimating && animationFrames.Count > 5) {
 				if (this.animationFrames[0].vectors == null || !this.animationFrames[0].key) {
@@ -330,6 +363,8 @@ namespace XLMultiplayer {
 				}
 
 				this.previousFrameTime = this.animationFrames[0].frameTime;
+				//this.firstFrameTime = this.animationFrames[0].frameTime;
+				//this.startAnimTime = Time.time;
 
 				this.animationFrames.RemoveAt(0);
 			}
@@ -384,7 +419,6 @@ namespace XLMultiplayer {
 			else this.animationFrames[0].timeSinceStart = offset;
 
 			if (!inReplay) {
-				this.debugWriter.WriteLine("lerping shit");
 				for (int i = 0; i < 77; i++) {
 					bones[i].localPosition = Vector3.Lerp(bones[i].localPosition, this.animationFrames[0].vectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
 					bones[i].localRotation = Quaternion.Slerp(bones[i].localRotation, this.animationFrames[0].quaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
@@ -399,13 +433,16 @@ namespace XLMultiplayer {
 			this.usernameObject.transform.LookAt(Camera.main.transform);
 
 			if (this.animationFrames[0].timeSinceStart >= this.animationFrames[0].deltaTime) {
-				//30FPS 120Seconds
-				if (this.recordedFrames.Count > 30 * 120) {
-					this.recordedFrames.RemoveAt(0);
-					this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), Time.time));
-				} else {
-					this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), Time.time));
-				}
+				// 30FPS 120Seconds
+				//if (!this.animationFrames[0].key) {
+				//	if (this.recordedFrames.Count > 30 * 120) {
+				//		this.recordedFrames.RemoveAt(0);
+				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), this.startAnimTime + this.animationFrames[0].frameTime - this.firstFrameTime));
+				//	} else {
+				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), this.startAnimTime + this.animationFrames[0].frameTime - this.firstFrameTime));
+				//	}
+				//}
+				this.replayAnimationFrames.Find(f => f.animFrame == this.animationFrames[0].animFrame).realFrameTime = Time.time;
 
 				if (!inReplay) {
 					for (int i = 0; i < 77; i++) {
@@ -433,18 +470,92 @@ namespace XLMultiplayer {
 		}
 		
 		TransformInfo[] BufferToInfo(MultiplayerFrameBufferObject frame) {
+			return CreateInfoArray(frame.vectors, frame.quaternions);
+		}
+
+		TransformInfo[] CreateInfoArray(Vector3[] vectors, Quaternion[] quaternions) {
 			TransformInfo[] info = new TransformInfo[replayController.playbackTransforms.Count];
 
 			for (int i = 0; i < info.Length; i++) {
 				info[i] = new TransformInfo(this.skater.transform);
-				info[i].position = frame.vectors[i];
-				info[i].rotation = frame.quaternions[i];
+				info[i].position = vectors[i];
+				info[i].rotation = quaternions[i];
 			}
 
 			return info;
 		}
 
-		public void EnsureQuaternionListContinuity() {
+		public void PrepareReplay() {
+			this.recordedFrames.Clear();
+
+			int firstKey = this.replayAnimationFrames.FindIndex(f => f.key);
+			
+			this.replayAnimationFrames.RemoveRange(0, firstKey);
+
+			ReplayRecordedFrame previousFrame = null;
+			for(int f = 0; f < this.replayAnimationFrames.Count; f++) {
+				MultiplayerFrameBufferObject frame = this.replayAnimationFrames[f];
+
+				if(f == 0) {
+					MultiplayerFrameBufferObject firstFrameWithTime = this.replayAnimationFrames.First(obj => obj.realFrameTime != -1f);
+					frame.realFrameTime = firstFrameWithTime.realFrameTime + (frame.animFrame - firstFrameWithTime.animFrame) * (1f / 30f);
+				}
+
+				if(f > 0 && !frame.key && this.replayAnimationFrames[f - 1].animFrame != frame.animFrame - 1) {
+					continue;
+				}
+
+				TransformInfo[] transforms = null;
+
+				if (previousFrame != null && !frame.key) {
+					Vector3[] vectors = new Vector3[frame.vectors.Length];
+					Quaternion[] quaternions = new Quaternion[frame.vectors.Length];
+					for(int i = 0; i < frame.vectors.Length; i++) {
+						vectors[i] = previousFrame.transformInfos[i].position + frame.vectors[i];
+						quaternions[i].eulerAngles = previousFrame.transformInfos[i].rotation.eulerAngles + frame.quaternions[i].eulerAngles;
+					}
+
+					transforms = CreateInfoArray(vectors, quaternions);
+				}
+				if (frame.key) {
+					transforms = BufferToInfo(frame);
+				}
+
+				if(frame.realFrameTime == -1f && f > 0) {
+					frame.realFrameTime = this.replayAnimationFrames[f - 1].realFrameTime + (frame.animFrame - this.replayAnimationFrames[f - 1].animFrame) * (1f / 30f);
+				}
+
+				if(transforms != null) {
+					this.recordedFrames.Add(new ReplayRecordedFrame(transforms, frame.realFrameTime));
+
+					previousFrame = this.recordedFrames.Last();
+				}
+			}
+
+			this.replayController.enabled = true;
+			this.recordedFrames = this.recordedFrames.OrderBy(f => f.time).ToList();
+			this.EnsureQuaternionListContinuity();
+			Traverse.Create(this.replayController).Property("ClipFrames").SetValue((from f in this.recordedFrames select f.Copy()).ToList());
+			Traverse.Create(this.replayController).Field("m_audioEventPlayers").SetValue(new List<ReplayAudioEventPlayer>());
+			{ // Subtract Start Time
+				float firstFrameGameTime = ReplayRecorder.Instance.RecordedFrames[0].time;
+				this.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f) {
+					f.time -= firstFrameGameTime;
+				});
+				UnityModManagerNet.UnityModManager.Logger.Log(this.replayController.ClipFrames[0].time + " " + ReplayEditorController.Instance.playbackController.ClipFrames[0].time + " " + firstFrameGameTime);
+				this.replayController.ClipEndTime = this.replayController.ClipFrames[this.replayController.ClipFrames.Count - 1].time;
+			}
+			this.replayController.StartCoroutine("UpdateAnimationClip");
+			this.usernameObject.GetComponent<Renderer>().enabled = false;
+		}
+
+		public void EndReplay() {
+			this.replayController.enabled = false;
+			this.usernameObject.GetComponent<Renderer>().enabled = true;
+			this.recordedFrames.Clear();
+		}
+
+		private void EnsureQuaternionListContinuity() {
 			float[] array = Enumerable.Repeat<float>(0f, bones.Length).ToArray<float>();
 			float[] array2 = Enumerable.Repeat<float>(0f, bones.Length).ToArray<float>();
 			float[] array3 = Enumerable.Repeat<float>(0f, bones.Length).ToArray<float>();

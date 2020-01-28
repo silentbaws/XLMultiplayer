@@ -145,7 +145,7 @@ namespace XLMultiplayerServer {
 						break;
 				}
 			};
-			const int maxMessages = 20;
+			const int maxMessages = 256;
 
 			NetworkingMessage[] netMessages = new NetworkingMessage[maxMessages];
 

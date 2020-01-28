@@ -1,9 +1,11 @@
-﻿using ReplayEditor;
+﻿using Harmony12;
+using ReplayEditor;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -34,8 +36,9 @@ namespace XLMultiplayer {
 		private NetworkingSockets client = null;
 		private StatusCallback status = null;
 		private uint connection;
-		private const int maxMessages = 100;
+		private const int maxMessages = 256;
 		private NetworkingMessage[] netMessages;
+		DebugCallback debugCallbackDelegate = null;
 
 		private bool isConnected = false;
 
@@ -50,8 +53,6 @@ namespace XLMultiplayer {
 		private float previousSentAnimationTime = -1;
 
 		private int tickRate = 30;
-		private Thread updateThread;
-
 
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
@@ -133,6 +134,36 @@ namespace XLMultiplayer {
 			this.debugWriter.WriteLine("Successfully connected to server");
 			isConnected = true;
 
+			debugCallbackDelegate = (type, message) => {
+				if (this.debugWriter != null)
+					this.debugWriter.WriteLine("Valve Debug - Type: {0}, Message: {1}", type, message);
+			};
+
+			NetworkingUtils utils = new NetworkingUtils();
+
+			utils.SetDebugCallback(DebugType.Important, debugCallbackDelegate);
+
+			#if DEBUG
+			unsafe {
+				// From data I saw a typical example of udp packets over the internet would be 0.3% loss, 25% reorder
+				// For testing I'll use 25% reorder, 100ms delay on reorder, 150ms ping, and 2% loss
+
+				// Re-order 25% of packets and add 200ms delay on reordered packets
+				float reorderPercent = 25f;
+				int reorderTime = 100;
+				utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&reorderPercent));
+				utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderTime, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&reorderTime));
+
+				// Fake 150ms ping
+				int pingTime = 150;
+				utils.SetConfiguratioValue(ConfigurationValue.FakePacketLagSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&pingTime));
+
+				// Simulate 2% packet loss
+				float lossPercent = 2f;
+				utils.SetConfiguratioValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
+			}
+			#endif
+
 			//byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
 
 			// TODO: Send username bytes
@@ -157,7 +188,7 @@ namespace XLMultiplayer {
 		}
 
 		public IEnumerator LoadMap(string path) {
-			while (updateThread == null || !updateThread.IsAlive) {
+			while (!IsInvoking("SendUpdate")) {
 				yield return new WaitForEndOfFrame();
 			}
 			//Load map with path
@@ -195,14 +226,17 @@ namespace XLMultiplayer {
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
 				if (replayStarted) {
 					foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
-						controller.replayController.enabled = false;
-						controller.usernameObject.GetComponent<Renderer>().enabled = true;
+						controller.EndReplay();
 					}
 				}
 				replayStarted = false;
 			} else {
 				if (!replayStarted) {
 					replayStarted = true;
+
+					foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
+						controller.PrepareReplay();
+					}
 				}
 			}
 
@@ -227,6 +261,9 @@ namespace XLMultiplayer {
 
 		private void UpdateClient() {
 			client.DispatchCallback(status);
+
+			if(debugCallbackDelegate != null)
+				GC.KeepAlive(debugCallbackDelegate);
 
 			int netMessagesCount = client.ReceiveMessagesOnConnection(connection, netMessages, maxMessages);
 
@@ -308,9 +345,10 @@ namespace XLMultiplayer {
 			Tuple<byte[], bool> animationData = this.playerController.PackAnimations();
 
 			// Only send update if it's new transforms(don't waste bandwidth on duplicates)
-			if (this.playerController.currentAnimationTime != previousSentAnimationTime) {
-				SendBytesAnimation(animationData.Item1, animationData.Item2);
+			if (this.playerController.currentAnimationTime != previousSentAnimationTime || 
+				GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.PlayState)) {
 
+				SendBytesAnimation(animationData.Item1, animationData.Item2);
 				previousSentAnimationTime = this.playerController.currentAnimationTime;
 			}
 		}
@@ -383,9 +421,7 @@ namespace XLMultiplayer {
 
 			isConnected = false;
 
-			if(updateThread != null && updateThread.IsAlive) {
-				updateThread.Join();
-			}
+			CancelInvoke("SendUpdate");
 
 			CleanupSockets();
 
