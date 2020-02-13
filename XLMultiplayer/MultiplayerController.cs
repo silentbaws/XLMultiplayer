@@ -146,9 +146,9 @@ namespace XLMultiplayer {
 			#if DEBUG
 			unsafe {
 				// From data I saw a typical example of udp packets over the internet would be 0.3% loss, 25% reorder
-				// For testing I'll use 25% reorder, 100ms delay on reorder, 150ms ping, and 2% loss
+				// For testing I'll use 25% reorder, 30ms delay on reorder, 150ms ping, and 0.2% loss
 
-				// Re-order 25% of packets and add 200ms delay on reordered packets
+				// Re-order 25% of packets and add 30ms delay on reordered packets
 				float reorderPercent = 25f;
 				int reorderTime = 30;
 				utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&reorderPercent));
@@ -158,7 +158,7 @@ namespace XLMultiplayer {
 				int pingTime = 150;
 				utils.SetConfiguratioValue(ConfigurationValue.FakePacketLagSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&pingTime));
 
-				// Simulate 2% packet loss
+				// Simulate 0.2% packet loss
 				float lossPercent = 0.2f;
 				utils.SetConfiguratioValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
 			}
