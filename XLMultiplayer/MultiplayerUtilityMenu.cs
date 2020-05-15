@@ -2,6 +2,10 @@
 using UnityEngine;
 using System.Text;
 
+// TODO: Add player list
+// TODO: Add network statistics
+// Possibly add these to shred menu?
+
 namespace XLMultiplayer {
 	class MultiplayerUtilityMenu : MonoBehaviour {
 		private bool showStatus = true;

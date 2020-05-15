@@ -119,10 +119,13 @@ namespace XLMultiplayer {
 					Label($"<b>{s.name}  v{s.version}</b>\n", title);
 					Label($"<b>IP:</b> {s.ip}      <b>port:</b> {s.port}\n<b>map:</b> {s.mapName}      <b>players:</b> {s.playerCurrent}/{s.playerMax}", center);
 					if (Button($"Connect with username \"{Main.menu.username}\"")) {
-						this.Close();
-						Main.menu.CreateMultiplayerManager();
+						ushort usedPort = 0;
+						if (ushort.TryParse(s.port, out usedPort)) {
+							this.Close();
+							Main.menu.CreateMultiplayerManager();
 
-						// TODO: Add server connect
+							Main.multiplayerController.ConnectToServer(s.ip, usedPort, Main.menu.username);
+						}
 					}
 					Separator();
 				}

@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
@@ -15,10 +16,6 @@ using Valve.Sockets;
 //			-> Only send hashes/paths from server unless client requests texture data
 
 // TODO: Send alive thread, read ping and packet loss
-
-// TODO: Move SendUpdate to Update
-
-// TODO: Delete Temp Folder on disconnect
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -59,6 +56,9 @@ namespace XLMultiplayer {
 		private float previousSentAnimationTime = -1;
 
 		private int tickRate = 30;
+
+		private bool sendingUpdates = false;
+		private float timeSinceLastUpdate = 0.0f;
 
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
@@ -102,8 +102,24 @@ namespace XLMultiplayer {
 
 			client = new NetworkingSockets();
 
+			IPAddress serverIP = null;
+			try {
+				IPHostEntry hostInfo = Dns.GetHostEntry(ip);
+				foreach (IPAddress address in hostInfo.AddressList) {
+					if (address.MapToIPv4() != null) {
+						serverIP = address.MapToIPv4();
+					}
+				}
+			} catch (Exception) { }
+			if (serverIP == null) {
+				if (!IPAddress.TryParse(ip, out serverIP)) {
+					DisconnectFromServer();
+					return;
+				}
+			}
+
 			Address remoteAddress = new Address();
-			remoteAddress.SetAddress(ip, port);
+			remoteAddress.SetAddress(serverIP.ToString(), port);
 
 			connection = client.Connect(ref remoteAddress);
 
@@ -181,7 +197,7 @@ namespace XLMultiplayer {
 		}
 
 		public IEnumerator LoadMap(string path) {
-			while (!IsInvoking("SendUpdate")) {
+			while (!sendingUpdates) {
 				yield return new WaitForEndOfFrame();
 			}
 			//Load map with path
@@ -228,6 +244,14 @@ namespace XLMultiplayer {
 			// Don't allow use of map selection
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0 && isConnected) {
 				GameManagement.GameStateMachine.Instance.RequestPlayState();
+			}
+
+			if (sendingUpdates) {
+				timeSinceLastUpdate += Time.unscaledDeltaTime;
+				if (timeSinceLastUpdate > 1f / (float)tickRate) {
+					SendUpdate();
+					timeSinceLastUpdate = 0.0f;
+				}
 			}
 
 			UpdateClient();
@@ -301,7 +325,7 @@ namespace XLMultiplayer {
 
 						this.StartCoroutine(this.playerController.EncodeTextures());
 
-						InvokeRepeating("SendUpdate", 0f, 1f / (float)this.tickRate);
+						sendingUpdates = true;
 					} else {
 						this.debugWriter.WriteLine("server version {0} does not match client version {1}", serverVersion, Main.modEntry.Version.ToString());
 						DisconnectFromServer();
@@ -501,8 +525,7 @@ namespace XLMultiplayer {
 			client.CloseConnection(connection);
 
 			isConnected = false;
-
-			CancelInvoke("SendUpdate");
+			sendingUpdates = false;
 
 			foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
 				GameObject.Destroy(controller.skater);
@@ -512,6 +535,17 @@ namespace XLMultiplayer {
 			}
 
 			CleanupSockets();
+
+			// Delete all temp assests
+			if (Directory.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp")) {
+				foreach (string dir in Directory.GetDirectories(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp")) {
+					foreach (string file in Directory.GetFiles(dir)) {
+						File.Delete(file);
+					}
+					Directory.Delete(dir);
+				}
+				Directory.Delete(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp");
+			}
 
 			this.debugWriter.Close();
 		}
