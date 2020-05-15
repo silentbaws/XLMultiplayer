@@ -16,7 +16,9 @@ using Valve.Sockets;
 
 // TODO: Send alive thread, read ping and packet loss
 
-// TODO: move SendUpdate to Update
+// TODO: Move SendUpdate to Update
+
+// TODO: Delete Temp Folder on disconnect
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {

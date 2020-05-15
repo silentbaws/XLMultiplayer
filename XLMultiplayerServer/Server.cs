@@ -1,13 +1,14 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Valve.Sockets;
-
-// TODO: Add announce and server config reading from json
 
 namespace XLMultiplayerServer {
 	public enum OpCode : byte {
@@ -74,17 +75,30 @@ namespace XLMultiplayerServer {
 	}
 
 	class Server {
-		private static NetworkingSockets server;
-
 		// TODO: Update version number with versions
-		public static bool RUNNING = true;
-		public static ushort port = 7777;
-
-		private static byte MAX_PLAYERS = 10;
-
 		private static string VERSION_NUMBER = "0.7.0";
 
+		private static NetworkingSockets server;
+
+		public static bool RUNNING = true;
+
+		[JsonProperty("Server_Name")]
+		private static string SERVER_NAME;
+
+		[JsonProperty("Port")]
+		private static ushort port = 7777;
+
+		[JsonProperty("Max_Players")]
+		private static byte MAX_PLAYERS = 10;
+
+		[JsonProperty("Enforce_Map")]
 		private static bool ENFORCE_MAPS = true;
+
+		[JsonProperty("API_Key")]
+		private static string API_KEY;
+
+		[JsonProperty("Maps_Folder")]
+		private static string mapsDir = "";
 
 		private static Player[] players = new Player[MAX_PLAYERS];
 		private static int total_players = 0;
@@ -104,6 +118,15 @@ namespace XLMultiplayerServer {
 			Console.BackgroundColor = ConsoleColor.Black;
 
 			Console.WriteLine("Starting server initialization");
+
+			if (File.Exists(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json")) {
+				JsonConvert.DeserializeObject<Server>(File.ReadAllText(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json"));
+				players = new Player[MAX_PLAYERS];
+			} else {
+				Console.WriteLine("Could not find server config file");
+				Console.In.Read();
+				return 0;
+			}
 
 			if (ENFORCE_MAPS) {
 				mapListBytes = GenerateMapList();
@@ -145,11 +168,13 @@ namespace XLMultiplayerServer {
 			mapList.Add("0", "Courthouse");
 			mapList.Add("1", "California Skatepark");
 
-			// string mapDir = Directory.GetCurrentDirectory() + sep + "Maps";
-			string mapDir = "C:\\Users\\davisellwood\\Documents\\SkaterXL\\Maps";
+			if (mapsDir == "") {
+				mapsDir = Directory.GetCurrentDirectory() + sep + "Maps";
+				Console.WriteLine($"No maps folder set so using {mapsDir}");
+			}
 
-			if (Directory.Exists(mapDir)) {
-				string[] files = Directory.GetFiles(mapDir);
+			if (Directory.Exists(mapsDir)) {
+				string[] files = Directory.GetFiles(mapsDir);
 				if (files.Length < 1) {
 					Console.ForegroundColor = ConsoleColor.Yellow;
 					Console.WriteLine("\nWARNING: FAILED TO FIND ANY CUSTOM MAPS IN THE MAPS DIRECTORY ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n");
@@ -171,7 +196,7 @@ namespace XLMultiplayerServer {
 				}
 			} else {
 				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine("\nWARNING: FAILED TO FIND MAPS DIRECTORY \"{0}\" SO ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n", mapDir);
+				Console.WriteLine("\nWARNING: FAILED TO FIND MAPS DIRECTORY \"{0}\" SO ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n", mapsDir);
 				Console.ForegroundColor = ConsoleColor.White;
 			}
 
@@ -357,6 +382,10 @@ namespace XLMultiplayerServer {
 
 			uint listenSocket = server.CreateListenSocket(ref address);
 
+			Console.WriteLine($"Server {SERVER_NAME} started Listening on port {port} for maximum of {MAX_PLAYERS} players\nEnforcing maps is {ENFORCE_MAPS}");
+
+			StartAnnouncing();
+
 			StatusCallback status = (info, context) => {
 				switch (info.connectionInfo.state) {
 					case ConnectionState.None:
@@ -382,9 +411,10 @@ namespace XLMultiplayerServer {
 								Array.Copy(versionNumber, 0, versionMessage, 1, versionNumber.Length);
 								server.SendMessageToConnection(players[i].connection, versionMessage, SendType.Reliable);
 
-								server.SendMessageToConnection(players[i].connection, mapListBytes, SendType.Reliable);
-
-								if (ENFORCE_MAPS) server.SendMessageToConnection(players[i].connection, GetCurrentMapHashMessage(), SendType.Reliable);
+								if (ENFORCE_MAPS) {
+									server.SendMessageToConnection(players[i].connection, mapListBytes, SendType.Reliable);
+									server.SendMessageToConnection(players[i].connection, GetCurrentMapHashMessage(), SendType.Reliable);
+								}
 
 								foreach (Player player in players) {
 									if(player != null && player != players[i]) {
@@ -530,6 +560,38 @@ namespace XLMultiplayerServer {
 			}
 
 			Library.Deinitialize();
+		}
+
+		public static async void StartAnnouncing() {
+			var client = new HttpClient();
+			while (true && API_KEY != "") {
+				try {
+					int currentPlayers = 0;
+					foreach (Player player in players) {
+						if (player != null)
+							currentPlayers++;
+					}
+
+					var values = new Dictionary<string, string> {
+					{ "maxPlayers",  players.Length.ToString() },
+					{ "serverName", SERVER_NAME },
+					{ "currentPlayers", currentPlayers.ToString() },
+					{ "serverPort", port.ToString() },
+					{ "serverVersion", VERSION_NUMBER },
+					{ "apiKey", API_KEY },
+					{ "mapName", ENFORCE_MAPS ? mapList[currentMapHash] : "Not enforcing maps" } };
+
+					var content = new FormUrlEncodedContent(values);
+
+					var response = await client.PostAsync("https://davisellwood-site.herokuapp.com/api/sendserverinfo/", content);
+					if (response.StatusCode != HttpStatusCode.OK) {
+						Console.WriteLine($"Error announcing: {response.StatusCode}");
+					}
+				} catch (Exception e) {
+					client = new HttpClient();
+				}
+				await Task.Delay(10000);
+			}
 		}
 	}
 }
