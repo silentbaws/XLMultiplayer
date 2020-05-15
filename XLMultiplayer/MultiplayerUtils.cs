@@ -135,15 +135,16 @@ namespace XLMultiplayer {
 		public static string ChangeMap(byte[] mapHash) {
 			int nameLength = BitConverter.ToInt32(mapHash, 1);
 			string mapName = ASCIIEncoding.ASCII.GetString(mapHash, 5, nameLength);
+			
+			string hash = ASCIIEncoding.ASCII.GetString(mapHash, 5 + nameLength, mapHash.Length - nameLength - 5);
 
-			int hashLength = BitConverter.ToInt32(mapHash, 5 + nameLength);
-			string hash = ASCIIEncoding.ASCII.GetString(mapHash, 9 + nameLength, hashLength);
+			UnityModManagerNet.UnityModManager.Logger.Log($"[XLMultiplayer] Trying to switch to map with hash {hash}");
 
 			string mapPath = "";
 			if (mapsDictionary.TryGetValue(hash, out mapPath)) {
 				currentVote = "current";
 				Main.multiplayerController.StartLoadMap(mapPath);
-				return "";
+				return null;
 			}
 			return mapName;
 		}

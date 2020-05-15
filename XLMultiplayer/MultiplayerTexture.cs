@@ -7,7 +7,12 @@ namespace XLMultiplayer {
 		Pants = 1,
 		Shoes = 2,
 		Hat = 3,
-		Board = 4
+		Deck = 4,
+		Grip = 5,
+		Trucks = 6,
+		Wheels = 7,
+		Head = 8,
+		Body = 9
 	}
 
 	public class MultiplayerTexture {
@@ -15,18 +20,21 @@ namespace XLMultiplayer {
 		public MPTextureType textureType;
 
 		public bool useFull = false;
-		protected Texture texture;
+
+		protected bool isCustom = false;
+		protected string path = "";
 
 		protected StreamWriter debugWriter;
 
 		public bool saved = false;
 
-		public MultiplayerTexture(Texture tex, MPTextureType texType, StreamWriter sw) {
-			textureType = texType;
-			texture = tex;
-			debugWriter = sw;
+		public MultiplayerTexture(bool custom, string path, MPTextureType texType, StreamWriter sw) {
+			this.path = path;
+			this.isCustom = custom;
+			this.debugWriter = sw;
+			this.textureType = texType;
 		}
-
+		
 		public MultiplayerTexture(MPTextureType tex, StreamWriter sw) {
 			this.debugWriter = sw;
 			textureType = tex;

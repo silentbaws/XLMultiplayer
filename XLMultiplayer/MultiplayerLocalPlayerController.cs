@@ -11,7 +11,12 @@ namespace XLMultiplayer {
 		public MultiplayerLocalTexture pantsMPTex;
 		public MultiplayerLocalTexture shoesMPTex;
 		public MultiplayerLocalTexture hatMPTex;
-		public MultiplayerLocalTexture boardMPTex;
+		public MultiplayerLocalTexture deckMPTex;
+		public MultiplayerLocalTexture gripMPTex;
+		public MultiplayerLocalTexture wheelMPTex;
+		public MultiplayerLocalTexture truckMPTex;
+		public MultiplayerLocalTexture headMPTex;
+		public MultiplayerLocalTexture bodyMPTex;
 
 		private bool startedEncoding = false;
 
@@ -24,15 +29,15 @@ namespace XLMultiplayer {
 		}
 
 		private System.Collections.IEnumerator IncrementLoading() {
-			Main.statusMenu.loadingStatus++;
+			Main.utilityMenu.loadingStatus++;
 			yield return new WaitForEndOfFrame();
 		}
 
 		public System.Collections.IEnumerator EncodeTextures() {
 			if (!this.startedEncoding) {
 				this.startedEncoding = true;
-				Main.statusMenu.isLoading = true;
-				Main.statusMenu.loadingStatus = 0;
+				Main.utilityMenu.isLoading = true;
+				Main.utilityMenu.loadingStatus = 0;
 				yield return new WaitForEndOfFrame();
 
 				this.shirtMPTex.ConvertTexture();
@@ -44,20 +49,46 @@ namespace XLMultiplayer {
 				this.shoesMPTex.ConvertTexture();
 				IncrementLoading();
 
-				this.hatMPTex.ConvertTexture();
+				this.hatMPTex.ConvertTexture(512);
 				IncrementLoading();
 
-				this.boardMPTex.ConvertTexture();
+				this.deckMPTex.ConvertTexture();
+				IncrementLoading();
+
+				this.gripMPTex.ConvertTexture();
+				IncrementLoading();
+
+				this.truckMPTex.ConvertTexture(512);
+				IncrementLoading();
+
+				this.wheelMPTex.ConvertTexture(512);
+				IncrementLoading();
+
+				this.headMPTex.ConvertTexture(2048);
+				IncrementLoading();
+
+				this.bodyMPTex.ConvertTexture(2048);
 				IncrementLoading();
 
 				IncrementLoading();
 				yield return new WaitForEndOfFrame();
 
-				// TODO: Send multiplayer textures
+				Main.multiplayerController.SendBytesRaw(this.shirtMPTex.GetSendData(), true);
+				Main.multiplayerController.SendBytesRaw(this.pantsMPTex.GetSendData(), true);
+				Main.multiplayerController.SendBytesRaw(this.shoesMPTex.GetSendData(), true);
+				Main.multiplayerController.SendBytesRaw(this.hatMPTex.GetSendData(), true);
+
+				Main.multiplayerController.SendBytesRaw(this.deckMPTex.GetSendData(), true);
+				Main.multiplayerController.SendBytesRaw(this.gripMPTex.GetSendData(), true);
+				Main.multiplayerController.SendBytesRaw(this.truckMPTex.GetSendData(), true);
+				Main.multiplayerController.SendBytesRaw(this.wheelMPTex.GetSendData(), true);
+
+				Main.multiplayerController.SendBytesRaw(this.headMPTex.GetSendData(), true);
+				Main.multiplayerController.SendBytesRaw(this.bodyMPTex.GetSendData(), true);
 
 				yield return new WaitForEndOfFrame();
 
-				Main.statusMenu.isLoading = false;
+				Main.utilityMenu.isLoading = false;
 			}
 			yield break;
 		}
@@ -66,51 +97,101 @@ namespace XLMultiplayer {
 			this.debugWriter.WriteLine("Constructing Local Player");
 
 			this.player = PlayerController.Instance.skaterController.skaterTransform.gameObject;
-			bool foundBoard = false;
+			this.debugWriter.WriteLine("Found player");
+			
+			this.debugWriter.WriteLine("All clothing ID's");
+			foreach(KeyValuePair<string, CharacterGearTemplate> pair in GearDatabase.Instance.CharGearTemplateForID) {
+				this.debugWriter.WriteLine(pair.Key);
+			}
 
-			this.debugWriter.WriteLine("Found player, looking for board texture");
+			foreach (ClothingGearObjet clothingPiece in gearList) {
+				// Get the path of the gear piece
+				string path = "";
+				bool custom = clothingPiece.gearInfo.isCustom;
+				foreach(TextureChange change in clothingPiece.gearInfo.textureChanges) {
+					if (change.textureID.ToLower().Equals("albedo")) {
+						path = change.texturePath;
+					}
+				}
 
-			//Get the the board from the skater
-			foreach(Transform transform in PlayerController.Instance.gameObject.GetComponentInChildren<Transform>()) {
-				if (transform.gameObject.name.Equals("Skateboard")) {
-					foreach (Transform t2 in transform.GetComponentsInChildren<Transform>()) {
-						if (t2.name.Equals(SkateboardMaterials[0])) {
-							this.boardMPTex = new MultiplayerLocalTexture(t2.GetComponent<Renderer>().material.GetTexture(MainDeckTextureName), MPTextureType.Board, this.debugWriter);
-							foundBoard = true;
-							break;
+				switch (clothingPiece.template.categoryName.ToLower()) {
+					case "shirt":
+						this.shirtMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Shirt, this.debugWriter) {
+							useFull = false
+						};
+						break;
+					case "hoodie":
+						this.shirtMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Shirt, this.debugWriter) {
+							useFull = true
+						};
+						break;
+					case "hat":
+						this.hatMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Hat, this.debugWriter);
+						break;
+					case "pants":
+						this.pantsMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Pants, this.debugWriter);
+						break;
+					case "shoes":
+						this.shoesMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Shoes, this.debugWriter);
+						break;
+				}
+			}
+
+			foreach(BoardGearObject boardGear in boardGearList) {
+				// Get the path of the gear piece
+				string path = "";
+				bool custom = boardGear.gearInfo.isCustom;
+				foreach (TextureChange change in boardGear.gearInfo.textureChanges) {
+					if (change.textureID.ToLower().Equals("albedo")) {
+						path = change.texturePath;
+					}
+				}
+				
+				string gearType = BoardGearObject.AdaptMaterialID(boardGear.gearInfo.type);
+				
+				switch (gearType) {
+					case "deck":
+						this.deckMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Deck, this.debugWriter);
+						break;
+					case "griptape":
+						this.gripMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Grip, this.debugWriter);
+						break;
+					case "truck":
+						this.truckMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Trucks, this.debugWriter);
+						break;
+					case "wheel":
+						this.wheelMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Wheels, this.debugWriter);
+						break;
+				}
+			}
+			
+			/* Get the body textures */
+			{
+				string pathHead = "";
+				string pathBody = "";
+				bool isCustom = currentBody.gearInfo.isCustom;
+
+				this.debugWriter.WriteLine("Body changes\n{0}", currentBody.gearInfo.type);
+				if(currentBody.gearInfo.tags != null) {
+					this.debugWriter.WriteLine("Tags length {0}", currentBody.gearInfo.tags.Length);
+				}
+
+				foreach (MaterialChange matChange in currentBody.gearInfo.materialChanges) {
+					this.debugWriter.WriteLine("Mat ID: {0}", matChange.materialID);
+					foreach (TextureChange change in matChange.textureChanges) {
+						this.debugWriter.WriteLine("tex ID: {0}", change.textureID);
+						if (change.textureID.ToLower().Equals("albedo")) {
+							if (matChange.materialID.ToLower().Equals("head")) {
+								pathHead = change.texturePath;
+							} else {
+								pathBody = change.texturePath;
+							}
 						}
 					}
 				}
 
-				if (foundBoard) {
-					break;
-				}
-			}
-
-			this.debugWriter.WriteLine("Got board texture, grabbing clothing textures");
-
-			foreach (Tuple<CharacterGear, GameObject> tup in gearList) {
-				switch (tup.Item1.categoryName) {
-					case "Shirt":
-						this.shirtMPTex = new MultiplayerLocalTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter) {
-							useFull = false
-						};
-						break;
-					case "Hoodie":
-						this.shirtMPTex = new MultiplayerLocalTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shirt, this.debugWriter) {
-							useFull = true
-						};
-						break;
-					case "Hat":
-						this.hatMPTex = new MultiplayerLocalTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Hat, this.debugWriter);
-						break;
-					case "Pants":
-						this.pantsMPTex = new MultiplayerLocalTexture(tup.Item2.GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Pants, this.debugWriter);
-						break;
-					case "Shoes":
-						this.shoesMPTex = new MultiplayerLocalTexture(tup.Item2.transform.Find("Shoe_R").GetComponent<Renderer>().material.GetTexture(MainTextureName), MPTextureType.Shoes, this.debugWriter);
-						break;
-				}
+				this.headMPTex = new MultiplayerLocalTexture(isCustom, pathHead, MPTextureType.Head, this.debugWriter);
+				this.bodyMPTex = new MultiplayerLocalTexture(isCustom, pathBody, MPTextureType.Body, this.debugWriter);
 			}
 
 			this.debugWriter.WriteLine("Finished constructing local player");
@@ -118,7 +199,6 @@ namespace XLMultiplayer {
 
 		public byte[] PackTransformInfoArray(List<ReplayRecordedFrame> frames, int start, bool useKey) {
 			if(frames.Count < 2) {
-				this.debugWriter.WriteLine("Fuck");
 				return null;
 			}
 			TransformInfo[] T = frames[frames.Count - 1].transformInfos;
@@ -181,6 +261,8 @@ namespace XLMultiplayer {
 			}
 
 			byte[] transforms = PackTransformInfoArray(ReplayRecorder.Instance.RecordedFrames, 0, useKey);
+
+			if (transforms == null) return null;
 
 			byte[] packed = new byte[transforms.Length + 5];
 

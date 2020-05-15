@@ -47,6 +47,8 @@ namespace XLMultiplayer {
 		private bool waitingForDelay = false;
 		private bool speedDelay = false;
 
+		private bool loadedAllTextures = false;
+
 		List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
 		List<MultiplayerFrameBufferObject> replayAnimationFrames = new List<MultiplayerFrameBufferObject>();
 		public List<ReplayRecordedFrame> recordedFrames = new List<ReplayRecordedFrame>();
@@ -55,15 +57,21 @@ namespace XLMultiplayer {
 		public MultiplayerRemoteTexture pantsMPTex;
 		public MultiplayerRemoteTexture shoesMPTex;
 		public MultiplayerRemoteTexture hatMPTex;
-		public MultiplayerRemoteTexture boardMPTex;
+
+		public MultiplayerRemoteTexture deckMPTex;
+		public MultiplayerRemoteTexture gripMPTex;
+		public MultiplayerRemoteTexture wheelMPTex;
+		public MultiplayerRemoteTexture truckMPTex;
+		
+		public MultiplayerRemoteTexture headMPTex;
+		public MultiplayerRemoteTexture bodyMPTex;
 
 		public ReplayPlaybackController replayController;
 
 		public byte playerID = 255;
 
 		public MultiplayerRemotePlayerController(StreamWriter writer) : base(writer) {  }
-
-		//TODO: half this stuff probably isn't needed
+		
 		override public void ConstructPlayer() {
 			//Create a new root object for the player
 			this.player = GameObject.Instantiate<GameObject>(ReplayEditor.ReplayEditorController.Instance.playbackController.gameObject);
@@ -121,46 +129,7 @@ namespace XLMultiplayer {
 			characterCustomizer.LoadCustomizations(PlayerController.Instance.characterCustomizer.CurrentCustomizations);
 
 			debugWriter.WriteLine("Added gear back");
-
-			//bool foundHat = false, foundShirt = false, foundPants = false, foundShoes = false;
-
-			//foreach(Tuple<CharacterGear, GameObject> GearItem in gearList) {
-			//	switch (GearItem.Item1.categoryName) {
-			//		case "Hat":
-			//			foundHat = true;
-			//			break;
-			//		case "Hoodie":
-			//			foundShirt = true;
-			//			break;
-			//		case "Shirt":
-			//			foundShirt = true;
-			//			break;
-			//		case "Pants":
-			//			foundPants = true;
-			//			break;
-			//		case "Shoes":
-			//			foundShoes = true;
-			//			break;
-			//	}
-			//}
-
-			//if (!foundHat) {
-			//	CharacterGear newHat = CreateGear(GearCategory.Hat, "Hat", "PAX_1");
-			//	characterCustomizer.LoadGear(newHat);
-			//}
-			//if (!foundPants) {
-			//	CharacterGear newPants = CreateGear(GearCategory.Pants, "Pants", "PAX_1");
-			//	characterCustomizer.LoadGear(newPants);
-			//}
-			//if (!foundShirt) {
-			//	CharacterGear newShirt = CreateGear(GearCategory.Shirt, "Shirt", "PAX_1");
-			//	characterCustomizer.LoadGear(newShirt);
-			//}
-			//if (!foundShoes) {
-			//	CharacterGear newShoes = CreateGear(GearCategory.Shoes, "Shoes", "PAX_1");
-			//	characterCustomizer.LoadGear(newShoes);
-			//}
-
+			
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
 			this.usernameObject.transform.localScale = new Vector3(-0.01f, 0.01f, 1f);
@@ -177,77 +146,103 @@ namespace XLMultiplayer {
 			this.pantsMPTex = new MultiplayerRemoteTexture(MPTextureType.Pants, this.debugWriter);
 			this.hatMPTex = new MultiplayerRemoteTexture(MPTextureType.Hat, this.debugWriter);
 			this.shoesMPTex = new MultiplayerRemoteTexture(MPTextureType.Shoes, this.debugWriter);
-			this.boardMPTex = new MultiplayerRemoteTexture(MPTextureType.Board, this.debugWriter);
+
+			this.deckMPTex = new MultiplayerRemoteTexture(MPTextureType.Deck, this.debugWriter);
+			this.gripMPTex = new MultiplayerRemoteTexture(MPTextureType.Grip, this.debugWriter);
+			this.wheelMPTex = new MultiplayerRemoteTexture(MPTextureType.Wheels, this.debugWriter);
+			this.truckMPTex = new MultiplayerRemoteTexture(MPTextureType.Trucks, this.debugWriter);
+
+			this.headMPTex = new MultiplayerRemoteTexture(MPTextureType.Head, this.debugWriter);
+			this.bodyMPTex = new MultiplayerRemoteTexture(MPTextureType.Body, this.debugWriter);
 		}
 
-		// Create gear for players
-		private CharacterGear CreateGear(GearCategory category, string categoryName, string id) {
-			CharacterGear newGear = new CharacterGear();
-			newGear.category = category;
-			newGear.categoryName = categoryName;
-			newGear.id = id;
-			newGear.path = "CharacterCustomization/" + categoryName + "/" + id;
-			return newGear;
-		}
+		public void ApplyTextures() {
+			if (!loadedAllTextures) {
+				if (shirtMPTex.saved && !shirtMPTex.loaded)
+					shirtMPTex.LoadFromFileMainThread(this);
+				if (pantsMPTex.saved && !pantsMPTex.loaded)
+					pantsMPTex.LoadFromFileMainThread(this);
+				if (hatMPTex.saved && !hatMPTex.loaded)
+					hatMPTex.LoadFromFileMainThread(this);
+				if (shoesMPTex.saved && !shoesMPTex.loaded)
+					shoesMPTex.LoadFromFileMainThread(this);
 
-		private void SetClothingTexture(string[] names, Texture tex) {
-			foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
-				if (names.Contains(gearItem.Item1.categoryName)) {
-					gearItem.Item2.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
-					break;
+				if (deckMPTex.saved && !deckMPTex.loaded)
+					deckMPTex.LoadFromFileMainThread(this);
+				if (gripMPTex.saved && !gripMPTex.loaded)
+					gripMPTex.LoadFromFileMainThread(this);
+				if (wheelMPTex.saved && !wheelMPTex.loaded)
+					wheelMPTex.LoadFromFileMainThread(this);
+				if (truckMPTex.saved && !truckMPTex.loaded)
+					truckMPTex.LoadFromFileMainThread(this);
+
+				if (headMPTex.saved && bodyMPTex.saved && !headMPTex.loaded && !bodyMPTex.loaded) {
+					headMPTex.loaded = true;
+					bodyMPTex.loaded = true;
+
+					if (headMPTex.useTexture && bodyMPTex.useTexture) {
+						TextureChange[] headChange = { new TextureChange("albedo", headMPTex.fileLocation) };
+						TextureChange[] bodyChange = { new TextureChange("albedo", bodyMPTex.fileLocation) };
+
+						List<MaterialChange> materialChanges = new List<MaterialChange>();
+						materialChanges.Add(new MaterialChange("body", bodyChange));
+						materialChanges.Add(new MaterialChange("head", headChange));
+
+						CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", "male", true, materialChanges, new string[0]);
+
+						characterCustomizer.EquipGear(bodyInfo);
+					}
 				}
+
+				loadedAllTextures = shirtMPTex.loaded && pantsMPTex.loaded && hatMPTex.loaded && shoesMPTex.loaded && deckMPTex.loaded && gripMPTex.loaded && wheelMPTex.loaded && truckMPTex.loaded && headMPTex.loaded && bodyMPTex.loaded;
 			}
 		}
 
-		public void SetPlayerTexture(Texture tex, MPTextureType texType, bool useFull) {
-			switch (texType) {
-				case MPTextureType.Pants:
-					SetClothingTexture(new string[] { "Pants" }, tex);
-					break;
-				case MPTextureType.Shirt:
-					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
-						if (gearItem.Item1.categoryName.Equals("Hoodie") || gearItem.Item1.categoryName.Equals("Shirt")) {
-							CharacterGear newGear = new CharacterGear();
-							newGear.id = "PAX_1";
-							newGear.name = "Black";
-							newGear.category = useFull ? GearCategory.Hoodie : GearCategory.Shirt;
-							newGear.categoryName = useFull ? "Hoodie" : "Shirt";
-							newGear.path = useFull ? "CharacterCustomization/Hoodie/PAX_1" : "CharacterCustomization/Shirt/PAX_1";
+		public string GetGearTypeFromTextureType(MPTextureType textureType, bool useFull) {
+			string gearType = "";
 
-							characterCustomizer.LoadGear(newGear);
-							break;
-						}
-					}
-					if (tex != null) {
-						SetClothingTexture(new string[] { "Hoodie", "Shirt" }, tex);
-					}
+			switch (textureType) {
+				case MPTextureType.Shirt:
+					gearType = useFull ? "mHoodie" : "mShirt";
+					break;
+				case MPTextureType.Pants:
+					gearType = "mPants";
 					break;
 				case MPTextureType.Shoes:
-					foreach (Tuple<CharacterGear, GameObject> gearItem in gearList) {
-						if (gearItem.Item1.categoryName.Equals("Shoes")) {
-							GameObject Shoe_L = gearItem.Item2.transform.Find("Shoe_L").gameObject;
-							GameObject Shoe_R = gearItem.Item2.transform.Find("Shoe_R").gameObject;
-
-							Shoe_L.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
-							Shoe_R.GetComponent<Renderer>().material.SetTexture(MainTextureName, tex);
-							break;
-						}
-					}
+					gearType = "mShoes";
 					break;
 				case MPTextureType.Hat:
-					SetClothingTexture(new string[] { "Hat" }, tex);
+					gearType = "mHatDad";
 					break;
-				case MPTextureType.Board:
-					foreach (Transform t in board.GetComponentsInChildren<Transform>()) {
-						if (SkateboardMaterials.Contains(t.name)) {
-							Renderer r = t.GetComponent<Renderer>();
-							if (r != null) {
-								r.material.SetTexture(MainDeckTextureName, tex);
-							}
-						}
-					}
+				case MPTextureType.Deck:
+					gearType = "deck";
+					break;
+				case MPTextureType.Grip:
+					gearType = "griptape";
+					break;
+				case MPTextureType.Trucks:
+					gearType = "trucks";
+					break;
+				case MPTextureType.Wheels:
+					gearType = "wheels";
 					break;
 			}
+
+			return gearType;
+		}
+
+		public void SetPlayerTexture(string path, MPTextureType texType, bool useFull) {
+			TextureChange texChange = new TextureChange("albedo", path);
+			GearInfo newInfo;
+			
+			if((byte)texType >= (byte)MPTextureType.Deck) {
+				newInfo = new BoardGearInfo("MP Temp " + texType.ToString(), GetGearTypeFromTextureType(texType, useFull), true, new TextureChange[] { texChange }, new string[0]);
+			} else {
+				newInfo = new CharacterGearInfo("MP Temp " + texType.ToString(), GetGearTypeFromTextureType(texType, useFull), true, new TextureChange[] { texChange }, new string[0]);
+			}
+			
+			
+			characterCustomizer.EquipGear(newInfo);
 		}
 
 		public void UnpackAnimations(byte[] recBuffer) {

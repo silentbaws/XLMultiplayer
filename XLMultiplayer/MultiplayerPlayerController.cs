@@ -11,11 +11,6 @@ namespace XLMultiplayer {
 		public string username;
 
 		protected StreamWriter debugWriter;
-
-		protected readonly string[] SkateboardMaterials = new string[] { "GripTape", "Deck", "Hanger", "Wheel1 Mesh", "Wheel2 Mesh", "Wheel3 Mesh", "Wheel4 Mesh" };
-
-		protected const string MainTextureName = "Texture2D_4128E5C7";
-		protected const string MainDeckTextureName = "Texture2D_694A07B4";
 		
 		private CharacterCustomizer _characterCustomizer;
 
@@ -23,21 +18,39 @@ namespace XLMultiplayer {
 		public CharacterCustomizer characterCustomizer {
 			get {
 				if (_characterCustomizer == null) {
-					_characterCustomizer = this.player.GetComponentInChildren<CharacterCustomizer>();
+					if(this.player.transform.parent != null)
+						_characterCustomizer = this.player.transform.parent.GetComponentInChildren<CharacterCustomizer>();
+					else
+						_characterCustomizer = this.player.GetComponentInChildren<CharacterCustomizer>();
 				}
 				return _characterCustomizer;
 			}
 		}
-
+		
 		// Get the gear list on the character customizer
-		public List<Tuple<CharacterGear, GameObject>> gearList {
+		public List<ClothingGearObjet> gearList {
 			get {
-				return Traverse.Create(characterCustomizer).Field("equippedGear").GetValue() as List<Tuple<CharacterGear, GameObject>>;
+				return Traverse.Create(characterCustomizer).Field("equippedGear").GetValue() as List<ClothingGearObjet>;
+			}
+		}
+
+		public List<BoardGearObject> boardGearList {
+			get {
+				return Traverse.Create(characterCustomizer).Field("equippedBoardGear").GetValue() as List<BoardGearObject>;
+			}
+		}
+
+		public CharacterBodyObject currentBody {
+			get {
+				return Traverse.Create(characterCustomizer).Field("currentBody").GetValue() as CharacterBodyObject;
+			}
+			set {
+				Traverse.Create(characterCustomizer).Field("currentBody").SetValue(value);
 			}
 		}
 
 		public MultiplayerPlayerController(StreamWriter writer) {
-			debugWriter = writer;
+			this.debugWriter = writer;
 		}
 
 		// Override for local/remote players

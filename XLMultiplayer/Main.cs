@@ -16,7 +16,7 @@ namespace XLMultiplayer {
 		public static HarmonyInstance harmonyInstance;
 
 		public static MultiplayerMenu menu;
-		public static MultiplayerStatusMenu statusMenu;
+		public static MultiplayerUtilityMenu utilityMenu;
 		public static MultiplayerController multiplayerController;
 
 		static void Load(UnityModManager.ModEntry modEntry) {
@@ -36,16 +36,20 @@ namespace XLMultiplayer {
 				harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());
 
 				menu = XLShredLib.ModMenu.Instance.gameObject.AddComponent<MultiplayerMenu>();
-				statusMenu = XLShredLib.ModMenu.Instance.gameObject.AddComponent<MultiplayerStatusMenu>();
+				utilityMenu = XLShredLib.ModMenu.Instance.gameObject.AddComponent<MultiplayerUtilityMenu>();
+
+				MultiplayerUtils.StartMapLoading();
 			} else {
 				//Unpatch the replay editor
 				harmonyInstance.UnpatchAll(harmonyInstance.Id);
+
+				MultiplayerUtils.StopMapLoading();
 
 				multiplayerController.DisconnectFromServer();
 				menu.CloseMultiplayerMenu();
 
 				UnityEngine.Object.Destroy(menu);
-				UnityEngine.Object.Destroy(statusMenu);
+				UnityEngine.Object.Destroy(utilityMenu);
 			}
 
 			return true;

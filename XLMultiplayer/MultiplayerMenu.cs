@@ -6,8 +6,6 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using XLShredLib;
 
-//TODO: Change how multiplayer manager is accessed
-
 namespace XLMultiplayer {
 	public class MultiplayerMenu : MonoBehaviour {
 
@@ -41,6 +39,8 @@ namespace XLMultiplayer {
 		}
 		
 		public void OpenMultiplayerMenu() {
+			this.multiplayerMenuOpen = true;
+
 			if (UnityEngine.Object.FindObjectOfType<EventSystem>() == null) {
 				GameObject gameObject = new GameObject("Event System");
 				gameObject.AddComponent<EventSystem>();
@@ -110,7 +110,7 @@ namespace XLMultiplayer {
 			this.multiplayerMenuPaypalButton.targetGraphic = this.multiplayerMenuPaypalButtonImage;
 
 			this.multiplayerMenuPaypalButton.onClick.AddListener(() => {
-				Application.OpenURL("https://www.paypal.me/silentbaws");
+				Application.OpenURL("https://www.paypal.me/silentbawsmp");
 			});
 
 			this.multiplayerMenuConnectObject = new GameObject();
@@ -156,6 +156,7 @@ namespace XLMultiplayer {
 		}
 		
 		public void CloseMultiplayerMenu() {
+			this.multiplayerMenuOpen = false;
 			serverBrowser.Close();
 
 			UnityEngine.Object.Destroy(this.multiplayerMenu);
@@ -175,7 +176,7 @@ namespace XLMultiplayer {
 				float screenScale = Screen.height / 1080f;
 				Rect rect = new Rect(vectors[0].x, 1080 * screenScale - vectors[0].y + 5, (vectors[2].x - vectors[0].x) * 0.6f, 25f);
 				Rect rect2 = new Rect(rect.width + rect.x + 5, 1080 * screenScale - vectors[0].y + 5, vectors[2].x - rect.width - rect.x - 5, 25f);
-				ipAddress = GUI.TextField(rect, ipAddress, 16);
+				ipAddress = GUI.TextField(rect, ipAddress);
 				port = GUI.TextField(rect2, port, 4);
 				Rect rect3 = new Rect(rect.x, rect.y + rect.height + 5, rect.width, rect.height);
 				username = GUI.TextField(rect3, username, 16);

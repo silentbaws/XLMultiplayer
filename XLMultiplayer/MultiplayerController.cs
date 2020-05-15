@@ -1,29 +1,31 @@
-﻿using Harmony12;
-using ReplayEditor;
+﻿using ReplayEditor;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using UnityEngine;
 using Valve.Sockets;
 
-// TODO: Maybe send meshes? They're pretty small my dude
+// TODO: Redo the multiplayer texture system
+//			-> Send paths for non-custom gear
+//			-> Send hashes of full size textures for custom gear along with compressed texture
+//			-> Only send hashes/paths from server unless client requests texture data
+
+// TODO: Send alive thread, read ping and packet loss
+
+// TODO: move SendUpdate to Update
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
 		Connect = 0,
 		Settings = 1,
-		Position = 2,
+		VersionNumber = 2,
 		Animation = 3,
 		Texture = 4,
 		Chat = 5,
-		VersionNumber = 6,
 		MapHash = 7,
 		MapVote = 8,
 		MapList = 9,
@@ -40,7 +42,9 @@ namespace XLMultiplayer {
 		private NetworkingMessage[] netMessages;
 		DebugCallback debugCallbackDelegate = null;
 
-		private bool isConnected = false;
+		public List<string> chatMessages = new List<string>();
+
+		public bool isConnected { get; private set; } = false;
 
 		private StreamWriter debugWriter;
 
@@ -78,7 +82,7 @@ namespace XLMultiplayer {
 				string filename = "Multiplayer Debug Client" + (i == 0 ? "" : " " + i.ToString()) + ".txt";
 				try {
 					this.debugWriter = new StreamWriter(filename);
-				} catch (Exception e) {
+				} catch (Exception) {
 					this.debugWriter = null;
 					i++;
 				}
@@ -87,8 +91,8 @@ namespace XLMultiplayer {
 			this.debugWriter.WriteLine("Attempting to connect to server ip {0} on port {1}", ip, port.ToString());
 
 			MultiplayerUtils.serverMapDictionary.Clear();
-			
-			this.playerController = new MultiplayerLocalPlayerController(debugWriter);
+
+			this.playerController = new MultiplayerLocalPlayerController(this.debugWriter);
 			this.playerController.ConstructPlayer();
 			this.playerController.username = user;
 
@@ -118,12 +122,14 @@ namespace XLMultiplayer {
 				case ConnectionState.ClosedByPeer:
 					//Client disconnected from server
 					this.debugWriter.WriteLine("Disconnected from server");
+					Main.utilityMenu.SendImportantChat("<b><color=\"red\">You have been disconnected from the server</color></b>", 7500);
 					DisconnectFromServer();
 					break;
 
 				case ConnectionState.ProblemDetectedLocally:
 					//Client unable to connect
 					this.debugWriter.WriteLine("Unable to connect to server");
+					Main.utilityMenu.SendImportantChat("<b><color=\"red\">You could not connect to the server</color></b>", 7500);
 					DisconnectFromServer();
 					break;
 			}
@@ -143,44 +149,29 @@ namespace XLMultiplayer {
 
 			utils.SetDebugCallback(DebugType.Important, debugCallbackDelegate);
 
+			Main.utilityMenu.chat = "";
+			Main.utilityMenu.previousMessageCount = 0;
+
 			#if DEBUG
 			unsafe {
 				// From data I saw a typical example of udp packets over the internet would be 0.3% loss, 25% reorder
 				// For testing I'll use 25% reorder, 30ms delay on reorder, 150ms ping, and 0.2% loss
 
 				// Re-order 25% of packets and add 30ms delay on reordered packets
-				float reorderPercent = 25f;
-				int reorderTime = 30;
-				utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&reorderPercent));
-				utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderTime, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&reorderTime));
+				//float reorderPercent = 25f;
+				//int reorderTime = 30;
+				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&reorderPercent));
+				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderTime, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&reorderTime));
 
-				// Fake 150ms ping
-				int pingTime = 150;
-				utils.SetConfiguratioValue(ConfigurationValue.FakePacketLagSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&pingTime));
+				//// Fake 150ms ping
+				//int pingTime = 150;
+				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketLagSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&pingTime));
 
-				// Simulate 0.2% packet loss
-				float lossPercent = 0.2f;
-				utils.SetConfiguratioValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
+				//// Simulate 0.2% packet loss
+				//float lossPercent = 0.2f;
+				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
 			}
 			#endif
-
-			//byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
-
-			// TODO: Send username bytes
-
-			// TODO: Start new send alive thread(Is this necessary? Maybe put UpdateClient on new thread?)
-
-			// TODO: Send version number before updates and stuff
-
-			//updateThread = new Thread(new ThreadStart(UpdateThreadFunction));
-			//updateThread.IsBackground = true;
-			//updateThread.Start();
-
-			InvokeRepeating("SendUpdate", 0f, 1f / (float)this.tickRate);
-			
-			//this.playerController.EncodeTextures();
-
-			//SendTextures();
 		}
 
 		public void StartLoadMap(string path) {
@@ -198,9 +189,6 @@ namespace XLMultiplayer {
 			if (target == null) {
 				target = levelSelectionController.CustomLevels.Find(level => level.path.Equals(path));
 			}
-			if (target == null) {
-				Main.statusMenu.DisplayNoMap(path);
-			}
 			levelSelectionController.StartCoroutine(levelSelectionController.LoadLevel(target));
 			StartCoroutine(CloseAfterLoad());
 			yield break;
@@ -213,11 +201,6 @@ namespace XLMultiplayer {
 			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(false);
 			Main.menu.CloseMultiplayerMenu();
 			yield break;
-		}
-
-		private void SendTextures() {
-			// Send this
-			// playerController.shirtMPTex.GetSendData();
 		}
 
 		public void Update() {
@@ -250,6 +233,8 @@ namespace XLMultiplayer {
 			// Lerp frames using frame buffer
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
 				if (controller != null) {
+					controller.ApplyTextures();
+
 					if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
 						controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
 						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
@@ -279,10 +264,6 @@ namespace XLMultiplayer {
 					netMessage.Destroy();
 				}
 			}
-
-			// Save textures from queue
-
-			// Apply saved textures
 		}
 
 		private void ProcessMessage(byte[] buffer) {
@@ -295,14 +276,79 @@ namespace XLMultiplayer {
 				Array.Copy(buffer, 1, newBuffer, 0, buffer.Length - 2);
 			}
 
-			this.debugWriter.WriteLine("Recieved message with opcode {0}, and length {1}", opCode, buffer.Length);
+			if (opCode != OpCode.Animation) this.debugWriter.WriteLine("Recieved message with opcode {0}, and length {1}", opCode, buffer.Length);
 
 			switch (opCode) {
 				case OpCode.Connect:
 					AddPlayer(playerID);
 					break;
 				case OpCode.Disconnect:
+					// TODO: Delay destruction and removal until after they're no longer in replay
+					MultiplayerRemotePlayerController player = remoteControllers.Find(c => c.playerID == playerID);
+					chatMessages.Add("Player <color=\"yellow\">" + player.username + "{" + player.playerID + "}</color> <b><color=\"red\">DISCONNECTED</color></b>");
 					RemovePlayer(playerID);
+					break;
+				case OpCode.VersionNumber:
+					string serverVersion = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
+
+					if (serverVersion.Equals(Main.modEntry.Version.ToString())) {
+						this.debugWriter.WriteLine("Server version matches client version start encoding");
+
+						byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
+						SendBytes(OpCode.Settings, usernameBytes, true);
+
+						this.StartCoroutine(this.playerController.EncodeTextures());
+
+						InvokeRepeating("SendUpdate", 0f, 1f / (float)this.tickRate);
+					} else {
+						this.debugWriter.WriteLine("server version {0} does not match client version {1}", serverVersion, Main.modEntry.Version.ToString());
+						DisconnectFromServer();
+					}
+					break;
+				case OpCode.Settings:
+					MultiplayerRemotePlayerController remotePlayer = remoteControllers.Find((p) => { return p.playerID == playerID; });
+					if (remotePlayer != null) {
+						remotePlayer.username = RemoveMarkup(ASCIIEncoding.ASCII.GetString(newBuffer));
+						chatMessages.Add("Player <color=\"yellow\">" + remotePlayer.username + "{" + remotePlayer.playerID + "}</color> <b><color=\"green\">CONNECTED</color></b>");
+					}
+					break;
+				case OpCode.Texture:
+					MultiplayerRemotePlayerController remoteOwner = remoteControllers.Find((p) => { return p.playerID == playerID; });
+					if (remoteOwner == null) {
+						this.debugWriter.WriteLine("Texture owner not found");
+					}
+					switch ((MPTextureType)newBuffer[0]) {
+						case MPTextureType.Shirt:
+							remoteOwner.shirtMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Pants:
+							remoteOwner.pantsMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Shoes:
+							remoteOwner.shoesMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Hat:
+							remoteOwner.hatMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Deck:
+							remoteOwner.deckMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Grip:
+							remoteOwner.gripMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Trucks:
+							remoteOwner.truckMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Wheels:
+							remoteOwner.wheelMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Body:
+							remoteOwner.bodyMPTex.SaveTexture(playerID, newBuffer);
+							break;
+						case MPTextureType.Head:
+							remoteOwner.headMPTex.SaveTexture(playerID, newBuffer);
+							break;
+					}
 					break;
 				case OpCode.Animation:
 					byte[] packetData = new byte[newBuffer.Length - 4];
@@ -315,6 +361,31 @@ namespace XLMultiplayer {
 					Array.Copy(decompressedData, 0, animationData, 4, decompressedData.Length);
 
 					this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(animationData);
+					break;
+				case OpCode.Chat:
+					MultiplayerRemotePlayerController remoteSender = this.remoteControllers.Find(p => p.playerID == playerID);
+					string cleanedMessage = RemoveMarkup(ASCIIEncoding.ASCII.GetString(newBuffer));
+
+					if (remoteSender != null) {
+						cleanedMessage = "<b>" + remoteSender.username + "</b>{" + playerID + "}: " + cleanedMessage;
+						chatMessages.Add(cleanedMessage);
+					}
+					break;
+				case OpCode.MapList:
+					MultiplayerUtils.LoadServerMaps(buffer);
+					break;
+				case OpCode.MapHash:
+					string mapName = MultiplayerUtils.ChangeMap(buffer);
+
+					if(mapName != null) {
+						Main.utilityMenu.DisplayMessage("MAP NOT FOUND - DISCONNECTED FROM SERVER", "There is no map matching the servers map \"" + mapName + "\" if you have this map it may be a different version, check to see if there's been a new version", 15000);
+
+						DisconnectFromServer();
+					}
+
+					break;
+				case OpCode.MapVote:
+					Main.utilityMenu.SendImportantChat("<b><color=#ff00ffff>MAP VOTING HAS BEGUN. THE MAP WILL CHANGE IN 30 SECONDS</color></b>", 10000);
 					break;
 			}
 		}
@@ -333,16 +404,10 @@ namespace XLMultiplayer {
 			UnityEngine.Object.Destroy(remotePlayer.board);
 		}
 
-		private void UpdateThreadFunction() {
-			while (isConnected) {
-				SendUpdate();
-
-				Thread.Sleep((int)((1f/(float)this.tickRate)*1000));
-			}
-		}
-
 		public void SendUpdate() {
 			Tuple<byte[], bool> animationData = this.playerController.PackAnimations();
+
+			if (animationData == null) return;
 
 			// Only send update if it's new transforms(don't waste bandwidth on duplicates)
 			if (this.playerController.currentAnimationTime != previousSentAnimationTime || 
@@ -355,6 +420,7 @@ namespace XLMultiplayer {
 
 		// For things that encode the prebuffer during serialization
 		public void SendBytesRaw(byte[] msg, bool reliable) {
+			client.SendMessageToConnection(connection, msg, reliable ? SendType.Reliable : SendType.Unreliable);
 		}
 
 		public void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
@@ -362,7 +428,7 @@ namespace XLMultiplayer {
 			byte[] sendMsg = new byte[msg.Length + 1];
 			sendMsg[0] = (byte)opCode;
 			Array.Copy(msg, 0, sendMsg, 1, msg.Length);
-			client.SendMessageToConnection(connection, msg, reliable ? SendType.Reliable : SendType.Unreliable);
+			client.SendMessageToConnection(connection, sendMsg, reliable ? SendType.Reliable : SendType.Unreliable);
 		}
 
 		private void SendBytesAnimation(byte[] msg, bool reliable) {
@@ -378,6 +444,15 @@ namespace XLMultiplayer {
 			client.SendMessageToConnection(connection, packet, reliable ? SendType.Reliable : SendType.Unreliable);
 
 			sentAnimUpdates++;
+		}
+
+		public void SendChatMessage(string msg) {
+			string afterMarkup = RemoveMarkup(msg);
+
+			if(afterMarkup.Length > 0) {
+				chatMessages.Add("<b><color=\"blue\">You: </color></b>" + afterMarkup);
+				this.SendBytes(OpCode.Chat, ASCIIEncoding.ASCII.GetBytes(afterMarkup), true);
+			}
 		}
 
 		private string RemoveMarkup(string msg) {
@@ -417,19 +492,26 @@ namespace XLMultiplayer {
 		}
 
 		public void DisconnectFromServer() {
+			Main.menu.EndMultiplayer();
+		}
+
+		public void OnDestroy() {
 			client.CloseConnection(connection);
 
 			isConnected = false;
 
 			CancelInvoke("SendUpdate");
 
+			foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
+				GameObject.Destroy(controller.skater);
+				GameObject.Destroy(controller.board);
+				GameObject.Destroy(controller.skaterMeshObjects);
+				GameObject.Destroy(controller.player);
+			}
+
 			CleanupSockets();
 
-			UnityEngine.Object.Destroy(this);
-		}
-
-		public void OnDestroy() {
-			DisconnectFromServer();
+			this.debugWriter.Close();
 		}
 	}
 }

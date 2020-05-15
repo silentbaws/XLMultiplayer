@@ -166,7 +166,7 @@
     <Compile Include="MultiplayerRemotePlayerController.cs" />
     <Compile Include="MultiplayerRemoteTexture.cs" />
     <Compile Include="MultiplayerServerBrowser.cs" />
-    <Compile Include="MultiplayerStatusMenu.cs" />
+    <Compile Include="MultiplayerUtilityMenu.cs" />
     <Compile Include="MultiplayerTexture.cs" />
     <Compile Include="MultiplayerUtils.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -174,7 +174,7 @@
   <ItemGroup>
     <None Include="App.config" />
     <None Include="Info.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
   <ItemGroup>
