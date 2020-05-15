@@ -82,7 +82,7 @@ namespace XLMultiplayerServer {
 
 		private static byte MAX_PLAYERS = 10;
 
-		private static string VERSION_NUMBER = "1.0.0";
+		private static string VERSION_NUMBER = "0.7.0";
 
 		private static bool ENFORCE_MAPS = true;
 
