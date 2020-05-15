@@ -341,7 +341,7 @@ namespace XLMultiplayerServer {
 					}
 					break;
 				case OpCode.StillAlive:
-					server.SendMessageToConnection(players[fromID].connection, buffer);
+					if (players[fromID] != null) server.SendMessageToConnection(players[fromID].connection, buffer, SendType.Unreliable);
 					break;
 			}
 		}

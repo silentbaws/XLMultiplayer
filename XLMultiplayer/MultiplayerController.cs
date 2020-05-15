@@ -7,15 +7,16 @@ using System.IO.Compression;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using UnityEngine;
 using Valve.Sockets;
+using XLShredLib;
+using XLShredLib.UI;
 
 // TODO: Redo the multiplayer texture system
 //			-> Send paths for non-custom gear
 //			-> Send hashes of full size textures for custom gear along with compressed texture
 //			-> Only send hashes/paths from server unless client requests texture data
-
-// TODO: Send alive thread, read ping and packet loss
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -60,12 +61,128 @@ namespace XLMultiplayer {
 		private bool sendingUpdates = false;
 		private float timeSinceLastUpdate = 0.0f;
 
+		private Thread aliveThread = null;
+		private int alivePacketCount = 0;
+		private int receivedAlivePackets = 0;
+
+		private float statisticsResetTime = 0.0f;
+		private List<float> pingTimes = new List<float>();
+		private int receivedAlive10Seconds = 0;
+		private int sentAlive10Seconds = 0;
+
+		private ModUIBox uiBox;
+
+		private GUIStyle modMenuStyle = null;
+
+		private string playerListText = "Player List Test";
+
+		private string[] usernameColumnText = new string[3];
+		private List<string> column1Usernames = new List<string>();
+		private List<string> column2Usernames = new List<string>();
+		private List<string> column3Usernames = new List<string>();
+
+		private string networkStatsText = "Network Stats Will update after 10 seconds of connection";
+
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
 			if (ReplayEditorController.Instance == null) {
 				GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(true);
 				StartCoroutine(TurnOffReplay());
 			}
+
+			uiBox = ModMenu.Instance.RegisterModMaker("silentbaws", "Silentbaws", 5);
+			uiBox.AddCustom("Player List", PlayerListOnGUI, () => isConnected);
+			uiBox.AddCustom("Network Stats", NetworkStatsOnGUI, () => isConnected);
+		}
+
+		private void InitializeStyle() {
+			modMenuStyle = new GUIStyle();
+			modMenuStyle.alignment = TextAnchor.UpperCenter;
+			modMenuStyle.wordWrap = true;
+			modMenuStyle.normal.textColor = Color.yellow;
+			modMenuStyle.fontSize = 12;
+			modMenuStyle.richText = true;
+		}
+
+		private void PlayerListOnGUI() {
+			if (modMenuStyle == null) InitializeStyle();
+
+			int desiredHeight = (int)modMenuStyle.CalcHeight(new GUIContent("Player List"), 1000);
+			desiredHeight = (int)Math.Ceiling(desiredHeight * 1.5f);
+			playerListText = $"<b><size={desiredHeight}>Player List</size></b>";
+
+			if (column1Usernames.Count + column2Usernames.Count + column3Usernames.Count != remoteControllers.Count) {
+				int column = 0;
+
+				column1Usernames.Clear();
+				column2Usernames.Clear();
+				column3Usernames.Clear();
+
+				foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
+					switch (column) {
+						case 0:
+							column1Usernames.Add(controller.username);
+							break;
+						case 1:
+							column2Usernames.Add(controller.username);
+							break;
+						case 2:
+							column3Usernames.Add(controller.username);
+							column = -1;
+							break;
+					}
+
+					column++;
+				}
+
+				// Move usernames in columns to prioritize middle and then left/right balance
+				if (column1Usernames.Count > column3Usernames.Count && column1Usernames.Count > column2Usernames.Count) {
+					column2Usernames.Add(column1Usernames[column1Usernames.Count - 1]);
+					column1Usernames.RemoveAt(column1Usernames.Count - 1);
+				} else if (column1Usernames.Count > column3Usernames.Count && column1Usernames.Count == column2Usernames.Count) {
+					column3Usernames.Add(column2Usernames[column2Usernames.Count - 1]);
+					column2Usernames.RemoveAt(column2Usernames.Count - 1);
+				}
+
+				for (int i = 0; i < 3; i++) {
+					usernameColumnText[i] = "";
+				}
+
+				foreach (string username in column1Usernames) {
+					usernameColumnText[0] += username + "\n";
+				}
+				foreach (string username in column2Usernames) {
+					usernameColumnText[1] += username + "\n";
+				}
+				foreach (string username in column3Usernames) {
+					usernameColumnText[2] += username + "\n";
+				}
+			}
+
+			GUILayout.Label(playerListText, modMenuStyle, null);
+
+			GUILayout.BeginHorizontal();
+
+			// Split usernames into 3 rows
+			GUILayout.BeginVertical(ModMenu.Instance.columnLeftStyle, GUILayout.Width(ModMenu.label_column_width * 2 / 3));
+			GUILayout.Label(usernameColumnText[0], modMenuStyle, null);
+			GUILayout.EndVertical();
+
+			GUILayout.BeginVertical(modMenuStyle, GUILayout.Width(ModMenu.label_column_width * 2 / 3));
+			GUILayout.Label(usernameColumnText[1], modMenuStyle, null);
+			GUILayout.EndVertical();
+
+			GUILayout.BeginVertical(GUILayout.Width(ModMenu.label_column_width * 2 / 3));
+			GUILayout.Label(usernameColumnText[2], modMenuStyle, null);
+			GUILayout.EndVertical();
+
+			GUILayout.EndHorizontal();
+		}
+
+		private void NetworkStatsOnGUI() {
+			if (modMenuStyle == null) InitializeStyle();
+
+			GUILayout.Label(networkStatsText, modMenuStyle, null);
 		}
 
 		// Turn off replay editor as soon as it's instance is not null
@@ -103,20 +220,17 @@ namespace XLMultiplayer {
 			client = new NetworkingSockets();
 
 			IPAddress serverIP = null;
-			try {
-				IPHostEntry hostInfo = Dns.GetHostEntry(ip);
-				foreach (IPAddress address in hostInfo.AddressList) {
-					if (address.MapToIPv4() != null) {
-						serverIP = address.MapToIPv4();
+			if (!IPAddress.TryParse(ip, out serverIP)) {
+				try {
+					IPHostEntry hostInfo = Dns.GetHostEntry(ip);
+					foreach (IPAddress address in hostInfo.AddressList) {
+						if (address.MapToIPv4() != null) {
+							serverIP = address.MapToIPv4();
+						}
 					}
-				}
-			} catch (Exception) { }
-			if (serverIP == null) {
-				if (!IPAddress.TryParse(ip, out serverIP)) {
-					DisconnectFromServer();
-					return;
-				}
+				} catch (Exception) { }
 			}
+			
 
 			Address remoteAddress = new Address();
 			remoteAddress.SetAddress(serverIP.ToString(), port);
@@ -253,6 +367,27 @@ namespace XLMultiplayer {
 					timeSinceLastUpdate = 0.0f;
 				}
 			}
+			
+			// Calculate network statistics every 10 seconds
+			if (Time.time - statisticsResetTime > 10f && pingTimes.Count > 0 && sentAlive10Seconds > 0) {
+				float totalPing = 0;
+				foreach (float ping in pingTimes) {
+					totalPing += ping;
+				}
+
+				int realPing = (int)(totalPing / pingTimes.Count * 1000f);
+				float lossPercent = Mathf.Max(((1f - ((float)receivedAlive10Seconds / (float)sentAlive10Seconds)) * 100f), 0);
+
+				string netstats = $"Ping: {realPing}ms           Packet Loss: {lossPercent.ToString("N2")}%";
+
+				this.debugWriter.WriteLine(netstats);
+				networkStatsText = netstats;
+
+				statisticsResetTime = Time.time;
+				sentAlive10Seconds = 0;
+				receivedAlive10Seconds = 0;
+				pingTimes.Clear();
+			}
 
 			UpdateClient();
 
@@ -302,7 +437,7 @@ namespace XLMultiplayer {
 				Array.Copy(buffer, 1, newBuffer, 0, buffer.Length - 2);
 			}
 
-			if (opCode != OpCode.Animation) this.debugWriter.WriteLine("Recieved message with opcode {0}, and length {1}", opCode, buffer.Length);
+			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive) this.debugWriter.WriteLine("Recieved message with opcode {0}, and length {1}", opCode, buffer.Length);
 
 			switch (opCode) {
 				case OpCode.Connect:
@@ -319,6 +454,10 @@ namespace XLMultiplayer {
 
 					if (serverVersion.Equals(Main.modEntry.Version.ToString())) {
 						this.debugWriter.WriteLine("Server version matches client version start encoding");
+
+						aliveThread = new Thread(SendAlive);
+						aliveThread.IsBackground = true;
+						aliveThread.Start();
 
 						byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
 						SendBytes(OpCode.Settings, usernameBytes, true);
@@ -413,6 +552,12 @@ namespace XLMultiplayer {
 				case OpCode.MapVote:
 					Main.utilityMenu.SendImportantChat("<b><color=#ff00ffff>MAP VOTING HAS BEGUN. THE MAP WILL CHANGE IN 30 SECONDS</color></b>", 10000);
 					break;
+				case OpCode.StillAlive:
+					float sentTime = BitConverter.ToSingle(buffer, 1);
+					pingTimes.Add(Time.time - sentTime);
+					receivedAlivePackets++;
+					receivedAlive10Seconds++;
+					break;
 			}
 		}
 
@@ -441,6 +586,23 @@ namespace XLMultiplayer {
 
 				SendBytesAnimation(animationData.Item1, animationData.Item2);
 				previousSentAnimationTime = this.playerController.currentAnimationTime;
+			}
+		}
+
+		private void SendAlive() {
+			statisticsResetTime = Time.time;
+			while (isConnected) {
+				byte[] currentTime = BitConverter.GetBytes(Time.time);
+				byte[] message = new byte[5];
+				message[0] = (byte)OpCode.StillAlive;
+				Array.Copy(currentTime, 0, message, 1, 4);
+
+				SendBytesRaw(message, false);
+
+				alivePacketCount++;
+				sentAlive10Seconds++;
+
+				Thread.Sleep(200);
 			}
 		}
 
