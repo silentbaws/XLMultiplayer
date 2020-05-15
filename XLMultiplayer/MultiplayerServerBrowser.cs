@@ -1,11 +1,10 @@
 ﻿using System.Collections.Generic;
 using UnityModManagerNet;
-using XLShredLib;
 using System.Collections;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
-using Newtonsoft.Json;
+using System.Diagnostics;
 
 namespace XLMultiplayer {
 	public class ServerBrowser : MonoBehaviour {
@@ -26,10 +25,18 @@ namespace XLMultiplayer {
 		private Vector2 scrollPosition = new Vector2();
 		private GUIStyle usingStyle;
 
+		public Stopwatch closeTimer = new Stopwatch();
+
 		private void Start() {
 			log("Starting");
 			StartCoroutine(StartUpdatingServerList());
 			showUI = false;
+		}
+
+		private void Update() {
+			if (closeTimer.ElapsedMilliseconds > 1000) {
+				closeTimer.Stop();
+			}
 		}
 
 		public IEnumerator StartUpdatingServerList() {
@@ -162,6 +169,7 @@ namespace XLMultiplayer {
 
 		public void Close() {
 			showUI = false;
+			closeTimer.Restart();
 		}
 
 		private void OnGUI() {

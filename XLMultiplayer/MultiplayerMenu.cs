@@ -126,11 +126,13 @@ namespace XLMultiplayer {
 			this.multiplayerMenuConnectButton.targetGraphic = this.multiplayerMenuConnectButtonImage;
 
 			this.multiplayerMenuConnectButton.onClick.AddListener(delegate () {
-				if (this.multiplayerManagerObject == null) {
-					CreateMultiplayerManager();
-					Main.multiplayerController.ConnectToServer(ipAddress.Equals("IP Address") ? "127.0.0.1" : ipAddress, (ushort)(port.Equals("Port") ? 7777 : int.Parse(port)), this.username);
-				} else if (this.multiplayerManagerObject != null) {
-					EndMultiplayer();
+				if (serverBrowser.closeTimer.ElapsedMilliseconds > 250 || !serverBrowser.closeTimer.IsRunning) {
+					if (this.multiplayerManagerObject == null) {
+						CreateMultiplayerManager();
+						Main.multiplayerController.ConnectToServer(ipAddress.Equals("IP Address") ? "127.0.0.1" : ipAddress, (ushort)(port.Equals("Port") ? 7777 : int.Parse(port)), this.username);
+					} else if (this.multiplayerManagerObject != null) {
+						EndMultiplayer();
+					}
 				}
 			});
 
@@ -183,9 +185,11 @@ namespace XLMultiplayer {
 
 				if (this.multiplayerManagerObject == null) {
 					Rect openBrowser = new Rect(rect.x, rect3.y + rect3.height + 5, rect.width, 40);
-					if (GUI.Button(openBrowser, "Open server browser")) {
+					if (GUI.Button(openBrowser, serverBrowser.showUI ? "Close server browser" : "Open server browser")) {
 						if (!serverBrowser.showUI) {
 							serverBrowser.Open();
+						} else {
+							serverBrowser.Close();
 						}
 					}
 				}
