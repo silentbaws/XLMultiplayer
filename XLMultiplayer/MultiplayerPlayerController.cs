@@ -5,10 +5,10 @@ using System.IO;
 using UnityEngine;
 
 namespace XLMultiplayer {
-	public class MultiplayerPlayerController {
+	public abstract class MultiplayerPlayerController {
 		public GameObject player { get; protected set; }
 
-		public string username;
+		public string username = "";
 
 		protected StreamWriter debugWriter;
 		

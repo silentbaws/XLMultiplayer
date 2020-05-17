@@ -7,6 +7,8 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Valve.Sockets;
 
@@ -18,6 +20,7 @@ namespace XLMultiplayerServer {
 		Animation = 3,
 		Texture = 4,
 		Chat = 5,
+		UsernameAdjustment = 6,
 		MapHash = 7,
 		MapVote = 8,
 		MapList = 9,
@@ -83,7 +86,7 @@ namespace XLMultiplayerServer {
 		public static bool RUNNING = true;
 
 		[JsonProperty("Server_Name")]
-		private static string SERVER_NAME;
+		private static string SERVER_NAME = "";
 
 		[JsonProperty("Port")]
 		private static ushort port = 7777;
@@ -95,7 +98,7 @@ namespace XLMultiplayerServer {
 		private static bool ENFORCE_MAPS = true;
 
 		[JsonProperty("API_Key")]
-		private static string API_KEY;
+		private static string API_KEY = "";
 
 		[JsonProperty("Maps_Folder")]
 		private static string mapsDir = "";
@@ -267,25 +270,10 @@ namespace XLMultiplayerServer {
 
 			switch ((OpCode)buffer[0]) {
 				case OpCode.Settings:
-					string username = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
-
-					Console.WriteLine("Connection {0}'s username is {1}", fromID, username);
-
-					if(players[fromID] != null) {
-						players[fromID].username = username;
-
-						byte[] sendMessage = new byte[buffer.Length + 1];
-						Array.Copy(buffer, 0, sendMessage, 0, buffer.Length);
-						sendMessage[buffer.Length] = fromID;
-
-						players[fromID].usernameMessage = sendMessage;
-
-						foreach (Player player in players) {
-							if (player != null && player.playerID != fromID) {
-								server.SendMessageToConnection(player.connection, sendMessage, SendType.Reliable);
-							}
-						}
-					}
+					Console.WriteLine("Got username");
+					Thread usernameThread = new Thread(new ParameterizedThreadStart(Server.HandleUsername));
+					usernameThread.IsBackground = true;
+					usernameThread.Start(Tuple.Create(buffer, fromID));
 					break;
 				case OpCode.Texture: {
 						Console.WriteLine("Received Texture from " + fromID);
@@ -562,7 +550,130 @@ namespace XLMultiplayerServer {
 			Library.Deinitialize();
 		}
 
-		public static async void StartAnnouncing() {
+		private static string RemoveMarkup(string msg) {
+			string old;
+
+			do {
+				old = msg;
+				msg = Regex.Replace(msg.Trim(), "</?(?:b|i|color|size|material|quad)[^>]*>", "", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+			} while (!msg.Equals(old));
+
+			return msg;
+		}
+
+		public static void HandleUsername(object data) {
+			Tuple<byte[], byte> input = (Tuple<byte[], byte>)data;
+
+			byte[] buffer = input.Item1;
+			byte fromID = input.Item2;
+
+			string username = "";
+			byte[] IV = new byte[0];
+			byte[] usernameBytes;
+			string sentFancyName = "";
+			if (buffer[1] == 0) {
+				usernameBytes = new byte[buffer.Length - 2];
+
+				Array.Copy(buffer, 2, usernameBytes, 0, usernameBytes.Length);
+
+				usernameBytes = ASCIIEncoding.ASCII.GetBytes(RemoveMarkup(ASCIIEncoding.ASCII.GetString(usernameBytes)));
+			} else {
+				int IVLength = BitConverter.ToInt32(buffer, 2);
+
+				IV = new byte[IVLength];
+				usernameBytes = new byte[BitConverter.ToInt32(buffer, 6 + IVLength)];
+
+				if (IVLength > 0) Array.Copy(buffer, 6, IV, 0, IVLength);
+				if (usernameBytes.Length > 0) Array.Copy(buffer, 10 + IVLength, usernameBytes, 0, usernameBytes.Length);
+				sentFancyName = ASCIIEncoding.ASCII.GetString(buffer, 10 + IVLength + usernameBytes.Length, buffer.Length - IVLength - usernameBytes.Length - 10);
+			}
+			
+			var client = new HttpClient();
+
+			string usernameString = "";
+			foreach (byte b in usernameBytes) {
+				usernameString += b.ToString() + ", ";
+			}
+
+			string ivString = "";
+			foreach (byte b in IV) {
+				ivString += b.ToString() + ", ";
+			}
+
+			var values = new Dictionary<string, string> {
+				{ "username", usernameString },
+				{ "ipaddress", players[fromID].ipAddr.GetIP() },
+				{ "iv", ivString } };
+
+			var content = new FormUrlEncodedContent(values);
+
+			HttpResponseMessage response = new HttpResponseMessage();
+			try {
+				var task = client.PostAsync("http://davisellwood-site.herokuapp.com/api/getreservedname/", content);
+				task.Wait();
+				response = task.Result;
+			} catch(Exception) {
+				response.StatusCode = HttpStatusCode.RequestTimeout;
+			}
+			if (response.StatusCode != HttpStatusCode.OK) {
+				// If server cannot be reached use username bytes without markup if standard username buffer and stylized name for encrypted buffer
+				if (buffer[1] == 0) {
+					username = ASCIIEncoding.ASCII.GetString(usernameBytes);
+				} else {
+					if(response.StatusCode == HttpStatusCode.BadRequest) {
+						username = "Naughty Boy";
+					} else {
+						username = sentFancyName;
+					}
+				}
+				Console.WriteLine($"Error checking username: {response.StatusCode}");
+			} else {
+				var newTask = response.Content.ReadAsStringAsync();
+				newTask.Wait();
+				username = newTask.Result;
+
+				string[] usernameSplit = username.Split(',');
+				if (usernameSplit.Length > 1) {
+					bool allInts = true;
+					int result = 0;
+					foreach (string s in usernameSplit) {
+						if (!Int32.TryParse(s, out result)) {
+							allInts = false;
+						}
+					}
+					if (allInts) {
+						username = "Naughty Boy";
+					}
+				}
+			}
+
+			Console.WriteLine("Connection {0}'s username is {1}", fromID, username);
+
+			if (players[fromID] != null) {
+				players[fromID].username = username;
+
+
+				byte[] usernameAdjustmentBytes = new byte[username.Length + 1];
+				usernameAdjustmentBytes[0] = (byte)OpCode.UsernameAdjustment;
+				Array.Copy(ASCIIEncoding.ASCII.GetBytes(username), 0, usernameAdjustmentBytes, 1, username.Length);
+				server.SendMessageToConnection(players[fromID].connection, usernameAdjustmentBytes, SendType.Reliable);
+
+				byte[] sendMessage = new byte[username.Length + 2];
+				sendMessage[0] = (byte)OpCode.Settings;
+				Array.Copy(ASCIIEncoding.ASCII.GetBytes(username), 0, sendMessage, 1, username.Length);
+				sendMessage[sendMessage.Length - 1] = fromID;
+
+				players[fromID].usernameMessage = sendMessage;
+
+				foreach (Player player in players) {
+					if (player != null && player.playerID != fromID) {
+						server.SendMessageToConnection(player.connection, sendMessage, SendType.Reliable);
+					}
+				}
+			}
+		}
+
+		private static async void StartAnnouncing() {
 			var client = new HttpClient();
 			while (true && API_KEY != "") {
 				try {

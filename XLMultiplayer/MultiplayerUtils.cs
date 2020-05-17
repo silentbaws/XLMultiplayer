@@ -37,6 +37,42 @@ namespace XLMultiplayer {
 			}
 		}
 
+		public static byte[] EncryptStringToBytes_Aes(string plainText, byte[] Key, byte[] IV) {
+			// Check arguments.
+			if (plainText == null || plainText.Length <= 0)
+				throw new ArgumentNullException("plainText");
+			if (Key == null || Key.Length <= 0)
+				throw new ArgumentNullException("Key");
+			if (IV == null || IV.Length <= 0)
+				throw new ArgumentNullException("IV");
+
+			byte[] data = ASCIIEncoding.ASCII.GetBytes(plainText);
+
+			// Create an Aes object
+			// with the specified key and IV.
+			using (Aes aesAlg = Aes.Create()) {
+				aesAlg.Mode = CipherMode.CBC;
+				aesAlg.KeySize = 256;
+				aesAlg.BlockSize = 128;
+				aesAlg.Key = Key;
+				aesAlg.IV = IV;
+
+				// Create an encryptor to perform the stream transform.
+				ICryptoTransform encryptor = aesAlg.CreateEncryptor(aesAlg.Key, aesAlg.IV);
+
+				using (var ms = new MemoryStream())
+				using (var cryptoStream = new CryptoStream(ms, encryptor, CryptoStreamMode.Write)) {
+					cryptoStream.Write(data, 0, data.Length);
+					cryptoStream.FlushFinalBlock();
+
+					//byte[] returnValue = new byte[data.Length];
+					//Array.Copy(ms.ToArray(), 0, returnValue, 0, returnValue.Length);
+
+					return ms.ToArray();
+				}
+			}
+		}
+
 		public static void LoadServerMaps(byte[] mapListBytes) {
 			int readBytes = 1;
 

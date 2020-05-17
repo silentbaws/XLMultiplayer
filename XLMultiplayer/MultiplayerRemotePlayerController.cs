@@ -29,7 +29,6 @@ namespace XLMultiplayer {
 
 	public class MultiplayerRemotePlayerController : MultiplayerPlayerController {
 		public GameObject skater { get; private set; }
-		public GameObject skaterMeshObjects { get; private set; }
 		public GameObject board { get; private set; }
 
 		public GameObject usernameObject;
@@ -584,6 +583,13 @@ namespace XLMultiplayer {
 					array4[j] = num4;
 				}
 			}
+		}
+
+		public void Destroy() {
+			GameObject.Destroy(skater);
+			GameObject.Destroy(board);
+			GameObject.Destroy(usernameObject);
+			GameObject.Destroy(player);
 		}
 	}
 }

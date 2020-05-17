@@ -1,14 +1,17 @@
-﻿using ReplayEditor;
+﻿using Newtonsoft.Json;
+using ReplayEditor;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.Networking;
 using Valve.Sockets;
 using XLShredLib;
 using XLShredLib.UI;
@@ -26,11 +29,19 @@ namespace XLMultiplayer {
 		Animation = 3,
 		Texture = 4,
 		Chat = 5,
+		UsernameAdjustment = 6,
 		MapHash = 7,
 		MapVote = 8,
 		MapList = 9,
 		StillAlive = 254,
 		Disconnect = 255
+	}
+
+	class CustomUsername {
+		[JsonProperty("Secret_Key")]
+		public static string secretKey = "";
+		[JsonProperty("Username")]
+		public static string username = "";
 	}
 
 	class MultiplayerController : MonoBehaviour{
@@ -83,6 +94,10 @@ namespace XLMultiplayer {
 
 		private string networkStatsText = "Network Stats Will update after 10 seconds of connection";
 
+		private string playerListLocalUser = "";
+
+		private Thread usernameThread;
+
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
 			if (ReplayEditorController.Instance == null) {
@@ -90,7 +105,7 @@ namespace XLMultiplayer {
 				StartCoroutine(TurnOffReplay());
 			}
 
-			uiBox = ModMenu.Instance.RegisterModMaker("silentbaws", "Silentbaws", 5);
+			uiBox = ModMenu.Instance.RegisterModMaker("Silentbaws", "Silentbaws", 5);
 			uiBox.AddCustom("Player List", PlayerListOnGUI, () => isConnected);
 			uiBox.AddCustom("Network Stats", NetworkStatsOnGUI, () => isConnected);
 		}
@@ -109,25 +124,29 @@ namespace XLMultiplayer {
 
 			int desiredHeight = (int)modMenuStyle.CalcHeight(new GUIContent("Player List"), 1000);
 			desiredHeight = (int)Math.Ceiling(desiredHeight * 1.5f);
-			playerListText = $"<b><size={desiredHeight}>Player List</size></b>";
+			playerListText = $"<b><size={desiredHeight}>Player List</size></b>\n";
 
-			if (column1Usernames.Count + column2Usernames.Count + column3Usernames.Count != remoteControllers.Count) {
+			if (playerController == null) return;
+			if (column1Usernames.Count + column2Usernames.Count + column3Usernames.Count != remoteControllers.Count + 1 || playerListLocalUser != playerController.username) {
 				int column = 0;
 
 				column1Usernames.Clear();
 				column2Usernames.Clear();
 				column3Usernames.Clear();
 
+				column2Usernames.Add(playerController.username + "(YOU)");
+				playerListLocalUser = playerController.username;
+
 				foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
 					switch (column) {
 						case 0:
-							column1Usernames.Add(controller.username);
+							column1Usernames.Add(controller.username + $"({controller.playerID})");
 							break;
 						case 1:
-							column2Usernames.Add(controller.username);
+							column2Usernames.Add(controller.username + $"({controller.playerID})");
 							break;
 						case 2:
-							column3Usernames.Add(controller.username);
+							column3Usernames.Add(controller.username + $"({controller.playerID})");
 							column = -1;
 							break;
 					}
@@ -447,6 +466,7 @@ namespace XLMultiplayer {
 					// TODO: Delay destruction and removal until after they're no longer in replay
 					MultiplayerRemotePlayerController player = remoteControllers.Find(c => c.playerID == playerID);
 					chatMessages.Add("Player <color=\"yellow\">" + player.username + "{" + player.playerID + "}</color> <b><color=\"red\">DISCONNECTED</color></b>");
+					player.Destroy();
 					RemovePlayer(playerID);
 					break;
 				case OpCode.VersionNumber:
@@ -459,23 +479,35 @@ namespace XLMultiplayer {
 						aliveThread.IsBackground = true;
 						aliveThread.Start();
 
-						byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
-						SendBytes(OpCode.Settings, usernameBytes, true);
+						//SendUsername();
+						usernameThread = new Thread(SendUsername);
+						usernameThread.IsBackground = true;
+						usernameThread.Start();
 
 						this.StartCoroutine(this.playerController.EncodeTextures());
 
 						sendingUpdates = true;
 					} else {
 						this.debugWriter.WriteLine("server version {0} does not match client version {1}", serverVersion, Main.modEntry.Version.ToString());
+						Main.utilityMenu.SendImportantChat("<color=\"yellow\">server version <color=\"green\"><b>" + serverVersion + "</b></color> does not match client version <color=\"red\"><b>" + Main.modEntry.Version.ToString() + "</b></color></color>", 7500);
 						DisconnectFromServer();
 					}
 					break;
 				case OpCode.Settings:
 					MultiplayerRemotePlayerController remotePlayer = remoteControllers.Find((p) => { return p.playerID == playerID; });
 					if (remotePlayer != null) {
-						remotePlayer.username = RemoveMarkup(ASCIIEncoding.ASCII.GetString(newBuffer));
-						chatMessages.Add("Player <color=\"yellow\">" + remotePlayer.username + "{" + remotePlayer.playerID + "}</color> <b><color=\"green\">CONNECTED</color></b>");
+						remotePlayer.username = ASCIIEncoding.ASCII.GetString(newBuffer);
+						if (!ContainsMarkup(remotePlayer.username)) {
+							chatMessages.Add("Player <color=\"yellow\">" + remotePlayer.username + "{" + remotePlayer.playerID + "}</color> <b><color=\"green\">CONNECTED</color></b>");
+						} else {
+							chatMessages.Add("Player " + remotePlayer.username + "{" + remotePlayer.playerID + "} <b><color=\"green\">CONNECTED</color></b>");
+						}
+						if (column2Usernames.Count > 0) column2Usernames.RemoveAt(0);
+						else column1Usernames.RemoveAt(0);
 					}
+					break;
+				case OpCode.UsernameAdjustment:
+					this.playerController.username = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
 					break;
 				case OpCode.Texture:
 					MultiplayerRemotePlayerController remoteOwner = remoteControllers.Find((p) => { return p.playerID == playerID; });
@@ -634,6 +666,53 @@ namespace XLMultiplayer {
 			sentAnimUpdates++;
 		}
 
+		public void SendUsername() {
+			if (File.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\" + "CustomUsername.json")) {
+				JsonConvert.DeserializeObject<CustomUsername>(File.ReadAllText(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\" + "CustomUsername.json"));
+				
+				UnityWebRequest www = UnityWebRequest.Get("https://davisellwood-site.herokuapp.com/api/gettempkey/");
+				www.SendWebRequest();
+
+				while (!www.isDone) ;
+
+				string content = "";
+				if (!www.isNetworkError && !www.isHttpError) {
+					content = www.downloadHandler.text;
+				}
+
+				this.playerController.username = CustomUsername.username;
+
+				byte[] encryptionKey = ASCIIEncoding.ASCII.GetBytes(content);
+				byte[] IV = new byte[0];
+				byte[] usernameBytes = new byte[0];
+				byte[] fancyBytes = ASCIIEncoding.ASCII.GetBytes(CustomUsername.username);
+
+				if(encryptionKey.Length > 0) {
+					using (Aes myAes = Aes.Create()) {
+						myAes.Mode = CipherMode.CBC;
+						IV = myAes.IV;
+						usernameBytes = MultiplayerUtils.EncryptStringToBytes_Aes(CustomUsername.secretKey, encryptionKey, IV);
+					}
+				}
+
+				byte[] message = new byte[IV.Length + usernameBytes.Length + fancyBytes.Length + 9];
+				message[0] = 1;
+				Array.Copy(BitConverter.GetBytes(IV.Length), 0, message, 1, 4);
+				Array.Copy(IV, 0, message, 5, IV.Length);
+				Array.Copy(BitConverter.GetBytes(usernameBytes.Length), 0, message, 5 + IV.Length, 4);
+				Array.Copy(usernameBytes, 0, message, 9 + IV.Length, usernameBytes.Length);
+				Array.Copy(fancyBytes, 0, message, 9 + IV.Length + usernameBytes.Length, fancyBytes.Length);
+
+				SendBytes(OpCode.Settings, message, true);
+			} else {
+				byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
+				byte[] message = new byte[usernameBytes.Length + 1];
+				message[0] = 0;
+				Array.Copy(usernameBytes, 0, message, 1, usernameBytes.Length);
+				SendBytes(OpCode.Settings, message, true);
+			}
+		}
+
 		public void SendChatMessage(string msg) {
 			string afterMarkup = RemoveMarkup(msg);
 
@@ -652,6 +731,15 @@ namespace XLMultiplayer {
 			} while (!msg.Equals(old));
 
 			return msg;
+		}
+
+		private bool ContainsMarkup(string msg) {
+			string old;
+			
+			old = msg;
+			msg = Regex.Replace(msg.Trim(), "</?(?:b|i|color|size|material|quad)[^>]*>", "", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+
+			return old != msg;
 		}
 
 		public static byte[] Compress(byte[] data) {
@@ -690,10 +778,7 @@ namespace XLMultiplayer {
 			sendingUpdates = false;
 
 			foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
-				GameObject.Destroy(controller.skater);
-				GameObject.Destroy(controller.board);
-				GameObject.Destroy(controller.skaterMeshObjects);
-				GameObject.Destroy(controller.player);
+				controller.Destroy();
 			}
 
 			CleanupSockets();
@@ -708,6 +793,9 @@ namespace XLMultiplayer {
 				}
 				Directory.Delete(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp");
 			}
+
+			if(aliveThread != null && aliveThread.IsAlive) aliveThread.Join();
+			if(usernameThread != null && usernameThread.IsAlive) usernameThread.Join();
 
 			this.debugWriter.Close();
 		}
