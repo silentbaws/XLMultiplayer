@@ -60,7 +60,6 @@ namespace XLMultiplayer {
 		public bool isConnected { get; private set; } = false;
 
 		private List<byte[]> networkMessageQueue = new List<byte[]>();
-		private int messagesProcessed = 0;
 
 		private StreamWriter debugWriter;
 
@@ -427,13 +426,10 @@ namespace XLMultiplayer {
 			}
 
 			int messagesInQueue = networkMessageQueue.Count;
-			for (int i = messagesProcessed; i < messagesInQueue; i++) { 
+			for (int i = 0; i < messagesInQueue; i++) { 
 				ProcessMessage(networkMessageQueue[i]);
-				this.debugWriter.WriteLine($"Loop {i}/{messagesInQueue}");
 			}
-			messagesProcessed = messagesInQueue;
-
-			this.debugWriter.WriteLine(messagesInQueue);
+			networkMessageQueue.RemoveRange(0, messagesInQueue);
 
 			// Lerp frames using frame buffer
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
@@ -461,11 +457,6 @@ namespace XLMultiplayer {
 
 					if(debugCallbackDelegate != null)
 						GC.KeepAlive(debugCallbackDelegate);
-
-					if (messagesProcessed > 0) {
-						networkMessageQueue.RemoveRange(0, messagesProcessed);
-						messagesProcessed = 0;
-					}
 
 					int netMessagesCount = client.ReceiveMessagesOnConnection(connection, netMessages, maxMessages);
 

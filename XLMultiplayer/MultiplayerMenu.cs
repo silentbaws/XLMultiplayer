@@ -88,7 +88,7 @@ namespace XLMultiplayer {
 			this.multiplayerMenuText.rectTransform.anchorMin = new Vector2(0f, 0.9f);
 			this.multiplayerMenuText.rectTransform.anchorMax = new Vector2(0.3f, 1f);
 			this.multiplayerMenuText.rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
-			this.multiplayerMenuText.color = Color.white;
+			this.multiplayerMenuText.color = Color.black;
 			this.multiplayerMenuText.font = Resources.FindObjectsOfTypeAll<Font>()[0];
 			this.multiplayerMenuText.fontSize = 35;
 			this.multiplayerMenuText.alignment = TextAnchor.MiddleCenter;
