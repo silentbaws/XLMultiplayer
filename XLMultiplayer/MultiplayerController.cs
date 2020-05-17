@@ -53,9 +53,14 @@ namespace XLMultiplayer {
 		private NetworkingMessage[] netMessages;
 		DebugCallback debugCallbackDelegate = null;
 
+		private Thread networkMessageThread;
+
 		public List<string> chatMessages = new List<string>();
 
 		public bool isConnected { get; private set; } = false;
+
+		private List<byte[]> networkMessageQueue = new List<byte[]>();
+		private int messagesProcessed = 0;
 
 		private StreamWriter debugWriter;
 
@@ -97,6 +102,8 @@ namespace XLMultiplayer {
 		private string playerListLocalUser = "";
 
 		private Thread usernameThread;
+
+		byte[] usernameMessage = null;
 
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
@@ -259,6 +266,10 @@ namespace XLMultiplayer {
 			status = StatusCallback;
 
 			netMessages = new NetworkingMessage[maxMessages];
+			
+			networkMessageThread = new Thread(UpdateClient);
+			networkMessageThread.IsBackground = true;
+			networkMessageThread.Start();
 		}
 
 		private void StatusCallback(StatusInfo info, IntPtr context) {
@@ -299,12 +310,12 @@ namespace XLMultiplayer {
 			NetworkingUtils utils = new NetworkingUtils();
 
 			utils.SetDebugCallback(DebugType.Important, debugCallbackDelegate);
-
+			
 			Main.utilityMenu.chat = "";
 			Main.utilityMenu.previousMessageCount = 0;
 
-			#if DEBUG
 			unsafe {
+				#if DEBUG
 				// From data I saw a typical example of udp packets over the internet would be 0.3% loss, 25% reorder
 				// For testing I'll use 25% reorder, 30ms delay on reorder, 150ms ping, and 0.2% loss
 
@@ -321,8 +332,15 @@ namespace XLMultiplayer {
 				//// Simulate 0.2% packet loss
 				//float lossPercent = 0.2f;
 				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
+				#endif
+
+				int sendRateMin = 0;
+				int sendRateMax = 209715200;
+				int sendBufferSize = 10485760;
+				utils.SetConfiguratioValue(ConfigurationValue.SendRateMin, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMin));
+				utils.SetConfiguratioValue(ConfigurationValue.SendRateMax, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMax));
+				utils.SetConfiguratioValue(ConfigurationValue.SendBufferSize, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendBufferSize));
 			}
-			#endif
 		}
 
 		public void StartLoadMap(string path) {
@@ -408,7 +426,14 @@ namespace XLMultiplayer {
 				pingTimes.Clear();
 			}
 
-			UpdateClient();
+			int messagesInQueue = networkMessageQueue.Count;
+			for (int i = messagesProcessed; i < messagesInQueue; i++) { 
+				ProcessMessage(networkMessageQueue[i]);
+				this.debugWriter.WriteLine($"Loop {i}/{messagesInQueue}");
+			}
+			messagesProcessed = messagesInQueue;
+
+			this.debugWriter.WriteLine(messagesInQueue);
 
 			// Lerp frames using frame buffer
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
@@ -422,27 +447,43 @@ namespace XLMultiplayer {
 					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
 				}
 			}
+
+			if (usernameMessage != null) {
+				SendBytes(OpCode.Settings, usernameMessage, true);
+				usernameMessage = null;
+			}
 		}
 
 		private void UpdateClient() {
-			client.DispatchCallback(status);
+			while (this.playerController != null) {
+				if(client != null) {
+					client.DispatchCallback(status);
 
-			if(debugCallbackDelegate != null)
-				GC.KeepAlive(debugCallbackDelegate);
+					if(debugCallbackDelegate != null)
+						GC.KeepAlive(debugCallbackDelegate);
 
-			int netMessagesCount = client.ReceiveMessagesOnConnection(connection, netMessages, maxMessages);
+					if (messagesProcessed > 0) {
+						networkMessageQueue.RemoveRange(0, messagesProcessed);
+						messagesProcessed = 0;
+					}
 
-			if (netMessagesCount > 0) {
-				for (int i = 0; i < netMessagesCount; i++) {
-					ref NetworkingMessage netMessage = ref netMessages[i];
+					int netMessagesCount = client.ReceiveMessagesOnConnection(connection, netMessages, maxMessages);
 
-					byte[] messageData = new byte[netMessage.length];
-					netMessage.CopyTo(messageData);
+					if (netMessagesCount > 0) {
+						for (int i = 0; i < netMessagesCount; i++) {
+							ref NetworkingMessage netMessage = ref netMessages[i];
 
-					ProcessMessage(messageData);
+							byte[] messageData = new byte[netMessage.length];
+							netMessage.CopyTo(messageData);
 
-					netMessage.Destroy();
+							networkMessageQueue.Add(messageData);
+
+							netMessage.Destroy();
+						}
+					}
 				}
+
+				Thread.Sleep(30);
 			}
 		}
 
@@ -478,8 +519,7 @@ namespace XLMultiplayer {
 						aliveThread = new Thread(SendAlive);
 						aliveThread.IsBackground = true;
 						aliveThread.Start();
-
-						//SendUsername();
+						
 						usernameThread = new Thread(SendUsername);
 						usernameThread.IsBackground = true;
 						usernameThread.Start();
@@ -503,11 +543,13 @@ namespace XLMultiplayer {
 							chatMessages.Add("Player " + remotePlayer.username + "{" + remotePlayer.playerID + "} <b><color=\"green\">CONNECTED</color></b>");
 						}
 						if (column2Usernames.Count > 0) column2Usernames.RemoveAt(0);
-						else column1Usernames.RemoveAt(0);
+						else if (column1Usernames.Count > 0) column1Usernames.RemoveAt(0);
+						else if (column3Usernames.Count > 0) column3Usernames.RemoveAt(0);
 					}
 					break;
 				case OpCode.UsernameAdjustment:
 					this.playerController.username = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
+					Main.utilityMenu.SendImportantChat($"<color=\"yellow\">Server adjusted your username to {this.playerController.username}</color>", 5000);
 					break;
 				case OpCode.Texture:
 					MultiplayerRemotePlayerController remoteOwner = remoteControllers.Find((p) => { return p.playerID == playerID; });
@@ -703,13 +745,14 @@ namespace XLMultiplayer {
 				Array.Copy(usernameBytes, 0, message, 9 + IV.Length, usernameBytes.Length);
 				Array.Copy(fancyBytes, 0, message, 9 + IV.Length + usernameBytes.Length, fancyBytes.Length);
 
-				SendBytes(OpCode.Settings, message, true);
+				usernameMessage = message;
 			} else {
 				byte[] usernameBytes = Encoding.ASCII.GetBytes(this.playerController.username);
 				byte[] message = new byte[usernameBytes.Length + 1];
 				message[0] = 0;
 				Array.Copy(usernameBytes, 0, message, 1, usernameBytes.Length);
-				SendBytes(OpCode.Settings, message, true);
+
+				usernameMessage = message;
 			}
 		}
 
@@ -777,6 +820,8 @@ namespace XLMultiplayer {
 			isConnected = false;
 			sendingUpdates = false;
 
+			this.playerController = null;
+
 			foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
 				controller.Destroy();
 			}
@@ -794,8 +839,9 @@ namespace XLMultiplayer {
 				Directory.Delete(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp");
 			}
 
-			if(aliveThread != null && aliveThread.IsAlive) aliveThread.Join();
-			if(usernameThread != null && usernameThread.IsAlive) usernameThread.Join();
+			if(aliveThread != null && aliveThread.IsAlive) aliveThread.Abort();
+			if(usernameThread != null && usernameThread.IsAlive) usernameThread.Abort();
+			if (networkMessageThread != null && networkMessageThread.IsAlive) networkMessageThread.Abort();
 
 			this.debugWriter.Close();
 		}

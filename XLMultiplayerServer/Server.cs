@@ -284,7 +284,7 @@ namespace XLMultiplayerServer {
 								foreach (Player player2 in players) {
 									if (player2 != null && player2.playerID != fromID) {
 										foreach (KeyValuePair<string, byte[]> value in player.gear) {
-											server.SendMessageToConnection(player2.connection, value.Value, SendType.Reliable);
+											server.SendMessageToConnection(player2.connection, value.Value, SendType.Reliable | SendType.NoNagle);
 										}
 									}
 								}
@@ -365,6 +365,21 @@ namespace XLMultiplayerServer {
 
 			server = new NetworkingSockets();
 			Address address = new Address();
+			
+			NetworkingUtils utils = new NetworkingUtils();
+
+			utils.SetDebugCallback(DebugType.Debug, (type, message) => {
+				Console.WriteLine("Valve Debug - Type: {0}, Message: {1}", type, message);
+			});
+
+			unsafe {
+				int sendRateMin = 1024*1024*10;
+				int sendRateMax = 2147483647;
+				int sendBufferSize = 209715200;
+				utils.SetConfiguratioValue(ConfigurationValue.SendRateMin, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMin));
+				utils.SetConfiguratioValue(ConfigurationValue.SendRateMax, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMax));
+				utils.SetConfiguratioValue(ConfigurationValue.SendBufferSize, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendBufferSize));
+			}
 
 			address.SetAddress("::0", port);
 
@@ -400,7 +415,7 @@ namespace XLMultiplayerServer {
 								server.SendMessageToConnection(players[i].connection, versionMessage, SendType.Reliable);
 
 								if (ENFORCE_MAPS) {
-									server.SendMessageToConnection(players[i].connection, mapListBytes, SendType.Reliable);
+									server.SendMessageToConnection(players[i].connection, mapListBytes, SendType.Reliable | SendType.NoNagle);
 									server.SendMessageToConnection(players[i].connection, GetCurrentMapHashMessage(), SendType.Reliable);
 								}
 
@@ -410,11 +425,11 @@ namespace XLMultiplayerServer {
 										server.SendMessageToConnection(player.connection, new byte[] { (byte)OpCode.Connect, i }, SendType.Reliable);
 
 										if (player.usernameMessage != null) {
-											server.SendMessageToConnection(players[i].connection, player.usernameMessage, SendType.Reliable);
+											server.SendMessageToConnection(players[i].connection, player.usernameMessage, SendType.Reliable | SendType.NoNagle);
 										}
 										if (player.allGearUploaded) {
 											foreach (KeyValuePair<string, byte[]> value in player.gear) {
-												server.SendMessageToConnection(players[i].connection, value.Value, SendType.Reliable);
+												server.SendMessageToConnection(players[i].connection, value.Value, SendType.Reliable | SendType.NoNagle);
 											}
 										}
 									}
@@ -631,19 +646,19 @@ namespace XLMultiplayerServer {
 				var newTask = response.Content.ReadAsStringAsync();
 				newTask.Wait();
 				username = newTask.Result;
+			}
 
-				string[] usernameSplit = username.Split(',');
-				if (usernameSplit.Length > 1) {
-					bool allInts = true;
-					int result = 0;
-					foreach (string s in usernameSplit) {
-						if (!Int32.TryParse(s, out result)) {
-							allInts = false;
-						}
+			string[] usernameSplit = username.Split(',');
+			if (usernameSplit.Length > 1) {
+				bool allInts = true;
+				int result = 0;
+				foreach (string s in usernameSplit) {
+					if (s.Trim() != "" && !Int32.TryParse(s, out result)) {
+						allInts = false;
 					}
-					if (allInts) {
-						username = "Naughty Boy";
-					}
+				}
+				if (allInts) {
+					username = "Naughty Boy";
 				}
 			}
 
