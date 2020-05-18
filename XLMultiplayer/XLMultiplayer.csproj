@@ -185,6 +185,9 @@
     <Content Include="Background.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="patreon_button.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Paypal.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

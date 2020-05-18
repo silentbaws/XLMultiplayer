@@ -368,7 +368,7 @@ namespace XLMultiplayerServer {
 			
 			NetworkingUtils utils = new NetworkingUtils();
 
-			utils.SetDebugCallback(DebugType.Debug, (type, message) => {
+			utils.SetDebugCallback(DebugType.Important, (type, message) => {
 				Console.WriteLine("Valve Debug - Type: {0}, Message: {1}", type, message);
 			});
 
