@@ -353,11 +353,8 @@ namespace XLMultiplayer {
 			//Load map with path
 			LevelSelectionController levelSelectionController = GameManagement.GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
 			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(true);
-			LevelInfo target = levelSelectionController.Levels.Find(level => level.path.Equals(path));
-			if (target == null) {
-				target = levelSelectionController.CustomLevels.Find(level => level.path.Equals(path));
-			}
-			levelSelectionController.StartCoroutine(levelSelectionController.LoadLevel(target));
+			LevelInfo target = levelSelectionController.Items.Find(level => level.path.Equals(path));
+			LevelManager.Instance.LoadLevel(target);
 			StartCoroutine(CloseAfterLoad());
 			yield break;
 		}
