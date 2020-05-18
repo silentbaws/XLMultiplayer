@@ -240,7 +240,6 @@ namespace XLMultiplayer {
 				newInfo = new CharacterGearInfo("MP Temp " + texType.ToString(), GetGearTypeFromTextureType(texType, useFull), true, new TextureChange[] { texChange }, new string[0]);
 			}
 			
-			
 			characterCustomizer.EquipGear(newInfo);
 		}
 
