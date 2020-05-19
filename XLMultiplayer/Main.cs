@@ -83,7 +83,6 @@ namespace XLMultiplayer {
 				patreonStyle.richText = true;
 				patreonStyle.normal.textColor = Color.yellow;
 				patreonStyle.alignment = TextAnchor.UpperCenter;
-				patreonStyle.padding = new RectOffset(patreonStyle.padding.left, patreonStyle.padding.right, patreonStyle.padding.top, -20);
 			}
 			if (patreonButton == null) {
 				patreonButton = new Texture2D(0, 0, TextureFormat.RGBA32, false);
@@ -91,11 +90,15 @@ namespace XLMultiplayer {
 				patreonButton.filterMode = FilterMode.Trilinear;
 			}
 			if (patreonOptions == null) {
-				patreonOptions = new GUILayoutOption[] { GUILayout.Width(155), GUILayout.Height(36) };
+				patreonOptions = new GUILayoutOption[] { GUILayout.Width(233), GUILayout.Height(54) };
 			}
 
+			patreonStyle.padding.bottom = -20;
+
 			GUILayout.Label("Reserve your username and <b><i><color=#f00>a</color><color=#ff7f00>d</color><color=#ff0>d</color> <color=#0f0>s</color><color=#0ff>o</color><color=#00f>m</color><color=#8b00ff>e</color> <color=#f00>f</color><color=#ff7f00>l</color><color=#ff0>a</color><color=#0f0>i</color><color=#0ff>r</color></i></b> by supporting me on patreon\n\n", patreonStyle);
-			
+
+			patreonStyle.padding.bottom = 20;
+
 			GUILayout.FlexibleSpace();
 			GUILayout.BeginHorizontal();
 			GUILayout.FlexibleSpace();
