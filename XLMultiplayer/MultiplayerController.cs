@@ -53,6 +53,9 @@ namespace XLMultiplayer {
 		private NetworkingMessage[] netMessages;
 		DebugCallback debugCallbackDelegate = null;
 
+		private bool closedByPeer = false;
+		private bool problemDetectedLocally = false;
+
 		private Thread networkMessageThread;
 
 		public List<string> chatMessages = new List<string>();
@@ -282,16 +285,12 @@ namespace XLMultiplayer {
 
 				case ConnectionState.ClosedByPeer:
 					//Client disconnected from server
-					this.debugWriter.WriteLine("Disconnected from server");
-					Main.utilityMenu.SendImportantChat("<b><color=\"red\">You have been disconnected from the server</color></b>", 7500);
-					DisconnectFromServer();
+					closedByPeer = true;
 					break;
 
 				case ConnectionState.ProblemDetectedLocally:
 					//Client unable to connect
-					this.debugWriter.WriteLine("Unable to connect to server");
-					Main.utilityMenu.SendImportantChat("<b><color=\"red\">You could not connect to the server</color></b>", 7500);
-					DisconnectFromServer();
+					problemDetectedLocally = true;
 					break;
 			}
 		}
@@ -372,7 +371,21 @@ namespace XLMultiplayer {
 		}
 
 		public void Update() {
-			if (client == null) return;
+			if (closedByPeer) {
+				//Client disconnected from server
+				this.debugWriter.WriteLine("Disconnected from server");
+				Main.utilityMenu.SendImportantChat("<b><color=\"red\">You have been disconnected from the server</color></b>", 7500);
+				DisconnectFromServer();
+			}
+
+			if (problemDetectedLocally) {
+				//Client unable to connect
+				this.debugWriter.WriteLine("Unable to connect to server");
+				Main.utilityMenu.SendImportantChat("<b><color=\"red\">You could not connect to the server</color></b>", 7500);
+				DisconnectFromServer();
+			}
+
+			if (client == null || this.playerController == null) return;
 
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
 				if (replayStarted) {
@@ -457,7 +470,7 @@ namespace XLMultiplayer {
 
 					if(debugCallbackDelegate != null)
 						GC.KeepAlive(debugCallbackDelegate);
-
+					
 					int netMessagesCount = client.ReceiveMessagesOnConnection(connection, netMessages, maxMessages);
 
 					if (netMessagesCount > 0) {
@@ -673,7 +686,7 @@ namespace XLMultiplayer {
 
 		// For things that encode the prebuffer during serialization
 		public void SendBytesRaw(byte[] msg, bool reliable) {
-			client.SendMessageToConnection(connection, msg, reliable ? SendType.Reliable : SendType.Unreliable);
+			if (client != null) client.SendMessageToConnection(connection, msg, reliable ? SendType.Reliable : SendType.Unreliable);
 		}
 
 		public void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
@@ -806,12 +819,12 @@ namespace XLMultiplayer {
 		}
 
 		public void OnDestroy() {
-			client.CloseConnection(connection);
-
 			isConnected = false;
 			sendingUpdates = false;
 
 			this.playerController = null;
+
+			if (client != null) client.CloseConnection(connection);
 
 			foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
 				controller.Destroy();
@@ -830,11 +843,12 @@ namespace XLMultiplayer {
 				Directory.Delete(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp");
 			}
 
-			if(aliveThread != null && aliveThread.IsAlive) aliveThread.Abort();
-			if(usernameThread != null && usernameThread.IsAlive) usernameThread.Abort();
+			if (aliveThread != null && aliveThread.IsAlive) aliveThread.Abort();
+			if (usernameThread != null && usernameThread.IsAlive) usernameThread.Abort();
 			if (networkMessageThread != null && networkMessageThread.IsAlive) networkMessageThread.Abort();
 
 			this.debugWriter.Close();
+			this.debugWriter.Dispose();
 		}
 	}
 }
