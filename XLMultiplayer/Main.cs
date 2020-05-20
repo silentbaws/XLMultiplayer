@@ -39,22 +39,11 @@ namespace XLMultiplayer {
 				harmonyInstance = HarmonyInstance.Create(modEntry.Info.Id);
 				harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());
 
-				menu = XLShredLib.ModMenu.Instance.gameObject.AddComponent<MultiplayerMenu>();
-				utilityMenu = XLShredLib.ModMenu.Instance.gameObject.AddComponent<MultiplayerUtilityMenu>();
+				menu = ModMenu.Instance.gameObject.AddComponent<MultiplayerMenu>();
+				utilityMenu = ModMenu.Instance.gameObject.AddComponent<MultiplayerUtilityMenu>();
 
 				uiBox = ModMenu.Instance.RegisterModMaker("Silentbaws", "Silentbaws", 0);
 				uiBox.AddCustom("Patreon", DisplayPatreon, () => enabled);
-
-				// TODO: Change this to a more stable approach
-				Canvas[] canvasObjs = GameObject.FindObjectsOfType<Canvas>();
-				foreach(Canvas obj in canvasObjs) {
-					if (obj.name.Trim().Equals("Title Screen", StringComparison.CurrentCultureIgnoreCase)) {
-						if (obj.transform.GetComponentsInChildren<Transform>().Length == 12) {
-							GameObject.Destroy(obj);
-						}
-					}
-				}
-
 
 				MultiplayerUtils.StartMapLoading();
 			} else {

@@ -247,8 +247,7 @@ namespace XLMultiplayerServer {
 
 				if(input.Equals("QUIT", StringComparison.CurrentCultureIgnoreCase)) {
 					RUNNING = false;
-				}
-				if (input.ToLower().StartsWith("kick")) {
+				}else if (input.ToLower().StartsWith("kick")) {
 					string kickIDString = input.ToLower().Replace("kick ", "");
 					int kickID = -1;
 					if (Int32.TryParse(kickIDString, out kickID)) {
@@ -256,6 +255,8 @@ namespace XLMultiplayerServer {
 							Console.WriteLine("Kicking player {0}", kickID);
 							RemovePlayer(players[kickID].connection, kickID, true);
 						}
+					} else {
+						Console.WriteLine("Invalid player ID");
 					}
 				}
 			}
@@ -270,7 +271,6 @@ namespace XLMultiplayerServer {
 
 			switch ((OpCode)buffer[0]) {
 				case OpCode.Settings:
-					Console.WriteLine("Got username");
 					Thread usernameThread = new Thread(new ParameterizedThreadStart(Server.HandleUsername));
 					usernameThread.IsBackground = true;
 					usernameThread.Start(Tuple.Create(buffer, fromID));
