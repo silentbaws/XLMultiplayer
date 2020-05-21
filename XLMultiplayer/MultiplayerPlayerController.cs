@@ -1,5 +1,4 @@
 ﻿using Harmony12;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -8,7 +7,7 @@ namespace XLMultiplayer {
 	public abstract class MultiplayerPlayerController {
 		public GameObject player { get; protected set; }
 
-		public string username = "";
+		public string username = "Unset Username";
 
 		protected StreamWriter debugWriter;
 		

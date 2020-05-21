@@ -105,6 +105,9 @@ namespace XLMultiplayer {
 				GameObject.Destroy(gearPrefabController.gameObject);
 			}
 
+			characterCustomizer.LoadLastPlayer();
+			characterCustomizer.SetShoesVisible(true);
+
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
 			this.usernameObject.transform.localScale = new Vector3(-0.01f, 0.01f, 1f);

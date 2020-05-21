@@ -387,6 +387,11 @@ namespace XLMultiplayer {
 
 			if (client == null) return;
 
+			if (usernameMessage != null) {
+				SendBytes(OpCode.Settings, usernameMessage, true, true);
+				usernameMessage = null;
+			}
+
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
 				if (replayStarted) {
 					foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
@@ -455,11 +460,6 @@ namespace XLMultiplayer {
 					}
 					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
 				}
-			}
-
-			if (usernameMessage != null) {
-				SendBytes(OpCode.Settings, usernameMessage, true);
-				usernameMessage = null;
 			}
 		}
 
@@ -675,7 +675,7 @@ namespace XLMultiplayer {
 				message[0] = (byte)OpCode.StillAlive;
 				Array.Copy(currentTime, 0, message, 1, 4);
 
-				SendBytesRaw(message, false);
+				SendBytesRaw(message, false, true);
 
 				alivePacketCount++;
 				sentAlive10Seconds++;
@@ -685,16 +685,22 @@ namespace XLMultiplayer {
 		}
 
 		// For things that encode the prebuffer during serialization
-		public void SendBytesRaw(byte[] msg, bool reliable) {
-			if (client != null) client.SendMessageToConnection(connection, msg, reliable ? SendType.Reliable : SendType.Unreliable);
+		public void SendBytesRaw(byte[] msg, bool reliable, bool nonagle = false, bool nodelay = false) {
+			SendType sendType = reliable ? SendType.Reliable : SendType.Unreliable;
+			if (nonagle) sendType = sendType | SendType.NoNagle;
+			if (nodelay) sendType = sendType | SendType.NoDelay;
+			if (client != null) client.SendMessageToConnection(connection, msg, sendType);
 		}
 
-		public void SendBytes(OpCode opCode, byte[] msg, bool reliable) {
+		public void SendBytes(OpCode opCode, byte[] msg, bool reliable, bool nonagle = false) {
 			// Send bytes
+			SendType sendType = reliable ? SendType.Reliable : SendType.Unreliable;
+			if (nonagle) sendType = sendType | SendType.NoNagle;
+
 			byte[] sendMsg = new byte[msg.Length + 1];
 			sendMsg[0] = (byte)opCode;
 			Array.Copy(msg, 0, sendMsg, 1, msg.Length);
-			client.SendMessageToConnection(connection, sendMsg, reliable ? SendType.Reliable : SendType.Unreliable);
+			client.SendMessageToConnection(connection, sendMsg, sendType);
 		}
 
 		private void SendBytesAnimation(byte[] msg, bool reliable) {
@@ -764,7 +770,7 @@ namespace XLMultiplayer {
 			string afterMarkup = RemoveMarkup(msg);
 
 			if(afterMarkup.Length > 0) {
-				chatMessages.Add("<b><color=\"blue\">You: </color></b>" + afterMarkup);
+				chatMessages.Add(this.playerController.username + "<b><color=\"blue\"> (You): </color></b>" + afterMarkup);
 				this.SendBytes(OpCode.Chat, ASCIIEncoding.ASCII.GetBytes(afterMarkup), true);
 			}
 		}
