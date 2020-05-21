@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json;
+﻿#define VALVESOCKETS_SPAN
+
+using Newtonsoft.Json;
 using ReplayEditor;
 using System;
 using System.Collections;
@@ -49,8 +51,14 @@ namespace XLMultiplayer {
 		private NetworkingSockets client = null;
 		private StatusCallback status = null;
 		private uint connection;
+
+#if VALVESOCKETS_SPAN
+		MessageCallback messageCallback = MessageCallbackHandler;
+#else
 		private const int maxMessages = 256;
 		private NetworkingMessage[] netMessages;
+#endif
+
 		DebugCallback debugCallbackDelegate = null;
 
 		private bool closedByPeer = false;
@@ -78,10 +86,10 @@ namespace XLMultiplayer {
 
 		private bool sendingUpdates = false;
 		private float timeSinceLastUpdate = 0.0f;
-
-		private Thread aliveThread = null;
+		
 		private int alivePacketCount = 0;
 		private int receivedAlivePackets = 0;
+		private float lastAliveTime = 0;
 
 		private float statisticsResetTime = 0.0f;
 		private List<float> pingTimes = new List<float>();
@@ -105,10 +113,14 @@ namespace XLMultiplayer {
 
 		private Thread usernameThread;
 
-		byte[] usernameMessage = null;
+		private byte[] usernameMessage = null;
+
+		public static MultiplayerController Instance { get; private set; }
 
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
+			MultiplayerController.Instance = this;
+
 			if (ReplayEditorController.Instance == null) {
 				GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(true);
 				StartCoroutine(TurnOffReplay());
@@ -267,14 +279,16 @@ namespace XLMultiplayer {
 
 			status = StatusCallback;
 
+#if !VALVESOCKETS_SPAN
 			netMessages = new NetworkingMessage[maxMessages];
-			
+#endif
+
 			networkMessageThread = new Thread(UpdateClient);
 			networkMessageThread.IsBackground = true;
 			networkMessageThread.Start();
 		}
 
-		private void StatusCallback(StatusInfo info, IntPtr context) {
+		private void StatusCallback(ref StatusInfo info, IntPtr context) {
 			switch (info.connectionInfo.state) {
 				case ConnectionState.None:
 					break;
@@ -313,7 +327,7 @@ namespace XLMultiplayer {
 			Main.utilityMenu.previousMessageCount = 0;
 
 			unsafe {
-				#if DEBUG
+#if DEBUG
 				// From data I saw a typical example of udp packets over the internet would be 0.3% loss, 25% reorder
 				// For testing I'll use 25% reorder, 30ms delay on reorder, 150ms ping, and 0.2% loss
 
@@ -330,14 +344,14 @@ namespace XLMultiplayer {
 				//// Simulate 0.2% packet loss
 				//float lossPercent = 0.2f;
 				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
-				#endif
+#endif
 
 				int sendRateMin = 0;
 				int sendRateMax = 209715200;
 				int sendBufferSize = 10485760;
-				utils.SetConfiguratioValue(ConfigurationValue.SendRateMin, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMin));
-				utils.SetConfiguratioValue(ConfigurationValue.SendRateMax, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMax));
-				utils.SetConfiguratioValue(ConfigurationValue.SendBufferSize, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendBufferSize));
+				utils.SetConfigurationValue(ConfigurationValue.SendRateMin, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMin));
+				utils.SetConfigurationValue(ConfigurationValue.SendRateMax, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMax));
+				utils.SetConfigurationValue(ConfigurationValue.SendBufferSize, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendBufferSize));
 			}
 		}
 
@@ -463,31 +477,54 @@ namespace XLMultiplayer {
 			}
 		}
 
+#if VALVESOCKETS_SPAN
+		private static void MessageCallbackHandler(in NetworkingMessage netMessage) {
+			byte[] messageData = new byte[netMessage.length];
+			netMessage.CopyTo(messageData);
+
+			MultiplayerController.Instance.networkMessageQueue.Add(messageData);
+		}
+#endif
+
 		private void UpdateClient() {
+			statisticsResetTime = Time.time;
+			lastAliveTime = Time.time;
 			while (this.playerController != null) {
 				if(client != null) {
 					client.DispatchCallback(status);
 
 					if(debugCallbackDelegate != null)
 						GC.KeepAlive(debugCallbackDelegate);
-					
+
+					if (isConnected && Time.time - lastAliveTime >= 0.2f) {
+						byte[] currentTime = BitConverter.GetBytes(Time.time);
+						byte[] message = new byte[5];
+						message[0] = (byte)OpCode.StillAlive;
+						Array.Copy(currentTime, 0, message, 1, 4);
+
+						SendBytesRaw(message, false, true);
+
+						alivePacketCount++;
+						sentAlive10Seconds++;
+						lastAliveTime = Time.time;
+					}
+
+#if VALVESOCKETS_SPAN
+					client.ReceiveMessagesOnConnection(connection, messageCallback, 256);
+#else
 					int netMessagesCount = client.ReceiveMessagesOnConnection(connection, netMessages, maxMessages);
 
 					if (netMessagesCount > 0) {
 						for (int i = 0; i < netMessagesCount; i++) {
 							ref NetworkingMessage netMessage = ref netMessages[i];
 
-							byte[] messageData = new byte[netMessage.length];
-							netMessage.CopyTo(messageData);
-
-							networkMessageQueue.Add(messageData);
+							
 
 							netMessage.Destroy();
 						}
 					}
+#endif
 				}
-
-				Thread.Sleep(30);
 			}
 		}
 
@@ -519,10 +556,6 @@ namespace XLMultiplayer {
 
 					if (serverVersion.Equals(Main.modEntry.Version.ToString())) {
 						this.debugWriter.WriteLine("Server version matches client version start encoding");
-
-						aliveThread = new Thread(SendAlive);
-						aliveThread.IsBackground = true;
-						aliveThread.Start();
 						
 						usernameThread = new Thread(SendUsername);
 						usernameThread.IsBackground = true;
@@ -667,35 +700,18 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void SendAlive() {
-			statisticsResetTime = Time.time;
-			while (isConnected) {
-				byte[] currentTime = BitConverter.GetBytes(Time.time);
-				byte[] message = new byte[5];
-				message[0] = (byte)OpCode.StillAlive;
-				Array.Copy(currentTime, 0, message, 1, 4);
-
-				SendBytesRaw(message, false, true);
-
-				alivePacketCount++;
-				sentAlive10Seconds++;
-
-				Thread.Sleep(200);
-			}
-		}
-
 		// For things that encode the prebuffer during serialization
 		public void SendBytesRaw(byte[] msg, bool reliable, bool nonagle = false, bool nodelay = false) {
-			SendType sendType = reliable ? SendType.Reliable : SendType.Unreliable;
-			if (nonagle) sendType = sendType | SendType.NoNagle;
-			if (nodelay) sendType = sendType | SendType.NoDelay;
+			SendFlags sendType = reliable ? SendFlags.Reliable : SendFlags.Unreliable;
+			if (nonagle) sendType |= SendFlags.NoNagle;
+			if (nodelay) sendType |= SendFlags.NoDelay;
 			if (client != null) client.SendMessageToConnection(connection, msg, sendType);
 		}
 
 		public void SendBytes(OpCode opCode, byte[] msg, bool reliable, bool nonagle = false) {
 			// Send bytes
-			SendType sendType = reliable ? SendType.Reliable : SendType.Unreliable;
-			if (nonagle) sendType = sendType | SendType.NoNagle;
+			SendFlags sendType = reliable ? SendFlags.Reliable : SendFlags.Unreliable;
+			if (nonagle) sendType = sendType | SendFlags.NoNagle;
 
 			byte[] sendMsg = new byte[msg.Length + 1];
 			sendMsg[0] = (byte)opCode;
@@ -713,7 +729,7 @@ namespace XLMultiplayer {
 			Array.Copy(packetData, 0, packet, 5, packetData.Length);
 			packet[packet.Length - 1] = reliable ? (byte)1 : (byte)0;
 
-			client.SendMessageToConnection(connection, packet, reliable ? SendType.Reliable : SendType.Unreliable);
+			client.SendMessageToConnection(connection, packet, reliable ? SendFlags.Reliable : SendFlags.Unreliable);
 
 			sentAnimUpdates++;
 		}
@@ -817,7 +833,10 @@ namespace XLMultiplayer {
 
 			client = null;
 			status = null;
+
+#if !VALVESOCKETS_SPAN
 			netMessages = null;
+#endif
 		}
 
 		public void DisconnectFromServer() {
@@ -848,8 +867,7 @@ namespace XLMultiplayer {
 				}
 				Directory.Delete(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp");
 			}
-
-			if (aliveThread != null && aliveThread.IsAlive) aliveThread.Abort();
+			
 			if (usernameThread != null && usernameThread.IsAlive) usernameThread.Abort();
 			if (networkMessageThread != null && networkMessageThread.IsAlive) networkMessageThread.Abort();
 

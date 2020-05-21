@@ -2,7 +2,7 @@
   "Max_Players": 10,
   "Port": 7777,
   "Server_Name": "Hello Test Server",
-  "Enforce_Map": false,
+  "Enforce_Map": true,
   "Maps_Folder": "",
   "API_Key": "",
   "Paypal_Link": ""
