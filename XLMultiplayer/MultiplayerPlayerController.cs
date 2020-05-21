@@ -12,7 +12,9 @@ namespace XLMultiplayer {
 
 		protected StreamWriter debugWriter;
 		
-		private CharacterCustomizer _characterCustomizer;
+		private CharacterCustomizer _characterCustomizer = null;
+
+		protected int numBones = 0;
 
 		// Get the character customizer
 		public CharacterCustomizer characterCustomizer {
@@ -21,7 +23,7 @@ namespace XLMultiplayer {
 					if(this.player.transform.parent != null)
 						_characterCustomizer = this.player.transform.parent.GetComponentInChildren<CharacterCustomizer>();
 					else
-						_characterCustomizer = this.player.GetComponentInChildren<CharacterCustomizer>();
+						_characterCustomizer = this.player.transform.GetComponentInChildren<CharacterCustomizer>();
 				}
 				return _characterCustomizer;
 			}

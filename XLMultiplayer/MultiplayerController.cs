@@ -385,7 +385,7 @@ namespace XLMultiplayer {
 				DisconnectFromServer();
 			}
 
-			if (client == null || this.playerController == null) return;
+			if (client == null) return;
 
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
 				if (replayStarted) {

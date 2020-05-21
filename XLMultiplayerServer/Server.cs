@@ -103,6 +103,9 @@ namespace XLMultiplayerServer {
 		[JsonProperty("Maps_Folder")]
 		private static string mapsDir = "";
 
+		[JsonProperty("Paypal_Link")]
+		private static string PAYPAL = "";
+
 		private static Player[] players = new Player[MAX_PLAYERS];
 		private static int total_players = 0;
 
@@ -705,7 +708,8 @@ namespace XLMultiplayerServer {
 					{ "serverPort", port.ToString() },
 					{ "serverVersion", VERSION_NUMBER },
 					{ "apiKey", API_KEY },
-					{ "mapName", ENFORCE_MAPS ? mapList[currentMapHash] : "Not enforcing maps" } };
+					{ "mapName", ENFORCE_MAPS ? mapList[currentMapHash] : "Not enforcing maps" },
+					{ "paypal", PAYPAL} };
 
 					var content = new FormUrlEncodedContent(values);
 

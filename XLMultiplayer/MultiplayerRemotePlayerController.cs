@@ -70,10 +70,11 @@ namespace XLMultiplayer {
 		public byte playerID = 255;
 
 		public MultiplayerRemotePlayerController(StreamWriter writer) : base(writer) {  }
-		
+
 		override public void ConstructPlayer() {
 			//Create a new root object for the player
-			this.player = GameObject.Instantiate<GameObject>(ReplayEditor.ReplayEditorController.Instance.playbackController.gameObject);
+			this.player = GameObject.Instantiate<GameObject>(ReplayEditorController.Instance.playbackController.gameObject);
+
 			UnityEngine.Object.DontDestroyOnLoad(this.player);
 			this.player.name = "New Player";
 			this.player.transform.SetParent(null);
@@ -85,14 +86,6 @@ namespace XLMultiplayer {
 
 			this.bones = replayController.playbackTransforms.ToArray();
 
-			//UnityEngine.Object.DestroyImmediate(this.player.GetComponentInChildren<ReplayEditor.ReplayPlaybackController>());
-
-			//foreach (MonoBehaviour m in this.player.GetComponentsInChildren<MonoBehaviour>()) {
-			//	if (m.GetType() == typeof(ReplayEditor.ReplayAudioEventPlayer)) {
-			//		UnityEngine.Object.Destroy(m);
-			//	}
-			//}
-
 			this.player.SetActive(true);
 
 			this.board = this.player.transform.Find("Skateboard").gameObject;
@@ -103,32 +96,15 @@ namespace XLMultiplayer {
 			this.skater.transform.position = new Vector3(0, 0, 0);
 			this.skater.name = "New Player Skater";
 
-			Transform hips = this.skater.transform.Find("Skater_Joints").Find("Skater_root");
-			
-			GameObject skaterMeshesObject = this.skater.transform.Find("Skater").gameObject;
-
 			debugWriter.WriteLine("created everything");
 
+			Traverse.Create(characterCustomizer).Field("_bonesDict").SetValue(bones.ToDictionary((Transform t) => t.name));
 			characterCustomizer.enabled = true;
-			characterCustomizer.RemoveAllGear();
-			foreach (Transform t in skaterMeshesObject.GetComponentsInChildren<Transform>()) {
-				if (t.gameObject != null)
-					GameObject.Destroy(t.gameObject);
+
+			foreach (GearPrefabController gearPrefabController in this.player.GetComponentsInChildren<GearPrefabController>()) {
+				GameObject.Destroy(gearPrefabController.gameObject);
 			}
 
-			debugWriter.WriteLine("Removed gear");
-
-			debugWriter.WriteLine(characterCustomizer.ClothingParent.name);
-			debugWriter.WriteLine(characterCustomizer.RootBone.name);
-
-			this.characterCustomizer.ClothingParent = hips.Find("Skater_pelvis");
-			this.characterCustomizer.RootBone = hips;
-			Traverse.Create(characterCustomizer).Field("_bonesDict").SetValue(bones.ToDictionary((Transform t) => t.name));
-
-			characterCustomizer.LoadCustomizations(PlayerController.Instance.characterCustomizer.CurrentCustomizations);
-
-			debugWriter.WriteLine("Added gear back");
-			
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
 			this.usernameObject.transform.localScale = new Vector3(-0.01f, 0.01f, 1f);
@@ -163,8 +139,10 @@ namespace XLMultiplayer {
 					pantsMPTex.LoadFromFileMainThread(this);
 				if (hatMPTex.saved && !hatMPTex.loaded)
 					hatMPTex.LoadFromFileMainThread(this);
-				if (shoesMPTex.saved && !shoesMPTex.loaded)
+				if (shoesMPTex.saved && !shoesMPTex.loaded) {
 					shoesMPTex.LoadFromFileMainThread(this);
+					characterCustomizer.SetShoesVisible(true);
+				}
 
 				if (deckMPTex.saved && !deckMPTex.loaded)
 					deckMPTex.LoadFromFileMainThread(this);
@@ -202,16 +180,16 @@ namespace XLMultiplayer {
 
 			switch (textureType) {
 				case MPTextureType.Shirt:
-					gearType = useFull ? "mHoodie" : "mShirt";
+					gearType = useFull ? "mhoodie" : "mshirt";
 					break;
 				case MPTextureType.Pants:
-					gearType = "mPants";
+					gearType = "mpants";
 					break;
 				case MPTextureType.Shoes:
-					gearType = "mShoes";
+					gearType = "mshoes";
 					break;
 				case MPTextureType.Hat:
-					gearType = "mHatDad";
+					gearType = "mhatdad";
 					break;
 				case MPTextureType.Deck:
 					gearType = "deck";
@@ -435,7 +413,7 @@ namespace XLMultiplayer {
 				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), this.startAnimTime + this.animationFrames[0].frameTime - this.firstFrameTime));
 				//	}
 				//}
-				this.replayAnimationFrames.Find(f => f.animFrame == this.animationFrames[0].animFrame).realFrameTime = Time.time;
+				this.replayAnimationFrames.Find(f => f.animFrame == this.animationFrames[0].animFrame).realFrameTime = PlayTime.time;
 
 				if (!inReplay) {
 					for (int i = 0; i < 77; i++) {
