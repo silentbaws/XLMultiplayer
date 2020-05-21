@@ -81,7 +81,7 @@ namespace XLMultiplayerServer {
 
 	class Server {
 		// TODO: Update version number with versions
-		private static string VERSION_NUMBER = "0.7.0";
+		private static string VERSION_NUMBER = "0.7.1";
 
 		private static NetworkingSockets server;
 
