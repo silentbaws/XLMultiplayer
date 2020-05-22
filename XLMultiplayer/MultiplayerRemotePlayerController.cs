@@ -136,27 +136,27 @@ namespace XLMultiplayer {
 
 		public void ApplyTextures() {
 			if (!loadedAllTextures) {
-				if (shirtMPTex.saved && !shirtMPTex.loaded)
+				if (shirtMPTex != null && shirtMPTex.saved && !shirtMPTex.loaded)
 					shirtMPTex.LoadFromFileMainThread(this);
-				if (pantsMPTex.saved && !pantsMPTex.loaded)
+				if (pantsMPTex != null && pantsMPTex.saved && !pantsMPTex.loaded)
 					pantsMPTex.LoadFromFileMainThread(this);
-				if (hatMPTex.saved && !hatMPTex.loaded)
+				if (hatMPTex != null && hatMPTex.saved && !hatMPTex.loaded)
 					hatMPTex.LoadFromFileMainThread(this);
-				if (shoesMPTex.saved && !shoesMPTex.loaded) {
+				if (shoesMPTex != null && shoesMPTex.saved && !shoesMPTex.loaded) {
 					shoesMPTex.LoadFromFileMainThread(this);
 					characterCustomizer.SetShoesVisible(true);
 				}
 
-				if (deckMPTex.saved && !deckMPTex.loaded)
+				if (deckMPTex != null && deckMPTex.saved && !deckMPTex.loaded)
 					deckMPTex.LoadFromFileMainThread(this);
-				if (gripMPTex.saved && !gripMPTex.loaded)
+				if (gripMPTex != null && gripMPTex.saved && !gripMPTex.loaded)
 					gripMPTex.LoadFromFileMainThread(this);
-				if (wheelMPTex.saved && !wheelMPTex.loaded)
+				if (wheelMPTex != null && wheelMPTex.saved && !wheelMPTex.loaded)
 					wheelMPTex.LoadFromFileMainThread(this);
-				if (truckMPTex.saved && !truckMPTex.loaded)
+				if (truckMPTex != null && truckMPTex.saved && !truckMPTex.loaded)
 					truckMPTex.LoadFromFileMainThread(this);
 
-				if (headMPTex.saved && bodyMPTex.saved && !headMPTex.loaded && !bodyMPTex.loaded) {
+				if (headMPTex != null && headMPTex.saved && bodyMPTex != null && bodyMPTex.saved && !headMPTex.loaded && !bodyMPTex.loaded) {
 					headMPTex.loaded = true;
 					bodyMPTex.loaded = true;
 
@@ -296,7 +296,7 @@ namespace XLMultiplayer {
 
 			if (this.startAnimTime == -1f && this.firstFrameTime == -1f && currentBufferObject.key) {
 				this.firstFrameTime = currentBufferObject.frameTime;
-				this.startAnimTime = Time.time;
+				this.startAnimTime = PlayTime.time;
 			}
 
 			if (this.replayAnimationFrames.Count > 30 * 120) {

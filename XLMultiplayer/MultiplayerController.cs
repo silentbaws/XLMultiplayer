@@ -427,7 +427,7 @@ namespace XLMultiplayer {
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0 && isConnected) {
 				GameManagement.GameStateMachine.Instance.RequestPlayState();
 			}
-
+			
 			if (sendingUpdates) {
 				timeSinceLastUpdate += Time.unscaledDeltaTime;
 				if (timeSinceLastUpdate > 1f / (float)tickRate) {
@@ -456,13 +456,21 @@ namespace XLMultiplayer {
 				receivedAlive10Seconds = 0;
 				pingTimes.Clear();
 			}
-
+			
 			int messagesInQueue = networkMessageQueue.Count;
-			for (int i = 0; i < messagesInQueue; i++) { 
-				ProcessMessage(networkMessageQueue[i]);
+			while (messagesInQueue > 0) {
+				byte[] message = null;
+				if (networkMessageQueue[0] != null) {
+					message = new byte[networkMessageQueue[0].Length];
+					networkMessageQueue[0].CopyTo(message, 0);
+				}
+				networkMessageQueue.RemoveAt(0);
+				if (message != null) {
+					ProcessMessage(message);
+				}
+				messagesInQueue--;
 			}
-			networkMessageQueue.RemoveRange(0, messagesInQueue);
-
+			
 			// Lerp frames using frame buffer
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
 				if (controller != null) {
@@ -493,8 +501,14 @@ namespace XLMultiplayer {
 				if(client != null) {
 					client.DispatchCallback(status);
 
-					if(debugCallbackDelegate != null)
+					if (debugCallbackDelegate != null)
 						GC.KeepAlive(debugCallbackDelegate);
+
+					if (messageCallback != null)
+						GC.KeepAlive(messageCallback);
+
+					if (client != null)
+						GC.KeepAlive(client);
 
 					if (isConnected && Time.time - lastAliveTime >= 0.2f) {
 						byte[] currentTime = BitConverter.GetBytes(Time.time);
@@ -534,7 +548,7 @@ namespace XLMultiplayer {
 
 			byte[] newBuffer = new byte[buffer.Length - 2];
 
-			if(newBuffer.Length != 0) {
+			if (newBuffer.Length != 0) {
 				Array.Copy(buffer, 1, newBuffer, 0, buffer.Length - 2);
 			}
 

@@ -326,10 +326,10 @@ namespace XLMultiplayerServer {
 						string vote = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
 
 						if(mapList.ContainsKey(vote) || vote.ToLower().Equals("current")) {
-							vote = mapList[vote].Equals(currentMapHash) ? "current" : vote;
+							vote = mapList.ContainsKey(vote) && mapList[vote].Equals(currentMapHash) ? "current" : vote;
 							players[fromID].currentVote = vote;
 
-							Console.WriteLine("{0} voted for the map {1}", fromID, mapList[vote]);
+							Console.WriteLine("{0} voted for the map {1}", fromID, mapList.ContainsKey(vote) ? mapList[vote] : vote);
 						}
 					}
 					break;
