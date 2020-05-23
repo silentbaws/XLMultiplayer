@@ -1,4 +1,5 @@
 ﻿#define VALVESOCKETS_SPAN
+#define VALVESOCKETS_INLINING
 
 using Newtonsoft.Json;
 using System;
@@ -108,6 +109,15 @@ namespace XLMultiplayerServer {
 		[JsonProperty("Paypal_Link")]
 		private static string PAYPAL = "";
 
+		[JsonProperty("Max_Upload_Bytes_Per_Second")]
+		private static int MAX_UPLOAD = 1073741824;
+
+		[JsonProperty("Max_Queued_Sending_Bytes")]
+		private static int MAX_BUFFER = 209715200;
+
+		[JsonProperty("Max_Queued_Bytes_Per_Connection")]
+		private static int MAX_BYTES_PENDING = 5242880;
+
 		private static Player[] players = new Player[MAX_PLAYERS];
 		private static int total_players = 0;
 
@@ -157,7 +167,7 @@ namespace XLMultiplayerServer {
 			using (var md5 = MD5.Create()) {
 				using (var stream = File.OpenRead(filename)) {
 					byte[] hash = null;
-					long size = new System.IO.FileInfo(filename).Length;
+					long size = new FileInfo(filename).Length;
 					if (size > 10485760) {
 						byte[] bytes = new byte[10485760];
 						stream.Read(bytes, 0, 10485760);
@@ -289,8 +299,9 @@ namespace XLMultiplayerServer {
 								foreach (Player player2 in players) {
 									if (player2 != null && player2.playerID != fromID) {
 										foreach (KeyValuePair<string, byte[]> value in player.gear) {
-											server.SendMessageToConnection(player2.connection, value.Value, SendFlags.Reliable | SendFlags.NoNagle);
+											server.SendMessageToConnection(player2.connection, value.Value, SendFlags.Reliable);
 										}
+										server.FlushMessagesOnConnection(player2.connection);
 									}
 								}
 							}
@@ -298,12 +309,25 @@ namespace XLMultiplayerServer {
 					}
 					break;
 				case OpCode.Animation:
-					bool reliable = buffer[buffer.Length - 1] == (byte)1 ? true : false;
-					buffer[buffer.Length - 1] = fromID;
+					if(players[fromID] != null) {
 
-					foreach(Player player in players) {
-						if(player != null && player.playerID != fromID) {
-							server.SendMessageToConnection(player.connection, buffer, reliable ? SendFlags.Reliable : SendFlags.Unreliable);
+						bool reliable = buffer[buffer.Length - 1] == (byte)1 ? true : false;
+						buffer[buffer.Length - 1] = fromID;
+
+						foreach (Player player in players) {
+							if(player != null && player.playerID != fromID) {
+								ConnectionStatus status = new ConnectionStatus();
+								if (server.GetQuickConnectionStatus(player.connection, ref status)) {
+									int bytesPending = status.pendingReliable + status.sentUnackedReliable;
+
+									if (reliable && bytesPending >= MAX_BYTES_PENDING) {
+										Console.WriteLine($"Sending animation unreliably to ({player.playerID}) because pending bytes is higher than max");
+										reliable = false;
+									}
+								}
+
+								server.SendMessageToConnection(player.connection, buffer, reliable ? SendFlags.Reliable | SendFlags.NoNagle : SendFlags.Unreliable | SendFlags.NoNagle);
+							}
 						}
 					}
 					break;
@@ -340,6 +364,8 @@ namespace XLMultiplayerServer {
 		}
 
 		private static void RemovePlayer(uint connection, int ID = -1, bool kicked = false) {
+			server.CloseConnection(connection);
+
 			Player removedPlayer = null;
 			if (ID == -1) {
 				foreach (Player player in players) {
@@ -361,8 +387,6 @@ namespace XLMultiplayerServer {
 				}
 				players[removedPlayer.playerID] = null;
 			}
-
-			server.CloseConnection(connection);
 		}
 
 		public static void ServerLoop() {
@@ -373,14 +397,14 @@ namespace XLMultiplayerServer {
 			
 			NetworkingUtils utils = new NetworkingUtils();
 
-			utils.SetDebugCallback(DebugType.Important, (type, message) => {
+			utils.SetDebugCallback(DebugType.Debug, (type, message) => {
 				Console.WriteLine("Valve Debug - Type: {0}, Message: {1}", type, message);
 			});
 
 			unsafe {
-				int sendRateMin = 1024*1024*10;
-				int sendRateMax = 2147483647;
-				int sendBufferSize = 209715200;
+				int sendRateMin = 5*1024*1024;
+				int sendRateMax = MAX_UPLOAD;
+				int sendBufferSize = MAX_BUFFER;
 				utils.SetConfigurationValue(ConfigurationValue.SendRateMin, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMin));
 				utils.SetConfigurationValue(ConfigurationValue.SendRateMax, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMax));
 				utils.SetConfigurationValue(ConfigurationValue.SendBufferSize, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendBufferSize));
@@ -419,10 +443,10 @@ namespace XLMultiplayerServer {
 
 								versionMessage[0] = (byte)OpCode.VersionNumber;
 								Array.Copy(versionNumber, 0, versionMessage, 1, versionNumber.Length);
-								server.SendMessageToConnection(players[i].connection, versionMessage, SendFlags.Reliable);
+								server.SendMessageToConnection(players[i].connection, versionMessage, SendFlags.Reliable | SendFlags.NoNagle);
 
 								if (ENFORCE_MAPS) {
-									server.SendMessageToConnection(players[i].connection, mapListBytes, SendFlags.Reliable | SendFlags.NoNagle);
+									server.SendMessageToConnection(players[i].connection, mapListBytes, SendFlags.Reliable);
 									server.SendMessageToConnection(players[i].connection, GetCurrentMapHashMessage(), SendFlags.Reliable);
 								}
 
@@ -432,15 +456,17 @@ namespace XLMultiplayerServer {
 										server.SendMessageToConnection(player.connection, new byte[] { (byte)OpCode.Connect, i }, SendFlags.Reliable);
 
 										if (player.usernameMessage != null) {
-											server.SendMessageToConnection(players[i].connection, player.usernameMessage, SendFlags.Reliable | SendFlags.NoNagle);
+											server.SendMessageToConnection(players[i].connection, player.usernameMessage, SendFlags.Reliable);
 										}
 										if (player.allGearUploaded) {
 											foreach (KeyValuePair<string, byte[]> value in player.gear) {
-												server.SendMessageToConnection(players[i].connection, value.Value, SendFlags.Reliable | SendFlags.NoNagle);
+												server.SendMessageToConnection(players[i].connection, value.Value, SendFlags.Reliable);
 											}
 										}
 									}
 								}
+
+								server.FlushMessagesOnConnection(players[i].connection);
 
 								openSlot = true;
 								break;
@@ -470,8 +496,6 @@ namespace XLMultiplayerServer {
 						break;
 					}
 				}
-
-				//Console.WriteLine("Recieved packet from connection {0}, sending player null: {1}", netMessage.connection, sendingPlayer == null);
 
 				if (sendingPlayer != null)
 					ProcessMessage(messageData, sendingPlayer.playerID, server);
@@ -521,7 +545,7 @@ namespace XLMultiplayerServer {
 						total_players++;
 
 						if (player.timeoutWatch.ElapsedMilliseconds > 15000) {
-							Console.WriteLine($"{player.playerID} has been timed out for not responding for 10 seconds");
+							Console.WriteLine($"{player.playerID} has been timed out for not responding for 15 seconds");
 
 							RemovePlayer(player.connection, player.playerID, true);
 						}
@@ -616,7 +640,9 @@ namespace XLMultiplayerServer {
 			string username = "";
 			byte[] IV = new byte[0];
 			byte[] usernameBytes;
+			byte[] sessionBytes = null;
 			string sentFancyName = "";
+			string sentSessionID = "";
 			if (buffer[1] == 0) {
 				usernameBytes = new byte[buffer.Length - 2];
 
@@ -628,10 +654,13 @@ namespace XLMultiplayerServer {
 
 				IV = new byte[IVLength];
 				usernameBytes = new byte[BitConverter.ToInt32(buffer, 6 + IVLength)];
+				int fancyNameLength = BitConverter.ToInt32(buffer, 10 + IVLength + usernameBytes.Length);
+				sessionBytes = new byte[BitConverter.ToInt32(buffer, 14 + IVLength + usernameBytes.Length + fancyNameLength)];
 
 				if (IVLength > 0) Array.Copy(buffer, 6, IV, 0, IVLength);
 				if (usernameBytes.Length > 0) Array.Copy(buffer, 10 + IVLength, usernameBytes, 0, usernameBytes.Length);
-				sentFancyName = ASCIIEncoding.ASCII.GetString(buffer, 10 + IVLength + usernameBytes.Length, buffer.Length - IVLength - usernameBytes.Length - 10);
+				sentFancyName = ASCIIEncoding.ASCII.GetString(buffer, 14 + IVLength + usernameBytes.Length, fancyNameLength);
+				if (sessionBytes.Length > 0) sentSessionID = ASCIIEncoding.ASCII.GetString(buffer, 18 + IVLength + usernameBytes.Length + fancyNameLength, sessionBytes.Length);
 			}
 			
 			var client = new HttpClient();
@@ -648,7 +677,7 @@ namespace XLMultiplayerServer {
 
 			var values = new Dictionary<string, string> {
 				{ "username", usernameString },
-				{ "ipaddress", players[fromID].ipAddr.GetIP() },
+				{ "ipaddress", sentSessionID.Equals("") ? players[fromID].ipAddr.GetIP() : sentSessionID },
 				{ "iv", ivString } };
 
 			var content = new FormUrlEncodedContent(values);
@@ -702,7 +731,7 @@ namespace XLMultiplayerServer {
 				byte[] usernameAdjustmentBytes = new byte[username.Length + 1];
 				usernameAdjustmentBytes[0] = (byte)OpCode.UsernameAdjustment;
 				Array.Copy(ASCIIEncoding.ASCII.GetBytes(username), 0, usernameAdjustmentBytes, 1, username.Length);
-				server.SendMessageToConnection(players[fromID].connection, usernameAdjustmentBytes, SendFlags.Reliable);
+				server.SendMessageToConnection(players[fromID].connection, usernameAdjustmentBytes, SendFlags.Reliable | SendFlags.NoNagle);
 
 				byte[] sendMessage = new byte[username.Length + 2];
 				sendMessage[0] = (byte)OpCode.Settings;
@@ -713,7 +742,7 @@ namespace XLMultiplayerServer {
 
 				foreach (Player player in players) {
 					if (player != null && player.playerID != fromID) {
-						server.SendMessageToConnection(player.connection, sendMessage, SendFlags.Reliable);
+						server.SendMessageToConnection(player.connection, sendMessage, SendFlags.Reliable | SendFlags.NoNagle);
 					}
 				}
 			}

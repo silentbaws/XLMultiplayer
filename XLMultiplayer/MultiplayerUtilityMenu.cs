@@ -115,7 +115,7 @@ namespace XLMultiplayer {
 				GUI.backgroundColor = Color.black;
 				GUI.contentColor = Color.yellow;
 
-				encodingWindowRect = GUI.Window(1, encodingWindowRect, DisplayEncodingWIndow, "Calm down it's loading");
+				encodingWindowRect = GUI.Window(1, encodingWindowRect, DisplayEncodingWindow, "Calm down it's loading");
 			}
 		}
 
@@ -221,10 +221,9 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void DisplayEncodingWIndow(int windowId) {
+		private void DisplayEncodingWindow(int windowId) {
 			string loading = "Encoding shirt.......";
 
-			//This is stupid, what was I thinking?
 			if (loadingStatus > 0) loading += "\nEncoded Shirt\nEncoding Pants.......";
 			if (loadingStatus > 1) loading += "\nEncoded Pants\nEncoding Shoes.......";
 			if (loadingStatus > 2) loading += "\nEncoded Shoes\nEncoding Hat.......";

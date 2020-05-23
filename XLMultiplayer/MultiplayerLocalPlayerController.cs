@@ -104,6 +104,17 @@ namespace XLMultiplayer {
 				this.debugWriter.WriteLine(pair.Key);
 			}
 
+			shirtMPTex = new MultiplayerLocalTexture(MPTextureType.Shirt, this.debugWriter);
+			pantsMPTex = new MultiplayerLocalTexture(MPTextureType.Pants, this.debugWriter);
+			shoesMPTex = new MultiplayerLocalTexture(MPTextureType.Shoes, this.debugWriter);
+			hatMPTex = new MultiplayerLocalTexture(MPTextureType.Hat, this.debugWriter);
+			deckMPTex = new MultiplayerLocalTexture(MPTextureType.Deck, this.debugWriter);
+			gripMPTex = new MultiplayerLocalTexture(MPTextureType.Grip, this.debugWriter);
+			wheelMPTex = new MultiplayerLocalTexture(MPTextureType.Wheels, this.debugWriter);
+			truckMPTex = new MultiplayerLocalTexture(MPTextureType.Trucks, this.debugWriter);
+			headMPTex = new MultiplayerLocalTexture(MPTextureType.Head, this.debugWriter);
+			bodyMPTex = new MultiplayerLocalTexture(MPTextureType.Body, this.debugWriter);
+
 			foreach (ClothingGearObjet clothingPiece in gearList) {
 				// Get the path of the gear piece
 				string path = "";

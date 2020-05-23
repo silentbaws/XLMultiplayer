@@ -7,7 +7,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -456,20 +458,8 @@ namespace XLMultiplayer {
 				receivedAlive10Seconds = 0;
 				pingTimes.Clear();
 			}
-			
-			int messagesInQueue = networkMessageQueue.Count;
-			while (messagesInQueue > 0) {
-				byte[] message = null;
-				if (networkMessageQueue[0] != null) {
-					message = new byte[networkMessageQueue[0].Length];
-					networkMessageQueue[0].CopyTo(message, 0);
-				}
-				networkMessageQueue.RemoveAt(0);
-				if (message != null) {
-					ProcessMessage(message);
-				}
-				messagesInQueue--;
-			}
+
+			ProcessMessageQueue();
 			
 			// Lerp frames using frame buffer
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
@@ -481,6 +471,20 @@ namespace XLMultiplayer {
 						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
 					}
 					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
+				}
+			}
+		}
+		
+		private void ProcessMessageQueue() {
+			for (int i = networkMessageQueue.Count; i > 0; i--) {
+				byte[] message = null;
+				if (networkMessageQueue[0] != null) {
+					message = new byte[networkMessageQueue[0].Length];
+					networkMessageQueue[0].CopyTo(message, 0);
+				}
+				networkMessageQueue.RemoveAt(0);
+				if (message != null) {
+					ProcessMessage(message);
 				}
 			}
 		}
@@ -751,15 +755,45 @@ namespace XLMultiplayer {
 		public void SendUsername() {
 			if (File.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\" + "CustomUsername.json")) {
 				JsonConvert.DeserializeObject<CustomUsername>(File.ReadAllText(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\" + "CustomUsername.json"));
+
+				const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+				string session = "";
+				using (RNGCryptoServiceProvider cryptoProvider = new RNGCryptoServiceProvider()) {
+					while(session.Length < 64) {
+						byte[] randByte = new byte[1];
+						cryptoProvider.GetBytes(randByte);
+						char newChar = ASCIIEncoding.ASCII.GetString(randByte)[0];
+						if (chars.Contains(newChar)) {
+							session += newChar;
+						}
+					}
+				}
+
+				var values = new Dictionary<string, string> {
+				{ "session", session } };
 				
-				UnityWebRequest www = UnityWebRequest.Get("https://davisellwood-site.herokuapp.com/api/gettempkey/");
+				// Try to give a session key instead of tying encryption key to IP(Useful if client has multiple IPs or something)
+
+				string content = "";
+				UnityWebRequest www = UnityWebRequest.Post("http://davisellwood-site.herokuapp.com/api/gettempkey/", values);
+
 				www.SendWebRequest();
 
 				while (!www.isDone) ;
 
-				string content = "";
 				if (!www.isNetworkError && !www.isHttpError) {
 					content = www.downloadHandler.text;
+				} else {
+					session = "";
+
+					www = UnityWebRequest.Get("https://davisellwood-site.herokuapp.com/api/gettempkey/");
+					www.SendWebRequest();
+
+					while (!www.isDone) ;
+					
+					if (!www.isNetworkError && !www.isHttpError) {
+						content = www.downloadHandler.text;
+					}
 				}
 
 				this.playerController.username = CustomUsername.username;
@@ -768,6 +802,7 @@ namespace XLMultiplayer {
 				byte[] IV = new byte[0];
 				byte[] usernameBytes = new byte[0];
 				byte[] fancyBytes = ASCIIEncoding.ASCII.GetBytes(CustomUsername.username);
+				byte[] sessionBytes = ASCIIEncoding.ASCII.GetBytes(session);
 
 				if(encryptionKey.Length > 0) {
 					using (Aes myAes = Aes.Create()) {
@@ -777,13 +812,16 @@ namespace XLMultiplayer {
 					}
 				}
 
-				byte[] message = new byte[IV.Length + usernameBytes.Length + fancyBytes.Length + 9];
+				byte[] message = new byte[IV.Length + usernameBytes.Length + fancyBytes.Length + sessionBytes.Length + 17];
 				message[0] = 1;
 				Array.Copy(BitConverter.GetBytes(IV.Length), 0, message, 1, 4);
 				Array.Copy(IV, 0, message, 5, IV.Length);
 				Array.Copy(BitConverter.GetBytes(usernameBytes.Length), 0, message, 5 + IV.Length, 4);
 				Array.Copy(usernameBytes, 0, message, 9 + IV.Length, usernameBytes.Length);
-				Array.Copy(fancyBytes, 0, message, 9 + IV.Length + usernameBytes.Length, fancyBytes.Length);
+				Array.Copy(BitConverter.GetBytes(fancyBytes.Length), 0, message, 9 + IV.Length + usernameBytes.Length, 4);
+				Array.Copy(fancyBytes, 0, message, 13 + IV.Length + usernameBytes.Length, fancyBytes.Length);
+				Array.Copy(BitConverter.GetBytes(sessionBytes.Length), 0, message, 13 + IV.Length + usernameBytes.Length + fancyBytes.Length, 4);
+				Array.Copy(sessionBytes, 0, message, 17 + IV.Length + usernameBytes.Length + fancyBytes.Length, sessionBytes.Length);
 
 				usernameMessage = message;
 			} else {
@@ -860,6 +898,8 @@ namespace XLMultiplayer {
 		public void OnDestroy() {
 			isConnected = false;
 			sendingUpdates = false;
+
+			Main.utilityMenu.isLoading = false;
 
 			this.playerController = null;
 

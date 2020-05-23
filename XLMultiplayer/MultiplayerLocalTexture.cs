@@ -11,16 +11,18 @@ namespace XLMultiplayer {
 		public void ConvertTexture(int maxSize = 1024) {
 			Texture2D texture2D = null;
 
-			if (this.isCustom) {
+			if (this.isCustom && File.Exists(path)) {
 				texture2D = new Texture2D(0, 0, TextureFormat.RGBA32, false);
 
 				texture2D.LoadImage(File.ReadAllBytes(this.path));
 
 				if (texture2D.width <= 4096 && texture2D.height <= 4096) {
-					if (texture2D.width > 1024 || texture2D.height > 1024)
-						TextureScale.Bilinear(texture2D, 1024, 1024);
+					if (texture2D.width > maxSize || texture2D.height > maxSize)
+						TextureScale.Bilinear(texture2D, maxSize, maxSize);
+				} else {
+					texture2D = null;
 				}
-			} else {
+			} else if (!this.isCustom && !this.path.Equals("")) {
 				Texture texture = Resources.Load<Texture>(this.path);
 				if (texture.width <= 4096 && texture.height <= 4096) {
 					texture2D = new Texture2D(texture.width, texture.height, TextureFormat.RGB24, false);

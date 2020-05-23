@@ -4,6 +4,15 @@
   "Server_Name": "Hello Test Server",
   "Enforce_Map": false,
   "Maps_Folder": "",
+
+
+  "PUBLIC SERVER OPTIONS": "THESE ARE NOT NEEDED FOR YOUR PRIVATE SERVER",
   "API_Key": "",
-  "Paypal_Link": ""
+  "Paypal_Link": "",
+
+
+  "ADVANCED_OPTIONS": "DO NOT EDIT BELOW THIS LINE IF YOU DONT KNOW WHAT YOURE DOING",
+  "Max_Upload_Bytes_Per_Second": 26214400,
+  "Max_Queued_Sending_Bytes": 209715200,
+  "Max_Queued_Bytes_Per_Connection": 102400
 }
