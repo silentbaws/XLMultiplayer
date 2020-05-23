@@ -382,7 +382,7 @@ namespace XLMultiplayerServer {
 				if (!kicked) Console.WriteLine("Client disconnected - ID: " + removedPlayer.playerID);
 				foreach (Player player in players) {
 					if (player != null && player != removedPlayer) {
-						server.SendMessageToConnection(player.connection, new byte[] { (byte)OpCode.Disconnect, removedPlayer.playerID }, SendFlags.Reliable);
+						server.SendMessageToConnection(player.connection, new byte[] { (byte)OpCode.Disconnect, removedPlayer.playerID }, SendFlags.Reliable | SendFlags.NoNagle);
 					}
 				}
 				players[removedPlayer.playerID] = null;
@@ -397,7 +397,7 @@ namespace XLMultiplayerServer {
 			
 			NetworkingUtils utils = new NetworkingUtils();
 
-			utils.SetDebugCallback(DebugType.Debug, (type, message) => {
+			utils.SetDebugCallback(DebugType.Important, (type, message) => {
 				Console.WriteLine("Valve Debug - Type: {0}, Message: {1}", type, message);
 			});
 
