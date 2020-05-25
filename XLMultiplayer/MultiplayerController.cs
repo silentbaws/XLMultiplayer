@@ -9,7 +9,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -20,10 +19,29 @@ using Valve.Sockets;
 using XLShredLib;
 using XLShredLib.UI;
 
+// TODO LIST FOR 0.8.0
+
+// TODO: Allow saving/customizing multiplayer replays
+// How to save replays
+//		-> ReplayEditorController.SaveClipAsync
+//		-> playerData = new ReplayPlayerData()
+//		-> PlayerDataInfo dataInfo = new PlayerDataInfo("MP Player N"); customFileWriter.AddData(replayData, "player", dataInfo);
+//		-> SaveManager.Instance.SaveReplay(string fileID, byte[] data)
+//			-> Prefix -> Append my bytes from dataInfos to data
+
 // TODO: Redo the multiplayer texture system
 //			-> Send paths for non-custom gear
 //			-> Send hashes of full size textures for custom gear along with compressed texture
 //			-> Only send hashes/paths from server unless client requests texture data
+
+// TODO: Create 2 connections -> One for gameplay 
+//								-> One for files
+
+// TODO: Send Textures after version is verified
+
+// TODO: Fix dawgs board mod for mp
+
+// TODO: Save previous username
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -77,7 +95,7 @@ namespace XLMultiplayer {
 		private StreamWriter debugWriter;
 
 		private MultiplayerLocalPlayerController playerController;
-		private List<MultiplayerRemotePlayerController> remoteControllers = new List<MultiplayerRemotePlayerController>();
+		public List<MultiplayerRemotePlayerController> remoteControllers = new List<MultiplayerRemotePlayerController>();
 
 		private bool replayStarted = false;
 
@@ -411,6 +429,11 @@ namespace XLMultiplayer {
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
 				if (replayStarted) {
 					foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
+						if (controller.playerID == 255) {
+							controller.skater.SetActive(false);
+							controller.board.SetActive(false);
+						}
+
 						controller.EndReplay();
 					}
 				}
@@ -420,6 +443,11 @@ namespace XLMultiplayer {
 					replayStarted = true;
 
 					foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
+						if (controller.playerID == 255) {
+							controller.skater.SetActive(true);
+							controller.board.SetActive(true);
+						}
+
 						controller.PrepareReplay();
 					}
 				}
@@ -469,7 +497,21 @@ namespace XLMultiplayer {
 					if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
 						controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
 						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
+
+
+						if (controller.playerID == 255 && controller.recordedFrames.Last().time < ReplayEditorController.Instance.playbackController.CurrentTime && controller.skater.activeSelf) {
+							controller.skater.SetActive(false);
+							controller.board.SetActive(false);
+						} else if (controller.playerID == 255 && controller.recordedFrames.Last().time > ReplayEditorController.Instance.playbackController.CurrentTime && !controller.skater.activeSelf) {
+							controller.skater.SetActive(true);
+							controller.board.SetActive(true);
+						}
 					}
+
+					if (controller.playerID == 255 && controller.replayAnimationFrames.Last(obj => obj.realFrameTime != -1f).realFrameTime < ReplayRecorder.Instance.RecordedFrames.First().time) {
+						RemovePlayer(controller);
+					}
+
 					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
 				}
 			}
@@ -566,8 +608,14 @@ namespace XLMultiplayer {
 					// TODO: Delay destruction and removal until after they're no longer in replay
 					MultiplayerRemotePlayerController player = remoteControllers.Find(c => c.playerID == playerID);
 					chatMessages.Add("Player <color=\"yellow\">" + player.username + "{" + player.playerID + "}</color> <b><color=\"red\">DISCONNECTED</color></b>");
-					player.Destroy();
-					RemovePlayer(playerID);
+					if(player.replayAnimationFrames.Count > 5) {
+						player.playerID = 255;
+						player.skater.SetActive(false);
+						player.board.SetActive(false);
+						player.usernameObject.SetActive(false);
+					} else {
+						RemovePlayer(player);
+					}
 					break;
 				case OpCode.VersionNumber:
 					string serverVersion = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
@@ -697,11 +745,10 @@ namespace XLMultiplayer {
 			this.remoteControllers.Add(newPlayer);
 		}
 
-		private void RemovePlayer(byte playerID) {
-			MultiplayerRemotePlayerController remotePlayer = this.remoteControllers.Find(p => p.playerID == playerID);
+		private void RemovePlayer(MultiplayerRemotePlayerController remotePlayer) {
 			this.remoteControllers.Remove(remotePlayer);
-			UnityEngine.Object.Destroy(remotePlayer.skater);
-			UnityEngine.Object.Destroy(remotePlayer.board);
+			this.debugWriter.WriteLine("Deleting player");
+			remotePlayer.Destroy();
 		}
 
 		public void SendUpdate() {

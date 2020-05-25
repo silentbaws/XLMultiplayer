@@ -20,6 +20,21 @@ namespace XLMultiplayer {
 		private static Stopwatch hashingWatch;
 		private static int duplicates = 0;
 
+		public static string CalculateMD5Bytes(byte[] bytes) {
+			using (var md5 = MD5.Create()) {
+				byte[] hash = null;
+				long size = bytes.Length;
+				if (size > 10485760) {
+					byte[] hashBytes = new byte[10485760];
+					Array.Copy(bytes, 0, hashBytes, 0, 10485760);
+					hash = md5.ComputeHash(hashBytes);
+				} else {
+					hash = md5.ComputeHash(bytes);
+				}
+				return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+			}
+		}
+
 		private static string CalculateMD5(string filename) {
 			using (var md5 = MD5.Create()) {
 				using (var stream = File.OpenRead(filename)) {

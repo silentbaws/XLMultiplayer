@@ -24,7 +24,7 @@ namespace XLMultiplayer {
 				}
 			} else if (!this.isCustom && !this.path.Equals("")) {
 				Texture texture = Resources.Load<Texture>(this.path);
-				if (texture.width <= 4096 && texture.height <= 4096) {
+				if (texture != null && texture.width <= 4096 && texture.height <= 4096) {
 					texture2D = new Texture2D(texture.width, texture.height, TextureFormat.RGB24, false);
 
 					RenderTexture currentRT = RenderTexture.active;

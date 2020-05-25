@@ -8,6 +8,7 @@ using System.Reflection;
 using XLShredLib.UI;
 using XLShredLib;
 using System.IO;
+using ReplayEditor;
 
 namespace XLMultiplayer {
 	class Main {
@@ -99,6 +100,55 @@ namespace XLMultiplayer {
 			GUILayout.FlexibleSpace();
 			GUILayout.EndHorizontal();
 			GUILayout.FlexibleSpace();
+		}
+	}
+
+	[HarmonyPatch(typeof(ReplayEditorController), "LoadFromFile")]
+	static class LoadMultiplayerReplayPatch {
+		static void Prefix(string path) {
+			string multiplayerReplayFile = path + "\\" + Path.GetFileNameWithoutExtension(path);
+			UnityModManager.Logger.Log("start load");
+			using (MemoryStream ms = new MemoryStream(File.ReadAllBytes())) {
+				UnityModManager.Logger.Log("start mem");
+				if (CustomFileReader.HasSignature(ms, "SXLDF001")) {
+					UnityModManager.Logger.Log("check read");
+					using (CustomFileReader fileReader = new CustomFileReader(ms)) {
+						UnityModManager.Logger.Log("start read");
+						ReplayPlayerData playerData;
+						PlayerDataInfo playerDataInfo;
+						if (!fileReader.TryGetData<ReplayPlayerData, PlayerDataInfo>("player2", out playerData, out playerDataInfo)) {
+							UnityModManager.Logger.Log("Huge surprise it wasn't found");
+						} else {
+							UnityModManager.Logger.Log("Found second player, wow you actually did something right! That's a first");
+						}
+					}
+				}
+			}
+		}
+	}
+
+	[HarmonyPatch(typeof(SaveManager), "SaveReplay")]
+	static class SaveMultiplayerReplayPatch {
+		static void Postfix(string fileID, byte[] data) {
+			byte[] result;
+			MultiplayerRemotePlayerController remoteController = Main.multiplayerController.remoteControllers[0];
+			List<ReplayRecordedFrame> recordedFrames = remoteController.recordedFrames;
+			ReplayPlayerData replayData = new ReplayPlayerData(recordedFrames, new TransformInfo(ReplayRecorder.Instance.transform, Space.World), new List<GPEvent>(), null, null, null, null, null, ReplayEditorController.Instance.playbackController.characterCustomizer.CurrentCustomizations);
+			using (MemoryStream memoryStream = new MemoryStream()) {
+				using (CustomFileWriter customFileWriter = new CustomFileWriter(memoryStream, "SXLDF001")) {
+					PlayerDataInfo dataInfo2 = new PlayerDataInfo("Player2");
+					customFileWriter.AddData(replayData, "player2", dataInfo2);
+					customFileWriter.Write();
+					result = memoryStream.ToArray();
+				}
+			}
+
+			string replaysPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL";
+			if (Directory.Exists(replaysPath) && Directory.Exists(replaysPath + "\\Replays")) {
+				replaysPath += "\\Replays\\" + fileID;
+				Directory.CreateDirectory(replaysPath);
+				File.WriteAllBytes(replaysPath + "\\MultiplayerReplay", result);
+			}
 		}
 	}
 

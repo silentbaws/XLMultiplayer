@@ -25,12 +25,12 @@ namespace XLMultiplayer {
 					Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing");
 
 				try {
-					File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".jpg", file);
+					File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + MultiplayerUtils.CalculateMD5Bytes(file) + connectionId.ToString() + ".jpg", file);
 				} catch (Exception e) {
 					this.debugWriter.WriteLine(e.ToString());
 				}
 				
-				this.fileLocation = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + connectionId.ToString() + ".jpg";
+				this.fileLocation = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + MultiplayerUtils.CalculateMD5Bytes(file) + connectionId.ToString() + ".jpg";
 				this.saved = true;
 				this.debugWriter.WriteLine("Saved texture in queue");
 			}

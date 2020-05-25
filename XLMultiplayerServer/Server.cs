@@ -402,7 +402,7 @@ namespace XLMultiplayerServer {
 			});
 
 			unsafe {
-				int sendRateMin = 5*1024*1024;
+				int sendRateMin = 600000;
 				int sendRateMax = MAX_UPLOAD;
 				int sendBufferSize = MAX_BUFFER;
 				utils.SetConfigurationValue(ConfigurationValue.SendRateMin, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMin));

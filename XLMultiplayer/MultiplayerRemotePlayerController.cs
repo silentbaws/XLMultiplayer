@@ -48,8 +48,8 @@ namespace XLMultiplayer {
 
 		private bool loadedAllTextures = false;
 
-		List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
-		List<MultiplayerFrameBufferObject> replayAnimationFrames = new List<MultiplayerFrameBufferObject>();
+		public List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
+		public List<MultiplayerFrameBufferObject> replayAnimationFrames = new List<MultiplayerFrameBufferObject>();
 		public List<ReplayRecordedFrame> recordedFrames = new List<ReplayRecordedFrame>();
 
 		public MultiplayerRemoteTexture shirtMPTex;
