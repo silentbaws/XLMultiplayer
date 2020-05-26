@@ -9,6 +9,7 @@ using XLShredLib.UI;
 using XLShredLib;
 using System.IO;
 using ReplayEditor;
+using System.Linq;
 
 namespace XLMultiplayer {
 	class Main {
@@ -23,6 +24,10 @@ namespace XLMultiplayer {
 		public static MultiplayerController multiplayerController;
 
 		private static ModUIBox uiBox;
+
+		public static List<MultiplayerRemotePlayerController> remoteReplayControllers = new List<MultiplayerRemotePlayerController>();
+
+		public static StreamWriter debugWriter;
 
 		static void Load(UnityModManager.ModEntry modEntry) {
 			Main.modEntry = modEntry;
@@ -103,25 +108,74 @@ namespace XLMultiplayer {
 		}
 	}
 
+	[HarmonyPatch(typeof(ReplayEditorController), "OnDisable")]
+	static class MultiplayReplayDisablePatch {
+		static void Prefix() {
+			if (Main.multiplayerController != null) {
+				foreach (MultiplayerRemotePlayerController controller in Main.multiplayerController.remoteControllers) {
+					if (controller.playerID != 255) {
+						controller.skater.SetActive(true);
+						controller.player.SetActive(true);
+						controller.usernameObject.SetActive(true);
+					}
+				}
+			} else {
+				Main.debugWriter.Flush();
+				Main.debugWriter.Close();
+			}
+
+			foreach (MultiplayerRemotePlayerController controller in Main.remoteReplayControllers) {
+				controller.Destroy();
+			}
+			Main.remoteReplayControllers.Clear();
+		}
+	}
+
+	[HarmonyPatch(typeof(ReplayEditorController), "Update")]
+	static class MultiplayReplayUpdatePatch {
+		static void Postfix(ReplayEditorController __instance) {
+			foreach (MultiplayerRemotePlayerController controller in Main.remoteReplayControllers) {
+				controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
+				controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
+			}
+		}
+	}
+
 	[HarmonyPatch(typeof(ReplayEditorController), "LoadFromFile")]
 	static class LoadMultiplayerReplayPatch {
 		static void Prefix(string path) {
-			string multiplayerReplayFile = path + "\\" + Path.GetFileNameWithoutExtension(path);
-			UnityModManager.Logger.Log("start load");
-			using (MemoryStream ms = new MemoryStream(File.ReadAllBytes())) {
-				UnityModManager.Logger.Log("start mem");
-				if (CustomFileReader.HasSignature(ms, "SXLDF001")) {
-					UnityModManager.Logger.Log("check read");
-					using (CustomFileReader fileReader = new CustomFileReader(ms)) {
-						UnityModManager.Logger.Log("start read");
-						ReplayPlayerData playerData;
-						PlayerDataInfo playerDataInfo;
-						if (!fileReader.TryGetData<ReplayPlayerData, PlayerDataInfo>("player2", out playerData, out playerDataInfo)) {
-							UnityModManager.Logger.Log("Huge surprise it wasn't found");
-						} else {
-							UnityModManager.Logger.Log("Found second player, wow you actually did something right! That's a first");
+			// TODO: Handle loading remote player customizations
+
+			string multiplayerReplayFile = Path.GetDirectoryName(path) + "\\" + Path.GetFileNameWithoutExtension(path) + "\\";
+			if (Directory.Exists(multiplayerReplayFile)) {
+				if (Main.multiplayerController != null && Main.multiplayerController.debugWriter != null) Main.debugWriter = Main.multiplayerController.debugWriter;
+				else Main.debugWriter = new StreamWriter("Multiplayer Replay DebugWriter.txt");
+				using (MemoryStream ms = new MemoryStream(File.ReadAllBytes(multiplayerReplayFile + "MultiplayerReplay.replay"))) {
+					if (CustomFileReader.HasSignature(ms, "SXLDF001")) {
+						using (CustomFileReader fileReader = new CustomFileReader(ms)) {
+							ReplayPlayerData playerData = null;
+							PlayerDataInfo playerDataInfo = null;
+							int i = 0;
+							do {
+								if (fileReader.TryGetData<ReplayPlayerData, PlayerDataInfo>("player" + i.ToString(), out playerData, out playerDataInfo)) {
+									Main.remoteReplayControllers.Add(new MultiplayerRemotePlayerController(Main.debugWriter));
+									Main.remoteReplayControllers[i].ConstructPlayer();
+									List<ReplayRecordedFrame> recordedFrames = new List<ReplayRecordedFrame>(playerData.recordedFrames);
+									Main.remoteReplayControllers[i].recordedFrames = recordedFrames;
+									Main.remoteReplayControllers[i].FinalizeReplay(false);
+								}
+								i++;
+							} while (playerData != null);
 						}
 					}
+				}
+			}
+
+			if (Main.multiplayerController != null) {
+				foreach (MultiplayerRemotePlayerController controller in Main.multiplayerController.remoteControllers) {
+					controller.skater.SetActive(false);
+					controller.player.SetActive(false);
+					controller.usernameObject.SetActive(false);
 				}
 			}
 		}
@@ -130,24 +184,72 @@ namespace XLMultiplayer {
 	[HarmonyPatch(typeof(SaveManager), "SaveReplay")]
 	static class SaveMultiplayerReplayPatch {
 		static void Postfix(string fileID, byte[] data) {
-			byte[] result;
-			MultiplayerRemotePlayerController remoteController = Main.multiplayerController.remoteControllers[0];
-			List<ReplayRecordedFrame> recordedFrames = remoteController.recordedFrames;
-			ReplayPlayerData replayData = new ReplayPlayerData(recordedFrames, new TransformInfo(ReplayRecorder.Instance.transform, Space.World), new List<GPEvent>(), null, null, null, null, null, ReplayEditorController.Instance.playbackController.characterCustomizer.CurrentCustomizations);
-			using (MemoryStream memoryStream = new MemoryStream()) {
-				using (CustomFileWriter customFileWriter = new CustomFileWriter(memoryStream, "SXLDF001")) {
-					PlayerDataInfo dataInfo2 = new PlayerDataInfo("Player2");
-					customFileWriter.AddData(replayData, "player2", dataInfo2);
-					customFileWriter.Write();
-					result = memoryStream.ToArray();
+			// TODO: Handle saving player customizations
+
+			if (Main.multiplayerController != null && Main.remoteReplayControllers.Count == 0) {
+				List<byte[]> remoteBytes = new List<byte[]>();
+				int totalBytes = 0;
+
+				using (MemoryStream memoryStream = new MemoryStream()) {
+					using (CustomFileWriter customFileWriter = new CustomFileWriter(memoryStream, "SXLDF001")) {
+
+						for (int i = 0; i < Main.multiplayerController.remoteControllers.Count; i++) {
+							List<ReplayRecordedFrame> recordedFrames = Traverse.Create(Main.multiplayerController.remoteControllers[i].replayController).Property("ClipFrames").GetValue<List<ReplayRecordedFrame>>();
+							ReplayPlayerData replayData = new ReplayPlayerData(recordedFrames.ToArray(), new List<GPEvent>().ToArray(), null, null, null, null, null, null, null, null, null, null, ReplayEditorController.Instance.playbackController.characterCustomizer.CurrentCustomizations);
+
+							PlayerDataInfo dataInfo2 = new PlayerDataInfo("Player"+i.ToString());
+							customFileWriter.AddData(replayData, "player"+i.ToString(), dataInfo2);
+							customFileWriter.Write();
+							byte[] newBytes = memoryStream.ToArray();
+							totalBytes += newBytes.Length;
+							remoteBytes.Add(newBytes);
+						}
+					}
+				}
+
+				byte[] result = new byte[totalBytes];
+				int bytesAdded = 0;
+				foreach (byte[] remotePlayerBytes in remoteBytes) {
+					Array.Copy(remotePlayerBytes, 0, result, bytesAdded, remotePlayerBytes.Length);
+					bytesAdded += remotePlayerBytes.Length;
+				}
+
+				string replaysPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL";
+				if (Directory.Exists(replaysPath) && Directory.Exists(replaysPath + "\\Replays")) {
+					replaysPath += "\\Replays\\" + fileID;
+					Directory.CreateDirectory(replaysPath);
+					File.WriteAllBytes(replaysPath + "\\MultiplayerReplay.replay", result);
+				}
+			} else if (Main.remoteReplayControllers.Count > 0) {
+				// TODO: Handle saving clipped mp replays in single player
+			}
+		}
+	}
+
+	[HarmonyPatch(typeof(ReplayPlaybackController), "CutClip")]
+	static class CutClipMultiplayerReplayPatch {
+		static void Prefix(ReplayPlaybackController __instance, float newStartTime, float newEndTime) {
+			if (Main.remoteReplayControllers.Find(c => c.replayController == __instance) != null || (Main.multiplayerController != null && Main.multiplayerController.remoteControllers.Find(c => c.replayController == __instance) != null)) return;
+
+			if (Main.multiplayerController != null) {
+				foreach (MultiplayerRemotePlayerController controller in Main.multiplayerController.remoteControllers) {
+					controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f)
+					{
+						f.time -= newStartTime;
+					});
+					controller.replayController.ClipEndTime = newEndTime - newStartTime;
+					controller.replayController.CurrentTime = Mathf.Clamp(controller.replayController.CurrentTime - newStartTime, 0f, controller.replayController.ClipEndTime);
+					controller.replayController.StartCoroutine("UpdateAnimationClip");
 				}
 			}
-
-			string replaysPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL";
-			if (Directory.Exists(replaysPath) && Directory.Exists(replaysPath + "\\Replays")) {
-				replaysPath += "\\Replays\\" + fileID;
-				Directory.CreateDirectory(replaysPath);
-				File.WriteAllBytes(replaysPath + "\\MultiplayerReplay", result);
+			foreach (MultiplayerRemotePlayerController controller in Main.remoteReplayControllers) {
+				controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f)
+				{
+					f.time -= newStartTime;
+				});
+				controller.replayController.ClipEndTime = newEndTime - newStartTime;
+				controller.replayController.CurrentTime = Mathf.Clamp(controller.replayController.CurrentTime - newStartTime, 0f, controller.replayController.ClipEndTime);
+				controller.replayController.StartCoroutine("UpdateAnimationClip");
 			}
 		}
 	}
@@ -169,13 +271,13 @@ namespace XLMultiplayer {
 					//BIG SHOUTOUT BLENDERMF
 					yield return new CodeInstruction(OpCodes.Ldarg_0);
 
-					yield return new CodeInstruction(OpCodes.Call, AccessTools.Property(typeof(ReplayEditor.ReplayPlaybackController), "ClipFrames").GetMethod);
+					yield return new CodeInstruction(OpCodes.Call, AccessTools.Property(typeof(ReplayPlaybackController), "ClipFrames").GetMethod);
 
 					yield return new CodeInstruction(OpCodes.Ldc_I4_0);
 
-					yield return new CodeInstruction(OpCodes.Callvirt, AccessTools.Property(typeof(List<ReplayEditor.ReplayRecordedFrame>), "Item").GetMethod);
+					yield return new CodeInstruction(OpCodes.Callvirt, AccessTools.Property(typeof(List<ReplayRecordedFrame>), "Item").GetMethod);
 
-					yield return new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(ReplayEditor.ReplayRecordedFrame), "time"));
+					yield return new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(ReplayRecordedFrame), "time"));
 				} else {
 					yield return instruction;
 				}

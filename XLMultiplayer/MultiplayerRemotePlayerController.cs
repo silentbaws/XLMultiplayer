@@ -462,6 +462,8 @@ namespace XLMultiplayer {
 		public void PrepareReplay() {
 			this.recordedFrames.Clear();
 
+			this.replayAnimationFrames = this.replayAnimationFrames.OrderBy(f => f.animFrame).ToList();
+
 			int firstKey = this.replayAnimationFrames.FindIndex(f => f.key);
 			
 			this.replayAnimationFrames.RemoveRange(0, firstKey);
@@ -479,8 +481,7 @@ namespace XLMultiplayer {
 				MultiplayerFrameBufferObject frame = this.replayAnimationFrames[f];
 
 				if(f == 0) {
-					MultiplayerFrameBufferObject firstFrameWithTime = this.replayAnimationFrames.First(obj => obj.realFrameTime != -1f);
-					frame.realFrameTime = firstFrameWithTime.realFrameTime + (frame.animFrame - firstFrameWithTime.animFrame) * averageFrameTime;
+					frame.realFrameTime = firstRealTime.realFrameTime + ((frame.animFrame - firstRealTime.animFrame) * 1f/30f);
 				}
 
 				//if(f > 0 && !frame.key && this.replayAnimationFrames[f - 1].animFrame != frame.animFrame - 1) {
@@ -498,8 +499,7 @@ namespace XLMultiplayer {
 					}
 
 					transforms = CreateInfoArray(vectors, quaternions);
-				}
-				if (frame.key) {
+				}else if (frame.key) {
 					transforms = BufferToInfo(frame);
 				}
 
@@ -514,12 +514,16 @@ namespace XLMultiplayer {
 				}
 			}
 
+			FinalizeReplay();
+		}
+
+		public void FinalizeReplay(bool subtractStartTime = true) {
 			this.replayController.enabled = true;
 			this.recordedFrames = this.recordedFrames.OrderBy(f => f.time).ToList();
 			this.EnsureQuaternionListContinuity();
 			Traverse.Create(this.replayController).Property("ClipFrames").SetValue((from f in this.recordedFrames select f.Copy()).ToList());
 			Traverse.Create(this.replayController).Field("m_audioEventPlayers").SetValue(new List<ReplayAudioEventPlayer>());
-			{ // Subtract Start Time
+			if (subtractStartTime) { // Subtract Start Time
 				float firstFrameGameTime = ReplayRecorder.Instance.RecordedFrames[0].time;
 				this.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f) {
 					f.time -= firstFrameGameTime;

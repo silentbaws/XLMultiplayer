@@ -92,7 +92,7 @@ namespace XLMultiplayer {
 
 		private List<byte[]> networkMessageQueue = new List<byte[]>();
 
-		private StreamWriter debugWriter;
+		public StreamWriter debugWriter;
 
 		private MultiplayerLocalPlayerController playerController;
 		public List<MultiplayerRemotePlayerController> remoteControllers = new List<MultiplayerRemotePlayerController>();
