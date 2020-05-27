@@ -24,6 +24,8 @@ namespace XLMultiplayer {
 
 		public float currentAnimationTime { get; private set; }
 
+		private bool sentTextures = false;
+
 		public MultiplayerLocalPlayerController(StreamWriter writer) : base(writer) {
 			currentAnimationTime = 0f;
 		}
@@ -73,6 +75,15 @@ namespace XLMultiplayer {
 				IncrementLoading();
 				yield return new WaitForEndOfFrame();
 
+				yield return new WaitForEndOfFrame();
+
+				Main.utilityMenu.isLoading = false;
+			}
+			yield break;
+		}
+
+		public void SendTextures() {
+			if (!Main.utilityMenu.isLoading && startedEncoding && !sentTextures) {
 				Main.multiplayerController.SendBytesRaw(this.shirtMPTex.GetSendData(), true);
 				Main.multiplayerController.SendBytesRaw(this.pantsMPTex.GetSendData(), true);
 				Main.multiplayerController.SendBytesRaw(this.shoesMPTex.GetSendData(), true);
@@ -86,11 +97,8 @@ namespace XLMultiplayer {
 				Main.multiplayerController.SendBytesRaw(this.headMPTex.GetSendData(), true);
 				Main.multiplayerController.SendBytesRaw(this.bodyMPTex.GetSendData(), true);
 
-				yield return new WaitForEndOfFrame();
-
-				Main.utilityMenu.isLoading = false;
+				sentTextures = true;
 			}
-			yield break;
 		}
 
 		public override void ConstructPlayer() {

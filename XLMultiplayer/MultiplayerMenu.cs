@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections;
 using System.IO;
 using UnityEngine;
@@ -7,7 +8,13 @@ using UnityEngine.UI;
 using XLShredLib;
 
 namespace XLMultiplayer {
+	public class PreviousUsername {
+		[JsonProperty("Previous_Name")]
+		public string username = "Username";
+	}
+
 	public class MultiplayerMenu : MonoBehaviour {
+		public PreviousUsername previousUsername;
 
 		private void Start() {
 			if (serverBrowser == null) {
@@ -41,6 +48,12 @@ namespace XLMultiplayer {
 		public void OpenMultiplayerMenu() {
 			this.multiplayerMenuOpen = true;
 
+			previousUsername = new PreviousUsername();
+
+			if (File.Exists(Main.modEntry.Path + "\\PreviousName.json")) {
+				previousUsername = JsonConvert.DeserializeObject<PreviousUsername>(File.ReadAllText(Main.modEntry.Path + "\\PreviousName.json"));
+			}
+			
 			if (UnityEngine.Object.FindObjectOfType<EventSystem>() == null) {
 				GameObject gameObject = new GameObject("Event System");
 				gameObject.AddComponent<EventSystem>();
@@ -49,7 +62,7 @@ namespace XLMultiplayer {
 
 			ipAddress = "IP Address";
 			port = "Port";
-			username = "Username";
+			username = previousUsername.username;
 
 			this.multiplayerMenu = new GameObject();
 			this.multiplayerMenuCanvas = this.multiplayerMenu.AddComponent<Canvas>();
@@ -129,6 +142,11 @@ namespace XLMultiplayer {
 				if (serverBrowser.closeTimer.ElapsedMilliseconds > 250 || !serverBrowser.closeTimer.IsRunning) {
 					if (this.multiplayerManagerObject == null) {
 						CreateMultiplayerManager();
+
+						previousUsername.username = username;
+						string newFile = JsonConvert.SerializeObject(previousUsername);
+						File.WriteAllText(Main.modEntry.Path + "\\PreviousName.json", newFile);
+
 						Main.multiplayerController.ConnectToServer(ipAddress.Equals("IP Address") ? "127.0.0.1" : ipAddress, (ushort)(port.Equals("Port") ? 7777 : int.Parse(port)), this.username);
 					} else if (this.multiplayerManagerObject != null) {
 						EndMultiplayer();

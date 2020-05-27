@@ -144,8 +144,6 @@ namespace XLMultiplayer {
 	[HarmonyPatch(typeof(ReplayEditorController), "LoadFromFile")]
 	static class LoadMultiplayerReplayPatch {
 		static void Prefix(string path) {
-			// TODO: Handle loading remote player customizations
-
 			string multiplayerReplayFile = Path.GetDirectoryName(path) + "\\" + Path.GetFileNameWithoutExtension(path) + "\\";
 			if (Directory.Exists(multiplayerReplayFile)) {
 				if (Main.multiplayerController != null && Main.multiplayerController.debugWriter != null) Main.debugWriter = Main.multiplayerController.debugWriter;
@@ -160,6 +158,7 @@ namespace XLMultiplayer {
 								if (fileReader.TryGetData<ReplayPlayerData, PlayerDataInfo>("player" + i.ToString(), out playerData, out playerDataInfo)) {
 									Main.remoteReplayControllers.Add(new MultiplayerRemotePlayerController(Main.debugWriter));
 									Main.remoteReplayControllers[i].ConstructPlayer();
+									Main.remoteReplayControllers[i].characterCustomizer.LoadCustomizations(playerData.customizations);
 									List<ReplayRecordedFrame> recordedFrames = new List<ReplayRecordedFrame>(playerData.recordedFrames);
 									Main.remoteReplayControllers[i].recordedFrames = recordedFrames;
 									Main.remoteReplayControllers[i].FinalizeReplay(false);
@@ -184,44 +183,147 @@ namespace XLMultiplayer {
 	[HarmonyPatch(typeof(SaveManager), "SaveReplay")]
 	static class SaveMultiplayerReplayPatch {
 		static void Postfix(string fileID, byte[] data) {
-			// TODO: Handle saving player customizations
+			string replaysPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL";
+			if (!Directory.Exists(replaysPath)) {
+				Directory.CreateDirectory(replaysPath);
+			}
+			if (!Directory.Exists(replaysPath + "\\Replays")) {
+				Directory.CreateDirectory(replaysPath + "\\Replays");
+			}
+			replaysPath += "\\Replays\\" + fileID;
+			Directory.CreateDirectory(replaysPath);
 
-			if (Main.multiplayerController != null && Main.remoteReplayControllers.Count == 0) {
-				List<byte[]> remoteBytes = new List<byte[]>();
-				int totalBytes = 0;
+			// TODO: Thread this shit, parallel as fuck boi
+			// TODO: Refactor, I'm reusing lots of code that doesn't need to be repeated
 
-				using (MemoryStream memoryStream = new MemoryStream()) {
-					using (CustomFileWriter customFileWriter = new CustomFileWriter(memoryStream, "SXLDF001")) {
+			if (Main.remoteReplayControllers.Count > 0) {
+				for (int i = 0; i < Main.remoteReplayControllers.Count; i++) {
+					MultiplayerRemotePlayerController remoteController = Main.remoteReplayControllers[i];
 
-						for (int i = 0; i < Main.multiplayerController.remoteControllers.Count; i++) {
-							List<ReplayRecordedFrame> recordedFrames = Traverse.Create(Main.multiplayerController.remoteControllers[i].replayController).Property("ClipFrames").GetValue<List<ReplayRecordedFrame>>();
-							ReplayPlayerData replayData = new ReplayPlayerData(recordedFrames.ToArray(), new List<GPEvent>().ToArray(), null, null, null, null, null, null, null, null, null, null, ReplayEditorController.Instance.playbackController.characterCustomizer.CurrentCustomizations);
+					foreach (ReplayRecordedFrame frame in remoteController.replayController.ClipFrames) {
+						frame.time -= ReplayEditorController.Instance.playbackController.ClipFrames[0].time;
+					}
 
-							PlayerDataInfo dataInfo2 = new PlayerDataInfo("Player"+i.ToString());
-							customFileWriter.AddData(replayData, "player"+i.ToString(), dataInfo2);
-							customFileWriter.Write();
-							byte[] newBytes = memoryStream.ToArray();
-							totalBytes += newBytes.Length;
-							remoteBytes.Add(newBytes);
+					foreach (ClothingGearObjet clothingPiece in remoteController.gearList) {
+						if (clothingPiece.gearInfo.isCustom) {
+							foreach (TextureChange change in clothingPiece.gearInfo.textureChanges) {
+								if (change.textureID.ToLower().Equals("albedo")) {
+									string newPath = replaysPath + "\\" + Path.GetFileName(change.texturePath);
+									File.Copy(change.texturePath, newPath);
+									change.texturePath = newPath;
+								}
+							}
+						}
+					}
+
+					foreach (BoardGearObject boardPiece in remoteController.boardGearList) {
+						if (boardPiece.gearInfo.isCustom) {
+							foreach (TextureChange change in boardPiece.gearInfo.textureChanges) {
+								if (change.textureID.ToLower().Equals("albedo")) {
+									string newPath = replaysPath + "\\" + Path.GetFileName(change.texturePath);
+									File.Copy(change.texturePath, newPath);
+									change.texturePath = newPath;
+								}
+							}
+						}
+					}
+
+					if (remoteController.currentBody.gearInfo.isCustom) {
+						foreach (MaterialChange matChange in remoteController.currentBody.gearInfo.materialChanges) {
+							foreach (TextureChange change in matChange.textureChanges) {
+								if (change.textureID.ToLower().Equals("albedo")) {
+									string newPath = replaysPath + "\\" + Path.GetFileName(change.texturePath);
+									File.Copy(change.texturePath, newPath);
+									change.texturePath = newPath;
+								}
+							}
 						}
 					}
 				}
 
-				byte[] result = new byte[totalBytes];
-				int bytesAdded = 0;
-				foreach (byte[] remotePlayerBytes in remoteBytes) {
-					Array.Copy(remotePlayerBytes, 0, result, bytesAdded, remotePlayerBytes.Length);
-					bytesAdded += remotePlayerBytes.Length;
+				byte[] result;
+
+				using (MemoryStream memoryStream = new MemoryStream()) {
+					using (CustomFileWriter customFileWriter = new CustomFileWriter(memoryStream, "SXLDF001")) {
+						for (int i = 0; i < Main.remoteReplayControllers.Count; i++) {
+							if (Main.remoteReplayControllers[i].replayController.ClipFrames.Count > 0) {
+								List<ReplayRecordedFrame> recordedFrames = Main.remoteReplayControllers[i].replayController.ClipFrames;
+								ReplayPlayerData replayData = new ReplayPlayerData(recordedFrames.ToArray(), new List<GPEvent>().ToArray(), null, null, null, null, null, null, null, null, null, null, Main.remoteReplayControllers[i].characterCustomizer.CurrentCustomizations);
+								PlayerDataInfo dataInfo2 = new PlayerDataInfo("Player" + i.ToString());
+								replayData.customizations = Main.remoteReplayControllers[i].characterCustomizer.CurrentCustomizations;
+								customFileWriter.AddData(replayData, "player" + i.ToString(), dataInfo2);
+								customFileWriter.Write();
+							}
+						}
+						result = memoryStream.ToArray();
+					}
 				}
 
-				string replaysPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL";
-				if (Directory.Exists(replaysPath) && Directory.Exists(replaysPath + "\\Replays")) {
-					replaysPath += "\\Replays\\" + fileID;
-					Directory.CreateDirectory(replaysPath);
-					File.WriteAllBytes(replaysPath + "\\MultiplayerReplay.replay", result);
+				File.WriteAllBytes(replaysPath + "\\MultiplayerReplay.replay", result);
+			} else if (Main.multiplayerController != null && Main.remoteReplayControllers.Count == 0) {
+				for (int i = 0; i < Main.multiplayerController.remoteControllers.Count; i++) {
+					MultiplayerRemotePlayerController remoteController = Main.multiplayerController.remoteControllers[i];
+
+					foreach (ReplayRecordedFrame frame in remoteController.replayController.ClipFrames) {
+						frame.time -= ReplayEditorController.Instance.playbackController.ClipFrames[0].time;
+					}
+
+					foreach (ClothingGearObjet clothingPiece in remoteController.gearList) {
+						if (clothingPiece.gearInfo.isCustom) {
+							foreach (TextureChange change in clothingPiece.gearInfo.textureChanges) {
+								if (change.textureID.ToLower().Equals("albedo")) {
+									string newPath = replaysPath + "\\" + Path.GetFileName(change.texturePath);
+									File.Copy(change.texturePath, newPath);
+									change.texturePath = newPath;
+								}
+							}
+						}
+					}
+
+					foreach (BoardGearObject boardPiece in remoteController.boardGearList) {
+						if (boardPiece.gearInfo.isCustom) {
+							foreach (TextureChange change in boardPiece.gearInfo.textureChanges) {
+								if (change.textureID.ToLower().Equals("albedo")) {
+									string newPath = replaysPath + "\\" + Path.GetFileName(change.texturePath);
+									File.Copy(change.texturePath, newPath);
+									change.texturePath = newPath;
+								}
+							}
+						}
+					}
+
+					if (remoteController.currentBody.gearInfo.isCustom) {
+						foreach (MaterialChange matChange in remoteController.currentBody.gearInfo.materialChanges) {
+							foreach (TextureChange change in matChange.textureChanges) {
+								if (change.textureID.ToLower().Equals("albedo")) {
+									string newPath = replaysPath + "\\" + Path.GetFileName(change.texturePath);
+									File.Copy(change.texturePath, newPath);
+									change.texturePath = newPath;
+								}
+							}
+						}
+					}
 				}
-			} else if (Main.remoteReplayControllers.Count > 0) {
-				// TODO: Handle saving clipped mp replays in single player
+
+				byte[] result;
+
+				using (MemoryStream memoryStream = new MemoryStream()) {
+					using (CustomFileWriter customFileWriter = new CustomFileWriter(memoryStream, "SXLDF001")) {
+						for (int i = 0; i < Main.multiplayerController.remoteControllers.Count; i++) {
+							if(Main.multiplayerController.remoteControllers[i].replayController.ClipFrames.Count > 0) {
+								List<ReplayRecordedFrame> recordedFrames = Main.multiplayerController.remoteControllers[i].replayController.ClipFrames;
+								ReplayPlayerData replayData = new ReplayPlayerData(recordedFrames.ToArray(), new List<GPEvent>().ToArray(), null, null, null, null, null, null, null, null, null, null, Main.multiplayerController.remoteControllers[i].characterCustomizer.CurrentCustomizations);
+								PlayerDataInfo dataInfo2 = new PlayerDataInfo("Player"+i.ToString());
+								replayData.customizations = Main.multiplayerController.remoteControllers[i].characterCustomizer.CurrentCustomizations;
+								customFileWriter.AddData(replayData, "player"+i.ToString(), dataInfo2);
+								customFileWriter.Write();
+							}
+						}
+						result = memoryStream.ToArray();
+					}
+				}
+				
+				File.WriteAllBytes(replaysPath + "\\MultiplayerReplay.replay", result);
 			}
 		}
 	}
@@ -233,28 +335,76 @@ namespace XLMultiplayer {
 
 			if (Main.multiplayerController != null) {
 				foreach (MultiplayerRemotePlayerController controller in Main.multiplayerController.remoteControllers) {
-					controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f)
-					{
-						f.time -= newStartTime;
-					});
-					controller.replayController.ClipEndTime = newEndTime - newStartTime;
-					controller.replayController.CurrentTime = Mathf.Clamp(controller.replayController.CurrentTime - newStartTime, 0f, controller.replayController.ClipEndTime);
-					controller.replayController.StartCoroutine("UpdateAnimationClip");
+					if(controller.replayController == null || controller.replayController.ClipFrames == null) {
+						continue;
+					}else if (controller.replayController.ClipFrames.Count > 0 && (controller.replayController.ClipFrames.Last().time <= newStartTime || controller.replayController.ClipFrames.First().time >= newEndTime)) {
+						controller.replayController.ClipFrames.Clear();
+					} else if(controller.replayController != null && controller.replayController.ClipFrames != null && controller.replayController.ClipFrames.Count > 0) {
+						int framesToRemove = 0;
+						while (framesToRemove < controller.replayController.ClipFrames.Count && controller.replayController.ClipFrames[framesToRemove].time < newStartTime) {
+							framesToRemove++;
+						}
+						controller.replayController.ClipFrames.RemoveRange(0, framesToRemove);
+
+						if(controller.replayController.ClipFrames.Count > 0) {
+							framesToRemove = 0;
+							while (framesToRemove < controller.replayController.ClipFrames.Count && controller.replayController.ClipFrames[controller.replayController.ClipFrames.Count - 1 - framesToRemove].time > newEndTime) {
+								framesToRemove++;
+							}
+							controller.replayController.ClipFrames.RemoveRange(controller.replayController.ClipFrames.Count - framesToRemove, framesToRemove);
+						}
+
+						if(controller.replayController.ClipFrames.Count > 0) {
+							controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f)
+							{
+								f.time -= newStartTime;
+							});
+
+							controller.replayController.ClipEndTime = newEndTime - newStartTime;
+							controller.replayController.CurrentTime = Mathf.Clamp(controller.replayController.CurrentTime - newStartTime, 0f, controller.replayController.ClipEndTime);
+
+							controller.replayController.StartCoroutine("UpdateAnimationClip");
+						}
+					}
 				}
 			}
 			foreach (MultiplayerRemotePlayerController controller in Main.remoteReplayControllers) {
-				controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f)
-				{
-					f.time -= newStartTime;
-				});
-				controller.replayController.ClipEndTime = newEndTime - newStartTime;
-				controller.replayController.CurrentTime = Mathf.Clamp(controller.replayController.CurrentTime - newStartTime, 0f, controller.replayController.ClipEndTime);
-				controller.replayController.StartCoroutine("UpdateAnimationClip");
+				if (controller.replayController == null || controller.replayController.ClipFrames == null) {
+					continue;
+				} else if(controller.replayController.ClipFrames.Count > 0 && (controller.replayController.ClipFrames.Last().time <= newStartTime || controller.replayController.ClipFrames.First().time >= newEndTime)) {
+					Main.multiplayerController.remoteControllers.Remove(controller);
+					controller.Destroy();
+				} else if (controller.replayController != null && controller.replayController.ClipFrames != null && controller.replayController.ClipFrames.Count > 0) {
+					int framesToRemove = 0;
+					while (framesToRemove < controller.replayController.ClipFrames.Count && controller.replayController.ClipFrames[framesToRemove].time < newStartTime) {
+						framesToRemove++;
+					}
+					controller.replayController.ClipFrames.RemoveRange(0, framesToRemove);
+
+					if (controller.replayController.ClipFrames.Count > 0) {
+						framesToRemove = 0;
+						while (framesToRemove < controller.replayController.ClipFrames.Count && controller.replayController.ClipFrames[controller.replayController.ClipFrames.Count - 1 - framesToRemove].time > newEndTime) {
+							framesToRemove++;
+						}
+						controller.replayController.ClipFrames.RemoveRange(controller.replayController.ClipFrames.Count - framesToRemove, framesToRemove);
+					}
+
+					if (controller.replayController.ClipFrames.Count > 0) {
+						controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f) {
+							f.time -= newStartTime;
+						});
+
+						controller.replayController.ClipEndTime = newEndTime - newStartTime;
+						controller.replayController.CurrentTime = Mathf.Clamp(controller.replayController.CurrentTime - newStartTime, 0f, controller.replayController.ClipEndTime);
+
+						controller.replayController.StartCoroutine("UpdateAnimationClip");
+					}
+				}
 			}
 		}
 	}
 
-	[HarmonyPatch(typeof(ReplayEditor.ReplayPlaybackController), "SetPlaybackTime")]
+	[HarmonyPatch(typeof(ReplayPlaybackController), "SetPlaybackTime")]
 	static class ReplaySetPlaybackTimePatch {
 
 		/* REPLACE ldc.r4 0 with

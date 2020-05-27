@@ -21,14 +21,6 @@ using XLShredLib.UI;
 
 // TODO LIST FOR 0.8.0
 
-// TODO: Allow saving/customizing multiplayer replays
-// How to save replays
-//		-> ReplayEditorController.SaveClipAsync
-//		-> playerData = new ReplayPlayerData()
-//		-> PlayerDataInfo dataInfo = new PlayerDataInfo("MP Player N"); customFileWriter.AddData(replayData, "player", dataInfo);
-//		-> SaveManager.Instance.SaveReplay(string fileID, byte[] data)
-//			-> Prefix -> Append my bytes from dataInfos to data
-
 // TODO: Redo the multiplayer texture system
 //			-> Send paths for non-custom gear
 //			-> Send hashes of full size textures for custom gear along with compressed texture
@@ -37,11 +29,7 @@ using XLShredLib.UI;
 // TODO: Create 2 connections -> One for gameplay 
 //								-> One for files
 
-// TODO: Send Textures after version is verified
-
 // TODO: Fix dawgs board mod for mp
-
-// TODO: Save previous username
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -290,7 +278,7 @@ namespace XLMultiplayer {
 					}
 				} catch (Exception) { }
 			}
-			
+
 
 			Address remoteAddress = new Address();
 			remoteAddress.SetAddress(serverIP.ToString(), port);
@@ -459,6 +447,8 @@ namespace XLMultiplayer {
 			}
 			
 			if (sendingUpdates) {
+				this.playerController.SendTextures();
+
 				timeSinceLastUpdate += Time.unscaledDeltaTime;
 				if (timeSinceLastUpdate > 1f / (float)tickRate) {
 					SendUpdate();
@@ -488,7 +478,7 @@ namespace XLMultiplayer {
 			}
 
 			ProcessMessageQueue();
-			
+
 			// Lerp frames using frame buffer
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
 				if (controller != null) {
@@ -499,10 +489,10 @@ namespace XLMultiplayer {
 						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
 
 
-						if (controller.playerID == 255 && controller.recordedFrames.Last().time < ReplayEditorController.Instance.playbackController.CurrentTime && controller.skater.activeSelf) {
+						if (controller.playerID == 255 && ((controller.replayController.ClipFrames.Last().time < ReplayEditorController.Instance.playbackController.CurrentTime && controller.skater.activeSelf) || (controller.replayController.ClipFrames.Count == 0 && controller.skater.activeSelf))) {
 							controller.skater.SetActive(false);
 							controller.board.SetActive(false);
-						} else if (controller.playerID == 255 && controller.recordedFrames.Last().time > ReplayEditorController.Instance.playbackController.CurrentTime && !controller.skater.activeSelf) {
+						} else if (controller.playerID == 255 && controller.replayController.ClipFrames.Count > 0 && controller.replayController.ClipFrames.Last().time > ReplayEditorController.Instance.playbackController.CurrentTime && !controller.skater.activeSelf) {
 							controller.skater.SetActive(true);
 							controller.board.SetActive(true);
 						}
@@ -628,7 +618,7 @@ namespace XLMultiplayer {
 						usernameThread.Start();
 
 						this.StartCoroutine(this.playerController.EncodeTextures());
-
+						
 						sendingUpdates = true;
 					} else {
 						this.debugWriter.WriteLine("server version {0} does not match client version {1}", serverVersion, Main.modEntry.Version.ToString());
