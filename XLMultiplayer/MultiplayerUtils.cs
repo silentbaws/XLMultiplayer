@@ -126,6 +126,9 @@ namespace XLMultiplayer {
 			if (!mapsDictionary.ContainsKey("1")) {
 				mapsDictionary.Add("1", "Assets/_Scenes/Encinitas_scene.unity");
 			}
+			if (!mapsDictionary.ContainsKey("2")) {
+				mapsDictionary.Add("2", "Assets/_Scenes/CopingTests.unity");
+			}
 
 			string mapsFolder = "";
 			string[] files = null;

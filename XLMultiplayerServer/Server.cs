@@ -555,9 +555,6 @@ namespace XLMultiplayerServer {
 					break;
 
 				case ConnectionState.ClosedByPeer:
-					RemovePlayer(info.connection);
-					break;
-
 				case ConnectionState.ProblemDetectedLocally:
 					RemovePlayer(info.connection);
 					break;
@@ -592,6 +589,8 @@ namespace XLMultiplayerServer {
 			} else {
 				removedPlayer = players[ID];
 			}
+
+			if (removedPlayer == null) return;
 
 			server.CloseConnection(removedPlayer.connection);
 			FileServer.server.CloseConnection(removedPlayer.fileConnection);

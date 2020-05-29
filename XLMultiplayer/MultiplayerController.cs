@@ -85,7 +85,7 @@ namespace XLMultiplayer {
 		public bool isConnected { get; private set; } = false;
 		public bool isFileConnected { get; private set; } = false;
 
-		private List<byte[]> networkMessageQueue = new List<byte[]>();
+		private List<Tuple<byte[], uint>> networkMessageQueue = new List<Tuple<byte[], uint>>();
 
 		public StreamWriter debugWriter;
 
@@ -533,13 +533,15 @@ namespace XLMultiplayer {
 		private void ProcessMessageQueue() {
 			for (int i = networkMessageQueue.Count; i > 0; i--) {
 				byte[] message = null;
+				uint inboundConnection = 0;
 				if (networkMessageQueue[0] != null) {
-					message = new byte[networkMessageQueue[0].Length];
-					networkMessageQueue[0].CopyTo(message, 0);
+					message = new byte[networkMessageQueue[0].Item1.Length];
+					networkMessageQueue[0].Item1.CopyTo(message, 0);
+					inboundConnection = networkMessageQueue[0].Item2;
 				}
 				networkMessageQueue.RemoveAt(0);
 				if (message != null) {
-					ProcessMessage(message);
+					ProcessMessage(message, inboundConnection);
 				}
 			}
 		}
@@ -549,7 +551,7 @@ namespace XLMultiplayer {
 			byte[] messageData = new byte[netMessage.length];
 			netMessage.CopyTo(messageData);
 
-			MultiplayerController.Instance.networkMessageQueue.Add(messageData);
+			MultiplayerController.Instance.networkMessageQueue.Add(Tuple.Create(messageData, netMessage.connection));
 		}
 #endif
 
@@ -576,6 +578,7 @@ namespace XLMultiplayer {
 						Array.Copy(currentTime, 0, message, 1, 4);
 
 						SendBytesRaw(message, false, true);
+						SendBytesRaw(message, false, true, false, true);
 
 						alivePacketCount++;
 						sentAlive10Seconds++;
@@ -602,7 +605,7 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void ProcessMessage(byte[] buffer) {
+		private void ProcessMessage(byte[] buffer, uint inboundConnection) {
 			OpCode opCode = (OpCode)buffer[0];
 			byte playerID = buffer[buffer.Length - 1];
 
@@ -757,10 +760,12 @@ namespace XLMultiplayer {
 					Main.utilityMenu.SendImportantChat(messageText, duration);
 					break;
 				case OpCode.StillAlive:
-					float sentTime = BitConverter.ToSingle(buffer, 1);
-					pingTimes.Add(Time.time - sentTime);
-					receivedAlivePackets++;
-					receivedAlive10Seconds++;
+					if (inboundConnection == connection) {
+						float sentTime = BitConverter.ToSingle(buffer, 1);
+						pingTimes.Add(Time.time - sentTime);
+						receivedAlivePackets++;
+						receivedAlive10Seconds++;
+					}
 					break;
 			}
 		}
@@ -979,6 +984,7 @@ namespace XLMultiplayer {
 			this.playerController = null;
 
 			if (client != null) client.CloseConnection(connection);
+			if (fileClient != null) fileClient.CloseConnection(fileConnection);
 
 			foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
 				controller.Destroy();

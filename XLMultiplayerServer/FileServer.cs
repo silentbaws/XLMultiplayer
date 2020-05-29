@@ -103,6 +103,8 @@ namespace XLMultiplayerServer {
 						}
 						server.FlushMessagesOnConnection(newPlayer.fileConnection);
 					}
+				} else if ((OpCode)message[0] == OpCode.StillAlive) { 
+					server.SendMessageToConnection(netMessage.connection, message, SendFlags.Unreliable | SendFlags.NoNagle);
 				} else {
 					foreach (Player player in Server.players) {
 						if (player != null && player.fileConnection == netMessage.connection) {
