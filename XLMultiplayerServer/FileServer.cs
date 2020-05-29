@@ -38,6 +38,8 @@ namespace XLMultiplayerServer {
 							break;
 						}
 
+						if (Server.motdBytes != null) server.SendMessageToConnection(info.connection, Server.motdBytes);
+
 						Console.WriteLine("connected on file server");
 					} break;
 

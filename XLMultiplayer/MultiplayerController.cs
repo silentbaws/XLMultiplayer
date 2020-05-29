@@ -19,17 +19,14 @@ using Valve.Sockets;
 using XLShredLib;
 using XLShredLib.UI;
 
-// TODO LIST FOR 0.8.0
-
 // TODO: Redo the multiplayer texture system
 //			-> Send paths for non-custom gear
 //			-> Send hashes of full size textures for custom gear along with compressed texture
 //			-> Only send hashes/paths from server unless client requests texture data
 
-// TODO: Create 2 connections -> One for gameplay 
-//								-> One for files
+	// TODO: message of the day
 
-// TODO: Fix dawgs board mod for mp
+	// TODO: server announce
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -43,6 +40,7 @@ namespace XLMultiplayer {
 		MapHash = 7,
 		MapVote = 8,
 		MapList = 9,
+		ServerMessage = 10,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -748,6 +746,11 @@ namespace XLMultiplayer {
 					break;
 				case OpCode.MapVote:
 					Main.utilityMenu.SendImportantChat("<b><color=#ff00ffff>MAP VOTING HAS BEGUN. THE MAP WILL CHANGE IN 30 SECONDS</color></b>", 10000);
+					break;
+				case OpCode.ServerMessage:
+					int duration = BitConverter.ToInt32(buffer, 1);
+					string messageText = ASCIIEncoding.ASCII.GetString(buffer, 5, buffer.Length - 5);
+					Main.utilityMenu.SendImportantChat(messageText, duration);
 					break;
 				case OpCode.StillAlive:
 					float sentTime = BitConverter.ToSingle(buffer, 1);

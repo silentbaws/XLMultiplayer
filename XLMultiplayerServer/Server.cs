@@ -27,6 +27,7 @@ namespace XLMultiplayerServer {
 		MapHash = 7,
 		MapVote = 8,
 		MapList = 9,
+		ServerMessage = 10,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -137,6 +138,7 @@ namespace XLMultiplayerServer {
 		private static string currentMapHash = "1";
 
 		public static List<string> bannedIPs = new List<string>();
+		public static byte[] motdBytes = null;
 
 		public static int Main(String[] args) {
 			Console.ForegroundColor = ConsoleColor.White;
@@ -311,8 +313,68 @@ namespace XLMultiplayerServer {
 					} else {
 						Console.WriteLine("Invalid player ID");
 					}
+				} else if (input.ToLower().StartsWith("msg")) {
+					byte[] messageBytes = ProcessMessageCommand(input);
+					if (messageBytes != null) {
+						foreach(Player player in players) {
+							if(player != null) {
+								FileServer.server.SendMessageToConnection(player.fileConnection, messageBytes, SendFlags.Reliable);
+							}
+						}
+					}
+				} else if (input.ToLower().StartsWith("motd")) {
+					byte[] messageBytes = ProcessMessageCommand(input);
+					if (messageBytes != null) {
+						motdBytes = messageBytes;
+					}
 				}
 			}
+		}
+
+		public static byte[] ProcessMessageCommand(string input) {
+			//msg:duration:color content of message here
+			//   - duration/color optional parameters so default duration is 10 seconds, default color ff00ff
+			string[] msgParams = input.Split(new char[] { ' ' }, 2);
+
+			if (msgParams.Length < 2) return null;
+
+			string[] msgSettings = msgParams[0].Split(':');
+
+			int duration = 10;
+			string msgColor = "ff00ff";
+
+			string acceptableCharacters = "abcdef0123456789";
+
+			if (msgSettings.Length > 1) {
+				if (Int32.TryParse(msgSettings[1], out duration)) {
+					duration = Math.Min(duration, 60);
+					duration = Math.Max(duration, 5);
+				} else {
+					duration = 10;
+				}
+			}
+			if (msgSettings.Length > 2) {
+				bool validColor = true;
+
+				foreach (char c in msgSettings[2]) {
+					if (!acceptableCharacters.Contains(c.ToString())) {
+						validColor = false;
+					}
+				}
+				validColor = validColor && (msgSettings[2].Length == 3 || msgSettings[2].Length == 6);
+
+				if (validColor) {
+					msgColor = msgSettings[2];
+				}
+			}
+			
+			string messageText = $"<b><color=#{msgColor}>{msgParams[1]}</color></b>";
+			byte[] messageBytes = new byte[messageText.Length + 5];
+			messageBytes[0] = (byte)OpCode.ServerMessage;
+			Array.Copy(BitConverter.GetBytes(duration * 1000), 0, messageBytes, 1, 4);
+			Array.Copy(ASCIIEncoding.ASCII.GetBytes(messageText), 0, messageBytes, 5, messageText.Length);
+
+			return messageBytes;
 		}
 
 		public static void ProcessMessage(byte[] buffer, byte fromID, NetworkingSockets server) {
@@ -792,7 +854,7 @@ namespace XLMultiplayerServer {
 				}
 			}
 
-			Console.WriteLine("Connection {0}'s username is {1}", fromID, username);
+			Console.WriteLine("Connection {0}'s username is {1}", fromID, RemoveMarkup(username));
 
 			if (players[fromID] != null) {
 				players[fromID].username = username;
