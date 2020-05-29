@@ -4,7 +4,7 @@
   "Server_Name": "Hello Test Server",
   "Enforce_Map": false,
   "Maps_Folder": "",
-
+  "MessageOTD": "motd:15:ff0000 This is an example motd that displays for 15 seconds in solid red",
 
   "PUBLIC SERVER OPTIONS": "THESE ARE NOT NEEDED FOR YOUR PRIVATE SERVER",
   "API_Key": "",

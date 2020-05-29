@@ -103,6 +103,9 @@ namespace XLMultiplayerServer {
 		[JsonProperty("Enforce_Map")]
 		private static bool ENFORCE_MAPS = true;
 
+		[JsonProperty("MessageOTD")]
+		private static string defaultMOTD = "";
+
 		[JsonProperty("API_Key")]
 		private static string API_KEY = "";
 
@@ -160,6 +163,13 @@ namespace XLMultiplayerServer {
 
 				if (mapListBytes == null) {
 					return 0;
+				}
+			}
+
+			if (!defaultMOTD.Equals("")) {
+				byte[] defaultMOTDBytes = ProcessMessageCommand(defaultMOTD);
+				if(defaultMOTDBytes != null) {
+					motdBytes = defaultMOTDBytes;
 				}
 			}
 
