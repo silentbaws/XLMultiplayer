@@ -75,6 +75,9 @@ namespace XLMultiplayer {
 		private bool closedByPeer = false;
 		private bool problemDetectedLocally = false;
 
+		private string serverIPString = "";
+		private ushort serverPort = 7777;
+
 		private Thread networkMessageThread;
 
 		public List<string> chatMessages = new List<string>();
@@ -283,6 +286,8 @@ namespace XLMultiplayer {
 				} catch (Exception) { }
 			}
 
+			serverPort = port;
+			serverIPString = serverIP.ToString();
 
 			Address remoteAddress = new Address();
 			remoteAddress.SetAddress(serverIP.ToString(), port);
@@ -506,8 +511,7 @@ namespace XLMultiplayer {
 					if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
 						controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
 						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
-
-
+						
 						if (controller.playerID == 255 && ((controller.replayController.ClipFrames.Last().time < ReplayEditorController.Instance.playbackController.CurrentTime && controller.skater.activeSelf) || (controller.replayController.ClipFrames.Count == 0 && controller.skater.activeSelf))) {
 							controller.skater.SetActive(false);
 							controller.board.SetActive(false);
@@ -638,7 +642,7 @@ namespace XLMultiplayer {
 							fileClient = new NetworkingSockets();
 
 							Address remoteAddress = new Address();
-							remoteAddress.SetAddress("127.0.0.1", 7778);
+							remoteAddress.SetAddress(serverIPString, (ushort)(serverPort + 1));
 
 							fileConnection = fileClient.Connect(ref remoteAddress);
 

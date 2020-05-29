@@ -58,7 +58,7 @@ namespace XLMultiplayerServer {
 
 			Console.WriteLine($"Gameplay port: {Server.port}, File Server Port: {(ushort)(Server.port + 1)}");
 
-			address.SetAddress("::0", 7778);
+			address.SetAddress("::0", (ushort)(Server.port + 1));
 
 			listenSocket = server.CreateListenSocket(ref address);
 			pollGroup = server.CreatePollGroup();
