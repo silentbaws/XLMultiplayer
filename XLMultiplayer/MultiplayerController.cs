@@ -57,8 +57,13 @@ namespace XLMultiplayer {
 	class MultiplayerController : MonoBehaviour{
 		// Valve Sockets stuff
 		private NetworkingSockets client = null;
+		private NetworkingSockets fileClient = null;
 		private StatusCallback status = null;
+		private StatusCallback fileStatus = null;
 		private uint connection;
+		private uint fileConnection;
+
+		private uint serverConnectionNumber;
 
 #if VALVESOCKETS_SPAN
 		MessageCallback messageCallback = MessageCallbackHandler;
@@ -77,6 +82,7 @@ namespace XLMultiplayer {
 		public List<string> chatMessages = new List<string>();
 
 		public bool isConnected { get; private set; } = false;
+		public bool isFileConnected { get; private set; } = false;
 
 		private List<byte[]> networkMessageQueue = new List<byte[]>();
 
@@ -302,7 +308,22 @@ namespace XLMultiplayer {
 					break;
 
 				case ConnectionState.Connected:
-					ConnectionCallback();
+					this.debugWriter.WriteLine("Got connected message");
+
+					if (info.connection == connection) {
+						ConnectionCallback();
+						this.StartCoroutine(this.playerController.EncodeTextures());
+					} else if (info.connection == fileConnection) {
+						this.debugWriter.WriteLine("connected on file server");
+
+						byte[] connectMessage = new byte[5];
+						connectMessage[0] = (byte)OpCode.Connect;
+						Array.Copy(BitConverter.GetBytes(serverConnectionNumber), 0, connectMessage, 1, 4);
+
+						fileClient.SendMessageToConnection(fileConnection, connectMessage, SendFlags.Reliable | SendFlags.NoNagle);
+						isFileConnected = true;
+					}
+
 					break;
 
 				case ConnectionState.ClosedByPeer:
@@ -560,7 +581,8 @@ namespace XLMultiplayer {
 					}
 
 #if VALVESOCKETS_SPAN
-					client.ReceiveMessagesOnConnection(connection, messageCallback, 256);
+					if (client != null) client.ReceiveMessagesOnConnection(connection, messageCallback, 256);
+					if (fileClient != null) fileClient.ReceiveMessagesOnConnection(fileConnection, messageCallback, 256);
 #else
 					int netMessagesCount = client.ReceiveMessagesOnConnection(connection, netMessages, maxMessages);
 
@@ -588,7 +610,7 @@ namespace XLMultiplayer {
 				Array.Copy(buffer, 1, newBuffer, 0, buffer.Length - 2);
 			}
 
-			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive) this.debugWriter.WriteLine("Recieved message with opcode {0}, and length {1}", opCode, buffer.Length);
+			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive) this.debugWriter.WriteLine("Received message with opcode {0}, and length {1}", opCode, buffer.Length);
 
 			switch (opCode) {
 				case OpCode.Connect:
@@ -608,18 +630,26 @@ namespace XLMultiplayer {
 					}
 					break;
 				case OpCode.VersionNumber:
-					string serverVersion = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
+					serverConnectionNumber = BitConverter.ToUInt32(buffer, 1);
+					string serverVersion = ASCIIEncoding.ASCII.GetString(buffer, 5, buffer.Length - 5);
 
 					if (serverVersion.Equals(Main.modEntry.Version.ToString())) {
 						this.debugWriter.WriteLine("Server version matches client version start encoding");
-						
-						usernameThread = new Thread(SendUsername);
-						usernameThread.IsBackground = true;
-						usernameThread.Start();
 
-						this.StartCoroutine(this.playerController.EncodeTextures());
-						
-						sendingUpdates = true;
+						if (fileClient == null) {
+							fileClient = new NetworkingSockets();
+
+							Address remoteAddress = new Address();
+							remoteAddress.SetAddress("127.0.0.1", 7778);
+
+							fileConnection = fileClient.Connect(ref remoteAddress);
+
+							usernameThread = new Thread(SendUsername);
+							usernameThread.IsBackground = true;
+							usernameThread.Start();
+
+							sendingUpdates = true;
+						}
 					} else {
 						this.debugWriter.WriteLine("server version {0} does not match client version {1}", serverVersion, Main.modEntry.Version.ToString());
 						Main.utilityMenu.SendImportantChat("<color=\"yellow\">server version <color=\"green\"><b>" + serverVersion + "</b></color> does not match client version <color=\"red\"><b>" + Main.modEntry.Version.ToString() + "</b></color></color>", 7500);
@@ -756,11 +786,12 @@ namespace XLMultiplayer {
 		}
 
 		// For things that encode the prebuffer during serialization
-		public void SendBytesRaw(byte[] msg, bool reliable, bool nonagle = false, bool nodelay = false) {
+		public void SendBytesRaw(byte[] msg, bool reliable, bool nonagle = false, bool nodelay = false, bool sendFileServer = false) {
 			SendFlags sendType = reliable ? SendFlags.Reliable : SendFlags.Unreliable;
 			if (nonagle) sendType |= SendFlags.NoNagle;
 			if (nodelay) sendType |= SendFlags.NoDelay;
-			if (client != null) client.SendMessageToConnection(connection, msg, sendType);
+			if (client != null && !sendFileServer) client.SendMessageToConnection(connection, msg, sendType);
+			else if (fileClient != null && sendFileServer) fileClient.SendMessageToConnection(fileConnection, msg, sendType);
 		}
 
 		public void SendBytes(OpCode opCode, byte[] msg, bool reliable, bool nonagle = false) {

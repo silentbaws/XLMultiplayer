@@ -48,6 +48,7 @@ namespace XLMultiplayerServer {
 		public byte playerID;
 		public string username;
 		public uint connection;
+		public uint fileConnection;
 		public Address ipAddr;
 
 		public byte[] usernameMessage = null;
@@ -82,17 +83,18 @@ namespace XLMultiplayerServer {
 
 	class Server {
 		// TODO: Update version number with versions
-		private static string VERSION_NUMBER = "0.7.2";
+		private static string VERSION_NUMBER = "0.8.0";
 
-		private static NetworkingSockets server;
-
+		public static NetworkingSockets server;
+		private static uint pollGroup;
+		private static uint listenSocket;
 		public static bool RUNNING = true;
 
 		[JsonProperty("Server_Name")]
 		private static string SERVER_NAME = "";
 
 		[JsonProperty("Port")]
-		private static ushort port = 7777;
+		public static ushort port { get; private set;  } = 7777;
 
 		[JsonProperty("Max_Players")]
 		private static byte MAX_PLAYERS = 10;
@@ -110,15 +112,18 @@ namespace XLMultiplayerServer {
 		private static string PAYPAL = "";
 
 		[JsonProperty("Max_Upload_Bytes_Per_Second")]
-		private static int MAX_UPLOAD = 1073741824;
+		private static int MAX_UPLOAD = 15400000;
 
 		[JsonProperty("Max_Queued_Sending_Bytes")]
 		private static int MAX_BUFFER = 209715200;
 
 		[JsonProperty("Max_Queued_Bytes_Per_Connection")]
-		private static int MAX_BYTES_PENDING = 5242880;
+		private static int MAX_BYTES_PENDING = 102400;
 
-		private static Player[] players = new Player[MAX_PLAYERS];
+		[JsonProperty("File_Max_Upload_Bytes_Per_Second")]
+		public static int FILE_MAX_UPLOAD = 4000000;
+
+		public static Player[] players { get; private set; } = new Player[MAX_PLAYERS];
 		private static int total_players = 0;
 
 		private static string sep = Path.DirectorySeparatorChar.ToString();
@@ -130,6 +135,8 @@ namespace XLMultiplayerServer {
 		private static Stopwatch mapVoteTimer = new Stopwatch();
 
 		private static string currentMapHash = "1";
+
+		public static List<string> bannedIPs = new List<string>();
 
 		public static int Main(String[] args) {
 			Console.ForegroundColor = ConsoleColor.White;
@@ -154,7 +161,18 @@ namespace XLMultiplayerServer {
 				}
 			}
 
+			if (File.Exists("ipban.txt")) {
+				string ipBanList = File.ReadAllText("ipban.txt");
+				string[] readBannedIPs = ipBanList.Split('\n');
+				bannedIPs.AddRange(readBannedIPs);
+			}
+
 			var serverTask = Task.Run(() => ServerLoop());
+
+			Thread fileServerThread = new Thread(FileServer.ServerLoop);
+			fileServerThread.IsBackground = true;
+			fileServerThread.Start();
+
 			Task.Run(() => CommandLoop());
 
 			Console.WriteLine("Server initialization finished");
@@ -185,6 +203,7 @@ namespace XLMultiplayerServer {
 
 			mapList.Add("0", "Courthouse");
 			mapList.Add("1", "California Skatepark");
+			mapList.Add("2", "Miniramp - test");
 
 			if (mapsDir == "") {
 				mapsDir = Directory.GetCurrentDirectory() + sep + "Maps";
@@ -273,11 +292,30 @@ namespace XLMultiplayerServer {
 					} else {
 						Console.WriteLine("Invalid player ID");
 					}
+				} else if (input.ToLower().StartsWith("ban")) {
+					string banIDString = input.ToLower().Replace("ban ", "");
+					int banID = -1;
+					if (Int32.TryParse(banIDString, out banID)) {
+						if (players[banID] != null) {
+							Console.WriteLine("Banning player {0} IP {1}", banID, players[banID].ipAddr.GetIP());
+							bannedIPs.Add(players[banID].ipAddr.GetIP());
+							RemovePlayer(players[banID].connection, banID, true);
+
+							string ipBanString = "";
+							foreach (string ip in bannedIPs) {
+								ipBanString += ip + "\n";
+							}
+
+							File.WriteAllText("ipban.txt", ipBanString);
+						}
+					} else {
+						Console.WriteLine("Invalid player ID");
+					}
 				}
 			}
 		}
 
-		private static void ProcessMessage(byte[] buffer, byte fromID, NetworkingSockets server) {
+		public static void ProcessMessage(byte[] buffer, byte fromID, NetworkingSockets server) {
 			if(!Enum.IsDefined(typeof(OpCode), (OpCode)buffer[0]) || players[fromID] == null) {
 				return;
 			}
@@ -299,9 +337,9 @@ namespace XLMultiplayerServer {
 								foreach (Player player2 in players) {
 									if (player2 != null && player2.playerID != fromID) {
 										foreach (KeyValuePair<string, byte[]> value in player.gear) {
-											server.SendMessageToConnection(player2.connection, value.Value, SendFlags.Reliable);
+											FileServer.server.SendMessageToConnection(player2.fileConnection, value.Value, SendFlags.Reliable);
 										}
-										server.FlushMessagesOnConnection(player2.connection);
+										FileServer.server.FlushMessagesOnConnection(player2.fileConnection);
 									}
 								}
 							}
@@ -310,7 +348,6 @@ namespace XLMultiplayerServer {
 					break;
 				case OpCode.Animation:
 					if(players[fromID] != null) {
-
 						bool reliable = buffer[buffer.Length - 1] == (byte)1 ? true : false;
 						buffer[buffer.Length - 1] = fromID;
 
@@ -363,13 +400,119 @@ namespace XLMultiplayerServer {
 			}
 		}
 
-		private static void RemovePlayer(uint connection, int ID = -1, bool kicked = false) {
-			server.CloseConnection(connection);
+		public static void StatusCallbackFunction(ref StatusInfo info, IntPtr context) {
+			switch (info.connectionInfo.state) {
+				case ConnectionState.None:
+					break;
 
+				case ConnectionState.Connecting: {
+						if (info.connectionInfo.listenSocket != listenSocket && info.connectionInfo.listenSocket == FileServer.listenSocket) {
+							FileServer.StatusCallbackFunction(ref info, context);
+							break;
+						} else if (info.connectionInfo.listenSocket != listenSocket) {
+							Console.WriteLine("refusing connection invalid listen socket");
+							server.CloseConnection(info.connection);
+							break;
+						}
+
+						Console.WriteLine("connecting on game server");
+
+						if (bannedIPs.Contains(info.connectionInfo.address.GetIP())) {
+							Console.WriteLine("Ban player attempted to connect to the server, IP: {0}", info.connectionInfo.address.GetIP());
+							server.CloseConnection(info.connection);
+						} else {
+							server.AcceptConnection(info.connection);
+							server.SetConnectionPollGroup(pollGroup, info.connection);
+						}
+					}
+					break;
+
+				case ConnectionState.Connected: {
+						if (info.connectionInfo.listenSocket != listenSocket && info.connectionInfo.listenSocket == FileServer.listenSocket) {
+							FileServer.StatusCallbackFunction(ref info, context);
+							break;
+						} else if (info.connectionInfo.listenSocket != listenSocket) {
+							Console.WriteLine("refusing connection invalid listen socket");
+							server.CloseConnection(info.connection);
+							break;
+						}
+						Console.WriteLine("connected on game server");
+
+						bool openSlot = false;
+
+						for (byte i = 0; i < MAX_PLAYERS; i++) {
+							if (players[i] == null) {
+								Console.WriteLine("Client connected - IP: " + info.connectionInfo.address.GetIP() + " ID: " + i.ToString());
+								players[i] = new Player(i, info.connection, info.connectionInfo.address);
+
+								byte[] versionNumber = ASCIIEncoding.ASCII.GetBytes(VERSION_NUMBER);
+								byte[] versionMessage = new byte[versionNumber.Length + 5];
+
+								versionMessage[0] = (byte)OpCode.VersionNumber;
+								Array.Copy(BitConverter.GetBytes(players[i].connection), 0, versionMessage, 1, 4);
+								Array.Copy(versionNumber, 0, versionMessage, 5, versionNumber.Length);
+								server.SendMessageToConnection(players[i].connection, versionMessage, SendFlags.Reliable | SendFlags.NoNagle);
+
+								if (ENFORCE_MAPS) {
+									server.SendMessageToConnection(players[i].connection, mapListBytes, SendFlags.Reliable);
+									server.SendMessageToConnection(players[i].connection, GetCurrentMapHashMessage(), SendFlags.Reliable);
+								}
+
+								foreach (Player player in players) {
+									if (player != null && player != players[i]) {
+										server.SendMessageToConnection(players[i].connection, new byte[] { (byte)OpCode.Connect, player.playerID }, SendFlags.Reliable);
+										server.SendMessageToConnection(player.connection, new byte[] { (byte)OpCode.Connect, i }, SendFlags.Reliable);
+
+										if (player.usernameMessage != null) {
+											server.SendMessageToConnection(players[i].connection, player.usernameMessage, SendFlags.Reliable);
+										}
+									}
+								}
+
+								server.FlushMessagesOnConnection(players[i].connection);
+
+								openSlot = true;
+								break;
+							}
+						}
+
+						if (!openSlot) {
+							server.CloseConnection(info.connection);
+						}
+					}
+					break;
+
+				case ConnectionState.ClosedByPeer:
+					RemovePlayer(info.connection);
+					break;
+
+				case ConnectionState.ProblemDetectedLocally:
+					RemovePlayer(info.connection);
+					break;
+			}
+		}
+
+		public static void MessageCallbackFunction(in NetworkingMessage netMessage) {
+			byte[] messageData = new byte[netMessage.length];
+			netMessage.CopyTo(messageData);
+
+			Player sendingPlayer = null;
+			foreach (Player player in players) {
+				if (player != null && player.connection == netMessage.connection) {
+					sendingPlayer = player;
+					break;
+				}
+			}
+
+			if (sendingPlayer != null)
+				ProcessMessage(messageData, sendingPlayer.playerID, server);
+		}
+
+		public static void RemovePlayer(uint connection, int ID = -1, bool kicked = false) {
 			Player removedPlayer = null;
 			if (ID == -1) {
 				foreach (Player player in players) {
-					if (player != null && player.connection == connection) {
+					if (player != null && (player.connection == connection || player.fileConnection == connection)) {
 						removedPlayer = player;
 						break;
 					}
@@ -377,6 +520,9 @@ namespace XLMultiplayerServer {
 			} else {
 				removedPlayer = players[ID];
 			}
+
+			server.CloseConnection(removedPlayer.connection);
+			FileServer.server.CloseConnection(removedPlayer.fileConnection);
 
 			if (removedPlayer != null) {
 				if (!kicked) Console.WriteLine("Client disconnected - ID: " + removedPlayer.playerID);
@@ -400,106 +546,30 @@ namespace XLMultiplayerServer {
 			utils.SetDebugCallback(DebugType.Important, (type, message) => {
 				Console.WriteLine("Valve Debug - Type: {0}, Message: {1}", type, message);
 			});
+			
+			address.SetAddress("::0", port);
 
+			listenSocket = server.CreateListenSocket(ref address);
+			pollGroup = server.CreatePollGroup();
+			
 			unsafe {
 				int sendRateMin = 600000;
 				int sendRateMax = MAX_UPLOAD;
 				int sendBufferSize = MAX_BUFFER;
-				utils.SetConfigurationValue(ConfigurationValue.SendRateMin, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMin));
-				utils.SetConfigurationValue(ConfigurationValue.SendRateMax, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendRateMax));
+				
+				utils.SetConfigurationValue(ConfigurationValue.SendRateMin, ConfigurationScope.ListenSocket, new IntPtr(listenSocket), ConfigurationDataType.Int32, new IntPtr(&sendRateMin));
+				utils.SetConfigurationValue(ConfigurationValue.SendRateMax, ConfigurationScope.ListenSocket, new IntPtr(listenSocket), ConfigurationDataType.Int32, new IntPtr(&sendRateMax));
 				utils.SetConfigurationValue(ConfigurationValue.SendBufferSize, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendBufferSize));
 			}
-
-			address.SetAddress("::0", port);
-
-			uint listenSocket = server.CreateListenSocket(ref address);
-			uint pollGroup = server.CreatePollGroup();
 
 			Console.WriteLine($"Server {SERVER_NAME} started Listening on port {port} for maximum of {MAX_PLAYERS} players\nEnforcing maps is {ENFORCE_MAPS}");
 
 			StartAnnouncing();
 
-			StatusCallback status = (ref StatusInfo info, IntPtr context) => {
-				switch (info.connectionInfo.state) {
-					case ConnectionState.None:
-						break;
-
-					case ConnectionState.Connecting:
-						server.AcceptConnection(info.connection);
-						server.SetConnectionPollGroup(pollGroup, info.connection);
-						break;
-
-					case ConnectionState.Connected:
-						Console.WriteLine("Client connected - IP: " + info.connectionInfo.address.GetIP());
-
-						bool openSlot = false;
-
-						for(byte i = 0; i < MAX_PLAYERS; i++) {
-							if(players[i] == null) {
-								players[i] = new Player(i, info.connection, info.connectionInfo.address);
-
-								byte[] versionNumber = ASCIIEncoding.ASCII.GetBytes(VERSION_NUMBER);
-								byte[] versionMessage = new byte[versionNumber.Length + 1];
-
-								versionMessage[0] = (byte)OpCode.VersionNumber;
-								Array.Copy(versionNumber, 0, versionMessage, 1, versionNumber.Length);
-								server.SendMessageToConnection(players[i].connection, versionMessage, SendFlags.Reliable | SendFlags.NoNagle);
-
-								if (ENFORCE_MAPS) {
-									server.SendMessageToConnection(players[i].connection, mapListBytes, SendFlags.Reliable);
-									server.SendMessageToConnection(players[i].connection, GetCurrentMapHashMessage(), SendFlags.Reliable);
-								}
-
-								foreach (Player player in players) {
-									if(player != null && player != players[i]) {
-										server.SendMessageToConnection(players[i].connection, new byte[] { (byte)OpCode.Connect, player.playerID }, SendFlags.Reliable);
-										server.SendMessageToConnection(player.connection, new byte[] { (byte)OpCode.Connect, i }, SendFlags.Reliable);
-
-										if (player.usernameMessage != null) {
-											server.SendMessageToConnection(players[i].connection, player.usernameMessage, SendFlags.Reliable);
-										}
-										if (player.allGearUploaded) {
-											foreach (KeyValuePair<string, byte[]> value in player.gear) {
-												server.SendMessageToConnection(players[i].connection, value.Value, SendFlags.Reliable);
-											}
-										}
-									}
-								}
-
-								server.FlushMessagesOnConnection(players[i].connection);
-
-								openSlot = true;
-								break;
-							}
-						}
-
-						if (!openSlot) {
-							server.CloseConnection(info.connection);
-						}
-						break;
-
-					case ConnectionState.ClosedByPeer:
-						RemovePlayer(info.connection);
-						break;
-				}
-			};
+			StatusCallback status = StatusCallbackFunction;
 
 #if VALVESOCKETS_SPAN
-			MessageCallback messageCallback = (in NetworkingMessage netMessage) => {
-				byte[] messageData = new byte[netMessage.length];
-				netMessage.CopyTo(messageData);
-
-				Player sendingPlayer = null;
-				foreach (Player player in players) {
-					if (player != null && player.connection == netMessage.connection) {
-						sendingPlayer = player;
-						break;
-					}
-				}
-
-				if (sendingPlayer != null)
-					ProcessMessage(messageData, sendingPlayer.playerID, server);
-			};
+			MessageCallback messageCallback = MessageCallbackFunction;
 #else
 			const int maxMessages = 256;
 

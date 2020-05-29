@@ -83,21 +83,21 @@ namespace XLMultiplayer {
 		}
 
 		public void SendTextures() {
-			if (!Main.utilityMenu.isLoading && startedEncoding && !sentTextures) {
-				Main.multiplayerController.SendBytesRaw(this.shirtMPTex.GetSendData(), true);
-				Main.multiplayerController.SendBytesRaw(this.pantsMPTex.GetSendData(), true);
-				Main.multiplayerController.SendBytesRaw(this.shoesMPTex.GetSendData(), true);
-				Main.multiplayerController.SendBytesRaw(this.hatMPTex.GetSendData(), true);
-
-				Main.multiplayerController.SendBytesRaw(this.deckMPTex.GetSendData(), true);
-				Main.multiplayerController.SendBytesRaw(this.gripMPTex.GetSendData(), true);
-				Main.multiplayerController.SendBytesRaw(this.truckMPTex.GetSendData(), true);
-				Main.multiplayerController.SendBytesRaw(this.wheelMPTex.GetSendData(), true);
-
-				Main.multiplayerController.SendBytesRaw(this.headMPTex.GetSendData(), true);
-				Main.multiplayerController.SendBytesRaw(this.bodyMPTex.GetSendData(), true);
-
+			if (!Main.utilityMenu.isLoading && startedEncoding && !sentTextures && Main.multiplayerController.isFileConnected) {
 				sentTextures = true;
+
+				Main.multiplayerController.SendBytesRaw(this.shirtMPTex.GetSendData(), true, false, false, true);
+				Main.multiplayerController.SendBytesRaw(this.pantsMPTex.GetSendData(), true, false, false, true);
+				Main.multiplayerController.SendBytesRaw(this.shoesMPTex.GetSendData(), true, false, false, true);
+				Main.multiplayerController.SendBytesRaw(this.hatMPTex.GetSendData(), true, false, false, true);
+
+				Main.multiplayerController.SendBytesRaw(this.deckMPTex.GetSendData(), true, false, false, true);
+				Main.multiplayerController.SendBytesRaw(this.gripMPTex.GetSendData(), true, false, false, true);
+				Main.multiplayerController.SendBytesRaw(this.truckMPTex.GetSendData(), true, false, false, true);
+				Main.multiplayerController.SendBytesRaw(this.wheelMPTex.GetSendData(), true, false, false, true);
+
+				Main.multiplayerController.SendBytesRaw(this.headMPTex.GetSendData(), true, false, false, true);
+				Main.multiplayerController.SendBytesRaw(this.bodyMPTex.GetSendData(), true, false, false, true);
 			}
 		}
 
