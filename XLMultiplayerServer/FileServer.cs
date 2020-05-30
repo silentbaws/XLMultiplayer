@@ -5,25 +5,31 @@ using System.Collections.Generic;
 using Valve.Sockets;
 
 namespace XLMultiplayerServer {
-	class FileServer {
-		public static NetworkingSockets server;
-		public static uint pollGroup;
-		public static uint listenSocket;
+	public class FileServer {
+		public NetworkingSockets server;
+		public uint pollGroup;
+		public uint listenSocket;
 
-		public static void StatusCallbackFunction(ref StatusInfo info, IntPtr context) {
+		public Server mainServer;
+
+		public FileServer(Server s) {
+			mainServer = s;
+		}
+
+		public void StatusCallbackFunction(ref StatusInfo info, IntPtr context) {
 				switch (info.connectionInfo.state) {
 					case ConnectionState.None:
 						break;
 
 					case ConnectionState.Connecting: {
 						if (info.connectionInfo.listenSocket != listenSocket) {
-							Server.StatusCallbackFunction(ref info, context);
+							mainServer.StatusCallbackFunction(ref info, context);
 							break;
 						}
 
 						Console.WriteLine("connecting on file server");
 
-						if (Server.bannedIPs.Contains(info.connectionInfo.address.GetIP())) {
+						if (mainServer.bannedIPs.Contains(info.connectionInfo.address.GetIP())) {
 							Console.WriteLine("Ban player attempted to connect to the server, IP: {0}", info.connectionInfo.address.GetIP());
 							server.CloseConnection(info.connection);
 						} else {
@@ -34,23 +40,23 @@ namespace XLMultiplayerServer {
 
 					case ConnectionState.Connected: {
 						if (info.connectionInfo.listenSocket != listenSocket) {
-							Server.StatusCallbackFunction(ref info, context);
+							mainServer.StatusCallbackFunction(ref info, context);
 							break;
 						}
 
-						if (Server.motdBytes != null) server.SendMessageToConnection(info.connection, Server.motdBytes);
+						if (mainServer.motdBytes != null) server.SendMessageToConnection(info.connection, mainServer.motdBytes);
 
 						Console.WriteLine("connected on file server");
 					} break;
 
 					case ConnectionState.ClosedByPeer:
 					case ConnectionState.ProblemDetectedLocally:
-						Server.RemovePlayer(info.connection);
+					mainServer.RemovePlayer(info.connection);
 					break;
 				}
 			}
 
-		public static void ServerLoop() {
+		public void ServerLoop() {
 			Library.Initialize();
 
 			server = new NetworkingSockets();
@@ -81,7 +87,7 @@ namespace XLMultiplayerServer {
 					uint originalConnection = BitConverter.ToUInt32(message, 1);
 
 					Player newPlayer = null;
-					foreach (Player player in Server.players) {
+					foreach (Player player in mainServer.players) {
 						if (player != null && player.connection == originalConnection) {
 							player.fileConnection = netMessage.connection;
 							newPlayer = player;
@@ -94,7 +100,7 @@ namespace XLMultiplayerServer {
 
 						server.CloseConnection(netMessage.connection);
 					} else {
-						foreach (Player player in Server.players) {
+						foreach (Player player in mainServer.players) {
 							if (player != null) {
 								foreach (KeyValuePair<string, byte[]> value in player.gear) {
 									server.SendMessageToConnection(newPlayer.fileConnection, value.Value, SendFlags.Reliable);
@@ -106,14 +112,15 @@ namespace XLMultiplayerServer {
 				} else if ((OpCode)message[0] == OpCode.StillAlive) { 
 					server.SendMessageToConnection(netMessage.connection, message, SendFlags.Unreliable | SendFlags.NoNagle);
 				} else {
-					foreach (Player player in Server.players) {
+					foreach (Player player in mainServer.players) {
 						if (player != null && player.fileConnection == netMessage.connection) {
-							Server.ProcessMessage(message, player.playerID, Server.server);
+							mainServer.ProcessMessage(message, player.playerID, mainServer.server);
 						}
 					}
 				}
 			};
-			while (Server.RUNNING) {
+
+			while (mainServer.RUNNING) {
 				server.DispatchCallback(status);
 
 				server.ReceiveMessagesOnPollGroup(pollGroup, messageCallback, 256);

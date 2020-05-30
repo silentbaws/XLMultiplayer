@@ -24,9 +24,19 @@ using XLShredLib.UI;
 //			-> Send hashes of full size textures for custom gear along with compressed texture
 //			-> Only send hashes/paths from server unless client requests texture data
 
-	// TODO: message of the day
+// TODO: v0.9.0
 
-	// TODO: server announce
+// TODO: Add sounds to remote clients
+
+// TODO: Move majority of reliable messages to file client
+
+// TODO: Usable GUI for servers
+
+// TODO: Console player list
+
+// TODO: game of skate.... maybe?
+
+// TODO: fix previous username saving, it doesn't work with server browser -> obviously dickhead you did it wrong 
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {

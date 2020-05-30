@@ -15,6 +15,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Valve.Sockets;
 
+// TODO: Move the fileserver to main thread - using too much CPU resources
+
 namespace XLMultiplayerServer {
 	public enum OpCode : byte {
 		Connect = 0,
@@ -45,51 +47,21 @@ namespace XLMultiplayerServer {
 		Body = 9
 	}
 
-	class Player {
-		public byte playerID;
-		public string username;
-		public uint connection;
-		public uint fileConnection;
-		public Address ipAddr;
-
-		public byte[] usernameMessage = null;
-
-		public bool allGearUploaded = false;
-		public Dictionary<string, byte[]> gear = new Dictionary<string, byte[]>();
-
-		public string currentVote = "current";
-
-		public Stopwatch timeoutWatch = new Stopwatch();
-
-		public Player(byte pID, uint conn, Address addr) {
-			this.playerID = pID;
-			this.connection = conn;
-			this.ipAddr = addr;
-		}
-
-		public void AddGear(byte[] buffer) {
-			byte[] newBuffer = new byte[buffer.Length + 1];
-			Array.Copy(buffer, 0, newBuffer, 0, buffer.Length);
-			newBuffer[buffer.Length] = playerID;
-			gear.Add(((MPTextureType)buffer[1]).ToString(), newBuffer);
-
-			allGearUploaded = true;
-			for (byte i = 0; i < 10; i++) {
-				if (!gear.ContainsKey(((MPTextureType)i).ToString())){
-					allGearUploaded = false;
-				}
-			}
-		}
-	}
-
-	class Server {
+	public delegate void LogMessage(string message, ConsoleColor textColor, params object[] objects);
+	public delegate void LogChatMessage(string message);
+	
+	public class Server {
 		// TODO: Update version number with versions
-		private static string VERSION_NUMBER = "0.8.1";
+		private string VERSION_NUMBER = "0.8.1";
 
-		public static NetworkingSockets server;
-		private static uint pollGroup;
-		private static uint listenSocket;
-		public static bool RUNNING = true;
+		public LogMessage LogMessageCallback;
+		public LogChatMessage LogChatMessageCallback;
+
+		public NetworkingSockets server;
+		public FileServer fileServer;
+		private uint pollGroup;
+		private uint listenSocket;
+		public bool RUNNING { get; private set; } = true;
 
 		[JsonProperty("Server_Name")]
 		private static string SERVER_NAME = "";
@@ -127,73 +99,29 @@ namespace XLMultiplayerServer {
 		[JsonProperty("File_Max_Upload_Bytes_Per_Second")]
 		public static int FILE_MAX_UPLOAD = 4000000;
 
-		public static Player[] players { get; private set; } = new Player[MAX_PLAYERS];
-		private static int total_players = 0;
+		public Player[] players { get; private set; }
+		private int total_players = 0;
 
-		private static string sep = Path.DirectorySeparatorChar.ToString();
+		private string sep = Path.DirectorySeparatorChar.ToString();
 		
-		private static byte[] mapListBytes = null;
-		private static Dictionary<string, string> mapList = new Dictionary<string, string>();
-		private static Dictionary<string, int> mapVotes = new Dictionary<string, int>();
+		private byte[] mapListBytes = null;
+		private Dictionary<string, string> mapList = new Dictionary<string, string>();
+		private Dictionary<string, int> mapVotes = new Dictionary<string, int>();
 
-		private static Stopwatch mapVoteTimer = new Stopwatch();
+		private Stopwatch mapVoteTimer = new Stopwatch();
 
-		private static string currentMapHash = "1";
+		private string currentMapHash = "1";
 
-		public static List<string> bannedIPs = new List<string>();
-		public static byte[] motdBytes = null;
+		public List<string> bannedIPs = new List<string>();
+		public byte[] motdBytes = null;
+		public string motdString = "";
 
-		public static int Main(String[] args) {
-			Console.ForegroundColor = ConsoleColor.White;
-			Console.BackgroundColor = ConsoleColor.Black;
-
-			Console.WriteLine("Starting server initialization");
-
-			if (File.Exists(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json")) {
-				JsonConvert.DeserializeObject<Server>(File.ReadAllText(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json"));
-				players = new Player[MAX_PLAYERS];
-			} else {
-				Console.WriteLine("Could not find server config file");
-				Console.In.Read();
-				return 0;
-			}
-
-			if (ENFORCE_MAPS) {
-				mapListBytes = GenerateMapList();
-
-				if (mapListBytes == null) {
-					return 0;
-				}
-			}
-
-			if (!defaultMOTD.Equals("")) {
-				byte[] defaultMOTDBytes = ProcessMessageCommand(defaultMOTD);
-				if(defaultMOTDBytes != null) {
-					motdBytes = defaultMOTDBytes;
-				}
-			}
-
-			if (File.Exists("ipban.txt")) {
-				string ipBanList = File.ReadAllText("ipban.txt");
-				string[] readBannedIPs = ipBanList.Split('\n');
-				bannedIPs.AddRange(readBannedIPs);
-			}
-
-			var serverTask = Task.Run(() => ServerLoop());
-
-			Thread fileServerThread = new Thread(FileServer.ServerLoop);
-			fileServerThread.IsBackground = true;
-			fileServerThread.Start();
-
-			Task.Run(() => CommandLoop());
-
-			Console.WriteLine("Server initialization finished");
-
-			serverTask.Wait();
-			return 0;
+		public Server(LogMessage logCallback, LogChatMessage logChatCallback) {
+			LogMessageCallback = logCallback;
+			LogChatMessageCallback = logChatCallback;
 		}
 
-		static string CalculateMD5(string filename) {
+		public static string CalculateMD5(string filename) {
 			using (var md5 = MD5.Create()) {
 				using (var stream = File.OpenRead(filename)) {
 					byte[] hash = null;
@@ -210,7 +138,28 @@ namespace XLMultiplayerServer {
 			}
 		}
 
-		private static byte[] GenerateMapList() {
+		public void LoadMapList() {
+			if (!mapVoteTimer.IsRunning) {
+				byte[] oldBytes = mapListBytes;
+				mapListBytes = GenerateMapList();
+
+				if (mapListBytes == null) {
+					mapListBytes = oldBytes;
+					return;
+				}
+
+				foreach (Player player in players) {
+					if(player != null) {
+						server.SendMessageToConnection(player.connection, mapListBytes);
+						player.currentVote = "current";
+					}
+				}
+			} else {
+				LogMessageCallback("You can't reload the maps during a vote to change", ConsoleColor.Red);
+			}
+		}
+
+		private byte[] GenerateMapList() {
 			mapList.Clear();
 
 			mapList.Add("0", "Courthouse");
@@ -219,41 +168,34 @@ namespace XLMultiplayerServer {
 
 			if (mapsDir == "") {
 				mapsDir = Directory.GetCurrentDirectory() + sep + "Maps";
-				Console.WriteLine($"No maps folder set so using {mapsDir}");
+				LogMessageCallback($"No maps folder set so using {mapsDir}", ConsoleColor.White);
 			}
 
 			if (Directory.Exists(mapsDir)) {
 				string[] files = Directory.GetFiles(mapsDir);
 				if (files.Length < 1) {
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine("\nWARNING: FAILED TO FIND ANY CUSTOM MAPS IN THE MAPS DIRECTORY ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n");
-					Console.ForegroundColor = ConsoleColor.White;
+					LogMessageCallback("\nWARNING: FAILED TO FIND ANY CUSTOM MAPS IN THE MAPS DIRECTORY ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n", ConsoleColor.Yellow);
 				} else {
-					Console.WriteLine("Begin hashing maps\n");
 					foreach (string file in files) {
 						string hash = CalculateMD5(file);
 						try {
 							mapList.Add(hash, Path.GetFileName(file));
-							Console.WriteLine("Adding map: " + Path.GetFileName(file) + ", with hash: " + hash + " to servers map list\n");
+							LogMessageCallback("Adding map: " + Path.GetFileName(file) + ", with hash: " + hash + " to servers map list\n", ConsoleColor.White);
 						} catch (ArgumentException) {
-							Console.ForegroundColor = ConsoleColor.Yellow;
-							Console.WriteLine("**WARNING** MAP " + Path.GetFileName(file) + " HASH OVERLAPS WITH " + mapList[hash] + " PLEASE DM ME TO LET ME KNOW\n");
-							Console.ForegroundColor = ConsoleColor.White;
+							LogMessageCallback("**WARNING** MAP " + Path.GetFileName(file) + " HASH OVERLAPS WITH " + mapList[hash] + " PLEASE DM ME TO LET ME KNOW\n", ConsoleColor.Yellow);
 						}
 					}
-					Console.WriteLine("Finished hashing maps");
+					LogMessageCallback("Finished hashing maps", ConsoleColor.White);
 				}
 			} else {
-				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine("\nWARNING: FAILED TO FIND MAPS DIRECTORY \"{0}\" SO ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n", mapsDir);
-				Console.ForegroundColor = ConsoleColor.White;
+				LogMessageCallback("\nWARNING: FAILED TO FIND MAPS DIRECTORY \"{0}\" SO ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n", ConsoleColor.Yellow, mapsDir);
 			}
 
 			byte[] mapListBytes = GetMapListBytes();
 			return mapListBytes;
 		}
 
-		private static byte[] GetMapListBytes() {
+		private byte[] GetMapListBytes() {
 			List<byte> mapListBytes = new List<byte>();
 
 			mapListBytes.Add((byte)OpCode.MapList);
@@ -273,7 +215,7 @@ namespace XLMultiplayerServer {
 			return mapListBytes.ToArray();
 		}
 
-		private static byte[] GetCurrentMapHashMessage() {
+		private byte[] GetCurrentMapHashMessage() {
 			byte[] mapHashBytes = ASCIIEncoding.ASCII.GetBytes(currentMapHash);
 			byte[] mapNameBytes = ASCIIEncoding.ASCII.GetBytes(mapList[currentMapHash]);
 
@@ -287,7 +229,7 @@ namespace XLMultiplayerServer {
 			return newMapMessage;
 		}
 
-		public static void CommandLoop() {
+		public void CommandLoop() {
 			while (RUNNING) {
 				string input = Console.ReadLine();
 
@@ -298,37 +240,26 @@ namespace XLMultiplayerServer {
 					int kickID = -1;
 					if (Int32.TryParse(kickIDString, out kickID)) {
 						if (players[kickID] != null) {
-							Console.WriteLine("Kicking player {0}", kickID);
+							LogMessageCallback("Kicking player {0}", ConsoleColor.White, kickID);
 							RemovePlayer(players[kickID].connection, kickID, true);
 						}
 					} else {
-						Console.WriteLine("Invalid player ID");
+						LogMessageCallback("Invalid player ID", ConsoleColor.White);
 					}
 				} else if (input.ToLower().StartsWith("ban")) {
 					string banIDString = input.ToLower().Replace("ban ", "");
 					int banID = -1;
 					if (Int32.TryParse(banIDString, out banID)) {
-						if (players[banID] != null) {
-							Console.WriteLine("Banning player {0} IP {1}", banID, players[banID].ipAddr.GetIP());
-							bannedIPs.Add(players[banID].ipAddr.GetIP());
-							RemovePlayer(players[banID].connection, banID, true);
-
-							string ipBanString = "";
-							foreach (string ip in bannedIPs) {
-								ipBanString += ip + "\n";
-							}
-
-							File.WriteAllText("ipban.txt", ipBanString);
-						}
+						BanPlayer(banID);
 					} else {
-						Console.WriteLine("Invalid player ID");
+						LogMessageCallback("Invalid player ID", ConsoleColor.White);
 					}
 				} else if (input.ToLower().StartsWith("msg")) {
 					byte[] messageBytes = ProcessMessageCommand(input);
 					if (messageBytes != null) {
 						foreach(Player player in players) {
 							if(player != null) {
-								FileServer.server.SendMessageToConnection(player.fileConnection, messageBytes, SendFlags.Reliable);
+								fileServer.server.SendMessageToConnection(player.fileConnection, messageBytes, SendFlags.Reliable);
 							}
 						}
 					}
@@ -341,7 +272,7 @@ namespace XLMultiplayerServer {
 			}
 		}
 
-		public static byte[] ProcessMessageCommand(string input) {
+		public byte[] ProcessMessageCommand(string input) {
 			//msg:duration:color content of message here
 			//   - duration/color optional parameters so default duration is 10 seconds, default color ff00ff
 			string[] msgParams = input.Split(new char[] { ' ' }, 2);
@@ -377,8 +308,13 @@ namespace XLMultiplayerServer {
 					msgColor = msgSettings[2];
 				}
 			}
-			
-			string messageText = $"<b><color=#{msgColor}>{msgParams[1]}</color></b>";
+
+
+			if (input.ToLower().StartsWith("motd")) {
+				motdString = RemoveMarkup(msgParams[1]);
+			}
+
+			string messageText = $"<b><color=#{msgColor}>{RemoveMarkup(msgParams[1])}</color></b>";
 			byte[] messageBytes = new byte[messageText.Length + 5];
 			messageBytes[0] = (byte)OpCode.ServerMessage;
 			Array.Copy(BitConverter.GetBytes(duration * 1000), 0, messageBytes, 1, 4);
@@ -387,7 +323,7 @@ namespace XLMultiplayerServer {
 			return messageBytes;
 		}
 
-		public static void ProcessMessage(byte[] buffer, byte fromID, NetworkingSockets server) {
+		public void ProcessMessage(byte[] buffer, byte fromID, NetworkingSockets server) {
 			if(!Enum.IsDefined(typeof(OpCode), (OpCode)buffer[0]) || players[fromID] == null) {
 				return;
 			}
@@ -396,12 +332,13 @@ namespace XLMultiplayerServer {
 
 			switch ((OpCode)buffer[0]) {
 				case OpCode.Settings:
-					Thread usernameThread = new Thread(new ParameterizedThreadStart(Server.HandleUsername));
-					usernameThread.IsBackground = true;
+					Thread usernameThread = new Thread(new ParameterizedThreadStart(HandleUsername)) {
+						IsBackground = true
+					};
 					usernameThread.Start(Tuple.Create(buffer, fromID));
 					break;
 				case OpCode.Texture: {
-						Console.WriteLine("Received Texture from " + fromID);
+						LogMessageCallback("Received Texture from " + fromID, ConsoleColor.White);
 						Player player = players[fromID];
 						if (player != null && player.playerID == fromID) {
 							player.AddGear(buffer);
@@ -409,9 +346,9 @@ namespace XLMultiplayerServer {
 								foreach (Player player2 in players) {
 									if (player2 != null && player2.playerID != fromID) {
 										foreach (KeyValuePair<string, byte[]> value in player.gear) {
-											FileServer.server.SendMessageToConnection(player2.fileConnection, value.Value, SendFlags.Reliable);
+											fileServer.server.SendMessageToConnection(player2.fileConnection, value.Value, SendFlags.Reliable);
 										}
-										FileServer.server.FlushMessagesOnConnection(player2.fileConnection);
+										fileServer.server.FlushMessagesOnConnection(player2.fileConnection);
 									}
 								}
 							}
@@ -430,7 +367,7 @@ namespace XLMultiplayerServer {
 									int bytesPending = status.pendingReliable + status.sentUnackedReliable;
 
 									if (reliable && bytesPending >= MAX_BYTES_PENDING) {
-										Console.WriteLine($"Sending animation unreliably to ({player.playerID}) because pending bytes is higher than max");
+										LogMessageCallback($"Sending animation unreliably to ({player.playerID}) because pending bytes is higher than max", ConsoleColor.White);
 										reliable = false;
 									}
 								}
@@ -442,7 +379,8 @@ namespace XLMultiplayerServer {
 					break;
 				case OpCode.Chat:
 					string contents = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
-					Console.WriteLine("Chat Message from {0} saying: {1}", fromID, contents);
+					LogMessageCallback("Chat Message from {0} saying: {1}", ConsoleColor.White, fromID, contents);
+					if (LogChatMessageCallback != null) LogChatMessageCallback($"{RemoveMarkup(players[fromID].username)}({fromID}): {contents}");
 
 					byte[] sendBuffer = new byte[buffer.Length + 1];
 					Array.Copy(buffer, 0, sendBuffer, 0, buffer.Length);
@@ -462,7 +400,7 @@ namespace XLMultiplayerServer {
 							vote = mapList.ContainsKey(vote) && mapList[vote].Equals(currentMapHash) ? "current" : vote;
 							players[fromID].currentVote = vote;
 
-							Console.WriteLine("{0} voted for the map {1}", fromID, mapList.ContainsKey(vote) ? mapList[vote] : vote);
+							LogMessageCallback("{0} voted for the map {1}", ConsoleColor.White, fromID, mapList.ContainsKey(vote) ? mapList[vote] : vote);
 						}
 					}
 					break;
@@ -472,25 +410,25 @@ namespace XLMultiplayerServer {
 			}
 		}
 
-		public static void StatusCallbackFunction(ref StatusInfo info, IntPtr context) {
+		public void StatusCallbackFunction(ref StatusInfo info, IntPtr context) {
 			switch (info.connectionInfo.state) {
 				case ConnectionState.None:
 					break;
 
 				case ConnectionState.Connecting: {
-						if (info.connectionInfo.listenSocket != listenSocket && info.connectionInfo.listenSocket == FileServer.listenSocket) {
-							FileServer.StatusCallbackFunction(ref info, context);
+						if (info.connectionInfo.listenSocket != listenSocket && info.connectionInfo.listenSocket == fileServer.listenSocket) {
+							fileServer.StatusCallbackFunction(ref info, context);
 							break;
 						} else if (info.connectionInfo.listenSocket != listenSocket) {
-							Console.WriteLine("refusing connection invalid listen socket");
+							LogMessageCallback("refusing connection invalid listen socket", ConsoleColor.White);
 							server.CloseConnection(info.connection);
 							break;
 						}
 
-						Console.WriteLine("connecting on game server");
+						LogMessageCallback("connecting on game server", ConsoleColor.White);
 
 						if (bannedIPs.Contains(info.connectionInfo.address.GetIP())) {
-							Console.WriteLine("Ban player attempted to connect to the server, IP: {0}", info.connectionInfo.address.GetIP());
+							LogMessageCallback("Ban player attempted to connect to the server, IP: {0}", ConsoleColor.White, info.connectionInfo.address.GetIP());
 							server.CloseConnection(info.connection);
 						} else {
 							server.AcceptConnection(info.connection);
@@ -500,21 +438,21 @@ namespace XLMultiplayerServer {
 					break;
 
 				case ConnectionState.Connected: {
-						if (info.connectionInfo.listenSocket != listenSocket && info.connectionInfo.listenSocket == FileServer.listenSocket) {
-							FileServer.StatusCallbackFunction(ref info, context);
+						if (info.connectionInfo.listenSocket != listenSocket && info.connectionInfo.listenSocket == fileServer.listenSocket) {
+							fileServer.StatusCallbackFunction(ref info, context);
 							break;
 						} else if (info.connectionInfo.listenSocket != listenSocket) {
-							Console.WriteLine("refusing connection invalid listen socket");
+							LogMessageCallback("refusing connection invalid listen socket", ConsoleColor.White);
 							server.CloseConnection(info.connection);
 							break;
 						}
-						Console.WriteLine("connected on game server");
+						LogMessageCallback("connected on game server", ConsoleColor.White);
 
 						bool openSlot = false;
 
 						for (byte i = 0; i < MAX_PLAYERS; i++) {
 							if (players[i] == null) {
-								Console.WriteLine("Client connected - IP: " + info.connectionInfo.address.GetIP() + " ID: " + i.ToString());
+								LogMessageCallback("Client connected - IP: " + info.connectionInfo.address.GetIP() + " ID: " + i.ToString(), ConsoleColor.White);
 								players[i] = new Player(i, info.connection, info.connectionInfo.address);
 
 								byte[] versionNumber = ASCIIEncoding.ASCII.GetBytes(VERSION_NUMBER);
@@ -561,7 +499,7 @@ namespace XLMultiplayerServer {
 			}
 		}
 
-		public static void MessageCallbackFunction(in NetworkingMessage netMessage) {
+		public void MessageCallbackFunction(in NetworkingMessage netMessage) {
 			byte[] messageData = new byte[netMessage.length];
 			netMessage.CopyTo(messageData);
 
@@ -577,7 +515,34 @@ namespace XLMultiplayerServer {
 				ProcessMessage(messageData, sendingPlayer.playerID, server);
 		}
 
-		public static void RemovePlayer(uint connection, int ID = -1, bool kicked = false) {
+		public void BanPlayer(int banID) {
+			if (players[banID] != null) {
+				LogMessageCallback("Banning player {0} IP {1}", ConsoleColor.White, banID, players[banID].ipAddr.GetIP());
+				bannedIPs.Add(players[banID].ipAddr.GetIP());
+				RemovePlayer(players[banID].connection, banID, true);
+
+				string ipBanString = "";
+				foreach (string ip in bannedIPs) {
+					ipBanString += ip + "\n";
+				}
+
+				File.WriteAllText("ipban.txt", ipBanString);
+			}
+		}
+		
+		public void RemoveBan(string ip) {
+			LogMessageCallback("Removing ban for IP {0}", ConsoleColor.White, ip);
+			bannedIPs.Remove(ip);
+
+			string ipBanString = "";
+			foreach (string bannedIP in bannedIPs) {
+				ipBanString += bannedIP + "\n";
+			}
+
+			File.WriteAllText("ipban.txt", ipBanString);
+		}
+
+		public void RemovePlayer(uint connection, int ID = -1, bool kicked = false) {
 			Player removedPlayer = null;
 			if (ID == -1) {
 				foreach (Player player in players) {
@@ -593,10 +558,10 @@ namespace XLMultiplayerServer {
 			if (removedPlayer == null) return;
 
 			server.CloseConnection(removedPlayer.connection);
-			FileServer.server.CloseConnection(removedPlayer.fileConnection);
+			fileServer.server.CloseConnection(removedPlayer.fileConnection);
 
 			if (removedPlayer != null) {
-				if (!kicked) Console.WriteLine("Client disconnected - ID: " + removedPlayer.playerID);
+				if (!kicked) LogMessageCallback("Client disconnected - ID: " + removedPlayer.playerID, ConsoleColor.White);
 				foreach (Player player in players) {
 					if (player != null && player != removedPlayer) {
 						server.SendMessageToConnection(player.connection, new byte[] { (byte)OpCode.Disconnect, removedPlayer.playerID }, SendFlags.Reliable | SendFlags.NoNagle);
@@ -606,7 +571,38 @@ namespace XLMultiplayerServer {
 			}
 		}
 
-		public static void ServerLoop() {
+		public void ServerLoop() {
+			LogMessageCallback("Starting server initialization", ConsoleColor.White);
+
+			if (File.Exists(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json")) {
+				JsonConvert.DeserializeObject<Server>(File.ReadAllText(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json"));
+				players = new Player[MAX_PLAYERS];
+			} else {
+				LogMessageCallback("Could not find server config file", ConsoleColor.White);
+				Console.In.Read();
+				return;
+			}
+
+			players = new Player[MAX_PLAYERS];
+
+			LoadMapList();
+			if (mapListBytes == null && ENFORCE_MAPS) return;
+
+			if (!defaultMOTD.Equals("")) {
+				byte[] defaultMOTDBytes = ProcessMessageCommand(defaultMOTD);
+				if (defaultMOTDBytes != null) {
+					motdBytes = defaultMOTDBytes;
+				}
+			}
+
+			if (File.Exists("ipban.txt")) {
+				string ipBanList = File.ReadAllText("ipban.txt");
+				string[] readBannedIPs = ipBanList.Split('\n');
+				bannedIPs.AddRange(readBannedIPs);
+			}
+
+			LogMessageCallback("Finished server initialization", ConsoleColor.White);
+
 			Library.Initialize();
 
 			server = new NetworkingSockets();
@@ -615,7 +611,7 @@ namespace XLMultiplayerServer {
 			NetworkingUtils utils = new NetworkingUtils();
 
 			utils.SetDebugCallback(DebugType.Important, (type, message) => {
-				Console.WriteLine("Valve Debug - Type: {0}, Message: {1}", type, message);
+				LogMessageCallback("Valve Debug - Type: {0}, Message: {1}", ConsoleColor.White, type, message);
 			});
 			
 			address.SetAddress("::0", port);
@@ -633,7 +629,7 @@ namespace XLMultiplayerServer {
 				utils.SetConfigurationValue(ConfigurationValue.SendBufferSize, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&sendBufferSize));
 			}
 
-			Console.WriteLine($"Server {SERVER_NAME} started Listening on port {port} for maximum of {MAX_PLAYERS} players\nEnforcing maps is {ENFORCE_MAPS}");
+			LogMessageCallback($"Server {SERVER_NAME} started Listening on port {port} for maximum of {MAX_PLAYERS} players\nEnforcing maps is {ENFORCE_MAPS}", ConsoleColor.White);
 
 			StartAnnouncing();
 
@@ -669,7 +665,7 @@ namespace XLMultiplayerServer {
 							}
 						}
 
-						//Console.WriteLine("Recieved packet from connection {0}, sending player null: {1}", netMessage.connection, sendingPlayer == null);
+						//LogMessageCallback("Recieved packet from connection {0}, sending player null: {1}", netMessage.connection, sendingPlayer == null);
 
 						if (sendingPlayer != null)
 							ProcessMessage(messageData, sendingPlayer.playerID, server);
@@ -678,7 +674,7 @@ namespace XLMultiplayerServer {
 					}
 				}
 #endif
-				
+
 				mapVotes.Clear();
 				total_players = 0;
 				foreach (Player player in players) {
@@ -686,7 +682,7 @@ namespace XLMultiplayerServer {
 						total_players++;
 
 						if (player.timeoutWatch.ElapsedMilliseconds > 15000) {
-							Console.WriteLine($"{player.playerID} has been timed out for not responding for 15 seconds");
+							LogMessageCallback($"{player.playerID} has been timed out for not responding for 15 seconds", ConsoleColor.White);
 
 							RemovePlayer(player.connection, player.playerID, true);
 						}
@@ -761,7 +757,8 @@ namespace XLMultiplayerServer {
 			Library.Deinitialize();
 		}
 
-		private static string RemoveMarkup(string msg) {
+		// TODO: Move this to utils class
+		public static string RemoveMarkup(string msg) {
 			string old;
 
 			do {
@@ -772,7 +769,7 @@ namespace XLMultiplayerServer {
 			return msg;
 		}
 
-		public static void HandleUsername(object data) {
+		private void HandleUsername(object data) {
 			Tuple<byte[], byte> input = (Tuple<byte[], byte>)data;
 
 			byte[] buffer = input.Item1;
@@ -842,7 +839,7 @@ namespace XLMultiplayerServer {
 						username = sentFancyName;
 					}
 				}
-				Console.WriteLine($"Error checking username: {response.StatusCode}");
+				LogMessageCallback($"Error checking username: {response.StatusCode}", ConsoleColor.White);
 			} else {
 				var newTask = response.Content.ReadAsStringAsync();
 				newTask.Wait();
@@ -863,7 +860,7 @@ namespace XLMultiplayerServer {
 				}
 			}
 
-			Console.WriteLine("Connection {0}'s username is {1}", fromID, RemoveMarkup(username));
+			LogMessageCallback("Connection {0}'s username is {1}", ConsoleColor.White, fromID, RemoveMarkup(username));
 
 			if (players[fromID] != null) {
 				players[fromID].username = username;
@@ -889,7 +886,7 @@ namespace XLMultiplayerServer {
 			}
 		}
 
-		private static async void StartAnnouncing() {
+		private async void StartAnnouncing() {
 			var client = new HttpClient();
 			while (true && API_KEY != "") {
 				try {
@@ -913,7 +910,7 @@ namespace XLMultiplayerServer {
 
 					var response = await client.PostAsync("https://davisellwood-site.herokuapp.com/api/sendserverinfo/", content);
 					if (response.StatusCode != HttpStatusCode.OK) {
-						Console.WriteLine($"Error announcing: {response.StatusCode}");
+						LogMessageCallback($"Error announcing: {response.StatusCode}", ConsoleColor.White);
 					}
 				} catch (Exception e) {
 					client = new HttpClient();
