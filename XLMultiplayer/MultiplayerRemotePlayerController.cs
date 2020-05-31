@@ -317,6 +317,72 @@ namespace XLMultiplayer {
 			this.replayAnimationFrames = this.replayAnimationFrames.OrderBy(f => f.animFrame).ToList();
 		}
 
+		public void UnpackSounds(byte[] soundBytes) {
+			int readBytes = 0;
+			List<List<AudioOneShotEvent>> newOneShots = new List<List<AudioOneShotEvent>>();
+			List<List<AudioClipEvent>> newClipEvents = new List<List<AudioClipEvent>>();
+			List<List<AudioVolumeEvent>> newAudioEvents = new List<List<AudioVolumeEvent>>();
+			List<List<AudioPitchEvent>> newPitchEvents = new List<List<AudioPitchEvent>>();
+			List<List<AudioCutoffEvent>> newCutoffEvents = new List<List<AudioCutoffEvent>>();
+
+			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
+				//newAudioBytes.AddRange(BitConverter.GetBytes(newOneShotEvents[i].Count));
+				//newAudioBytes.AddRange(newOneShotBytes[i]);
+
+				//newAudioBytes.AddRange(BitConverter.GetBytes(newClipEvents[i].Count));
+				//newAudioBytes.AddRange(newClipBytes[i]);
+
+				//newAudioBytes.AddRange(BitConverter.GetBytes(newVolumeEvents[i].Count));
+				//newAudioBytes.AddRange(newVolumeBytes[i]);
+
+				//newAudioBytes.AddRange(BitConverter.GetBytes(newPitchEvents[i].Count));
+				//newAudioBytes.AddRange(newPitchBytes[i]);
+
+				//newAudioBytes.AddRange(BitConverter.GetBytes(newCutoffEvents[i].Count));
+				//newAudioBytes.AddRange(newCutoffBytes[i]);
+				
+				newOneShots.Add(new List<AudioOneShotEvent>());
+
+				// TODO: Load other audio events
+				// TODO: Fix playback(only first one shot plays)
+				// TODO: Add audio to replays
+				// TODO: Be smarter
+
+				int oneShots = BitConverter.ToInt32(soundBytes, readBytes);
+				readBytes += 4;
+				for (int j = 0; j < oneShots; j++) {
+					newOneShots[i].Add(new AudioOneShotEvent());
+					newOneShots[i][j].clipName = MultiplayerUtils.audioClipNames[BitConverter.ToUInt16(soundBytes, readBytes)];
+					newOneShots[i][j].time = BitConverter.ToSingle(soundBytes, readBytes + 2);
+					newOneShots[i][j].volumeScale = BitConverter.ToSingle(soundBytes, readBytes + 6);
+
+					readBytes += 10;
+				}
+
+				int clipEvents = BitConverter.ToInt32(soundBytes, readBytes);
+				readBytes += 4;
+				readBytes += 7 * clipEvents;
+
+				int volumeEvents = BitConverter.ToInt32(soundBytes, readBytes);
+				readBytes += 4;
+				readBytes += 8 * volumeEvents;
+
+				int pitchEvents = BitConverter.ToInt32(soundBytes, readBytes);
+				readBytes += 4;
+				readBytes += 8 * pitchEvents;
+
+				int cutoffEvents = BitConverter.ToInt32(soundBytes, readBytes);
+				readBytes += 4;
+				readBytes += 8 * cutoffEvents;
+			}
+
+			for (int i = 0; i < newOneShots.Count; i++) {
+				if (newOneShots[i] != null && newOneShots[i].Count > 0) replayController.AudioEventPlayers[i].LoadOneShotEvents(newOneShots[i]);
+
+				if (newOneShots[i] != null && newOneShots[i].Count > 0) Traverse.Create(replayController.AudioEventPlayers[i]).Method("DoOneShotEvents", newOneShots[i][0].time).GetValue();
+			}
+		}
+
 		// TODO: refactor all this shit, I'm sure there's a better way
 		public void LerpNextFrame(bool inReplay, bool recursive = false, float offset = 0, int recursionLevel = 0) {
 			if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) return;

@@ -20,6 +20,9 @@ namespace XLMultiplayer {
 		private static Stopwatch hashingWatch;
 		private static int duplicates = 0;
 
+		public static List<string> audioClipNames = new List<string>();
+		public static List<string> audioPlayerNames = new List<string>();
+
 		public static string CalculateMD5Bytes(byte[] bytes) {
 			using (var md5 = MD5.Create()) {
 				byte[] hash = null;

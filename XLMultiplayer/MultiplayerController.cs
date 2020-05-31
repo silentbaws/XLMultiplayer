@@ -1,5 +1,6 @@
 ﻿#define VALVESOCKETS_SPAN
 
+using Harmony12;
 using Newtonsoft.Json;
 using ReplayEditor;
 using System;
@@ -51,6 +52,7 @@ namespace XLMultiplayer {
 		MapVote = 8,
 		MapList = 9,
 		ServerMessage = 10,
+		Sound = 11,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -154,6 +156,22 @@ namespace XLMultiplayer {
 			uiBox = ModMenu.Instance.RegisterModMaker("Silentbaws", "Silentbaws", 5);
 			uiBox.AddCustom("Player List", PlayerListOnGUI, () => isConnected);
 			uiBox.AddCustom("Network Stats", NetworkStatsOnGUI, () => isConnected);
+
+
+			if (MultiplayerUtils.audioClipNames.Count == 0) {
+				var clipDict = Traverse.Create(SoundManager.Instance).Field("clipForName").GetValue<Dictionary<string, AudioClip>>();
+				foreach (var KVP in clipDict) {
+					MultiplayerUtils.audioClipNames.Add(KVP.Key);
+				}
+
+				foreach (ReplayAudioEventPlayer audioPlayer in ReplayEditorController.Instance.playbackController.AudioEventPlayers) {
+					AudioSource newSource = Traverse.Create(audioPlayer).Property("audioSource").GetValue<AudioSource>();
+					if (newSource != null) MultiplayerUtils.audioPlayerNames.Add(newSource.name);
+				}
+
+				MultiplayerUtils.audioClipNames.Sort();
+				MultiplayerUtils.audioPlayerNames.Sort();
+			}
 		}
 
 		private void InitializeStyle() {
@@ -739,6 +757,10 @@ namespace XLMultiplayer {
 
 					this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(animationData);
 					break;
+				case OpCode.Sound:
+					byte[] decompressedSounds = Decompress(newBuffer);
+					this.remoteControllers.Find(p => p.playerID == playerID).UnpackSounds(decompressedSounds);
+					break;
 				case OpCode.Chat:
 					MultiplayerRemotePlayerController remoteSender = this.remoteControllers.Find(p => p.playerID == playerID);
 					string cleanedMessage = RemoveMarkup(ASCIIEncoding.ASCII.GetString(newBuffer));
@@ -794,7 +816,13 @@ namespace XLMultiplayer {
 		}
 
 		public void SendUpdate() {
+			if (this.playerController == null) return;
+
 			Tuple<byte[], bool> animationData = this.playerController.PackAnimations();
+
+			byte[] soundData = this.playerController.PackSounds();
+
+			if (soundData != null) SendBytesRaw(soundData, true);
 
 			if (animationData == null) return;
 
@@ -955,7 +983,7 @@ namespace XLMultiplayer {
 
 		public static byte[] Compress(byte[] data) {
 			MemoryStream output = new MemoryStream();
-			using (DeflateStream dstream = new DeflateStream(output, CompressionLevel.Optimal)) {
+			using (DeflateStream dstream = new DeflateStream(output, System.IO.Compression.CompressionLevel.Optimal)) {
 				dstream.Write(data, 0, data.Length);
 			}
 			return output.ToArray();

@@ -212,6 +212,25 @@ namespace XLMultiplayer {
 				this.headMPTex = new MultiplayerLocalTexture(isCustom, pathHead, MPTextureType.Head, this.debugWriter);
 				this.bodyMPTex = new MultiplayerLocalTexture(isCustom, pathBody, MPTextureType.Body, this.debugWriter);
 			}
+			
+			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
+				if (lastSentOneShots.Count < i + 1)
+					lastSentOneShots.Add(null);
+				if (lastSentClipEvents.Count < i + 1)
+					lastSentClipEvents.Add(null);
+				if (lastSentVolumeEvents.Count < i + 1)
+					lastSentVolumeEvents.Add(null);
+				if (lastSentPitchEvents.Count < i + 1)
+					lastSentPitchEvents.Add(null);
+				if (lastSentCutoffEvents.Count < i + 1)
+					lastSentCutoffEvents.Add(null);
+
+				lastSentOneShots[i] = ReplayRecorder.Instance.oneShotEvents != null && ReplayRecorder.Instance.oneShotEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) && ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]].Count > 0 ? ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]][ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]].Count - 1] : null;
+				lastSentClipEvents[i] = ReplayRecorder.Instance.clipEvents != null && ReplayRecorder.Instance.clipEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) && ReplayRecorder.Instance.clipEvents[MultiplayerUtils.audioPlayerNames[i]].Count > 0 ? ReplayRecorder.Instance.clipEvents[MultiplayerUtils.audioPlayerNames[i]][ReplayRecorder.Instance.clipEvents[MultiplayerUtils.audioPlayerNames[i]].Count - 1] : null;
+				lastSentVolumeEvents[i] = ReplayRecorder.Instance.volumeEvents != null && ReplayRecorder.Instance.volumeEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) && ReplayRecorder.Instance.volumeEvents[MultiplayerUtils.audioPlayerNames[i]].Count > 0 ? ReplayRecorder.Instance.volumeEvents[MultiplayerUtils.audioPlayerNames[i]][ReplayRecorder.Instance.volumeEvents[MultiplayerUtils.audioPlayerNames[i]].Count - 1] : null;
+				lastSentPitchEvents[i] = ReplayRecorder.Instance.pitchEvents != null && ReplayRecorder.Instance.pitchEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) && ReplayRecorder.Instance.pitchEvents[MultiplayerUtils.audioPlayerNames[i]].Count > 0 ? ReplayRecorder.Instance.pitchEvents[MultiplayerUtils.audioPlayerNames[i]][ReplayRecorder.Instance.pitchEvents[MultiplayerUtils.audioPlayerNames[i]].Count - 1] : null;
+				lastSentCutoffEvents[i] = ReplayRecorder.Instance.cutoffEvents != null && ReplayRecorder.Instance.cutoffEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) && ReplayRecorder.Instance.cutoffEvents[MultiplayerUtils.audioPlayerNames[i]].Count > 0 ? ReplayRecorder.Instance.cutoffEvents[MultiplayerUtils.audioPlayerNames[i]][ReplayRecorder.Instance.cutoffEvents[MultiplayerUtils.audioPlayerNames[i]].Count - 1] : null;
+			}
 
 			this.debugWriter.WriteLine("Finished constructing local player");
 		}
@@ -290,6 +309,168 @@ namespace XLMultiplayer {
 			Array.Copy(BitConverter.GetBytes(ReplayRecorder.Instance.RecordedFrames[ReplayRecorder.Instance.RecordedFrames.Count - 1].time), 0, packed, transforms.Length + 1, 4);
 
 			return Tuple.Create<byte[], bool>(packed, useKey);
+		}
+
+		private List<AudioOneShotEvent> lastSentOneShots = new List<AudioOneShotEvent>();
+		private List<AudioClipEvent> lastSentClipEvents = new List<AudioClipEvent>();
+		private List<AudioVolumeEvent> lastSentVolumeEvents = new List<AudioVolumeEvent>();
+		private List<AudioPitchEvent> lastSentPitchEvents = new List<AudioPitchEvent>();
+		private List<AudioCutoffEvent> lastSentCutoffEvents = new List<AudioCutoffEvent>();
+
+		public byte[] PackSounds() {
+			List<List<AudioOneShotEvent>> newOneShotEvents = new List<List<AudioOneShotEvent>>();
+			List<List<AudioClipEvent>> newClipEvents = new List<List<AudioClipEvent>>();
+			List<List<AudioVolumeEvent>> newVolumeEvents = new List<List<AudioVolumeEvent>>();
+			List<List<AudioPitchEvent>> newPitchEvents = new List<List<AudioPitchEvent>>();
+			List<List<AudioCutoffEvent>> newCutoffEvents = new List<List<AudioCutoffEvent>>();
+			
+			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i ++) {
+				newOneShotEvents.Add(new List<AudioOneShotEvent>());
+				newClipEvents.Add(new List<AudioClipEvent>());
+				newVolumeEvents.Add(new List<AudioVolumeEvent>());
+				newPitchEvents.Add(new List<AudioPitchEvent>());
+				newCutoffEvents.Add(new List<AudioCutoffEvent>());
+				
+				if (lastSentOneShots.Count < i + 1)
+					lastSentOneShots.Add(null);
+				if (lastSentClipEvents.Count < i + 1)
+					lastSentClipEvents.Add(null);
+				if (lastSentVolumeEvents.Count < i + 1)
+					lastSentVolumeEvents.Add(null);
+				if (lastSentPitchEvents.Count < i + 1)
+					lastSentPitchEvents.Add(null);
+				if (lastSentCutoffEvents.Count < i + 1)
+					lastSentCutoffEvents.Add(null);
+
+				// Out of range exception
+				int previousOneShotIndex = lastSentOneShots[i] == null || !ReplayRecorder.Instance.oneShotEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentOneShots[i]);
+				int previousClipIndex = lastSentClipEvents[i] == null || !ReplayRecorder.Instance.clipEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.clipEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentClipEvents[i]);
+				int previousVolumeIndex = lastSentVolumeEvents[i] == null || !ReplayRecorder.Instance.volumeEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.volumeEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentVolumeEvents[i]);
+				int previousPitchIndex = lastSentPitchEvents[i] == null || !ReplayRecorder.Instance.pitchEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.pitchEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentPitchEvents[i]);
+				int previousCutoffIndex = lastSentCutoffEvents[i] == null || !ReplayRecorder.Instance.cutoffEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.cutoffEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentCutoffEvents[i]);
+				
+				if (ReplayRecorder.Instance.oneShotEvents != null && ReplayRecorder.Instance.oneShotEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i])) {
+					for (int j = previousOneShotIndex + 1; j < ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]].Count; j++) {
+						newOneShotEvents[i].Add(ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]][j]);
+					}
+				}
+				if (ReplayRecorder.Instance.clipEvents != null && ReplayRecorder.Instance.clipEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i])) {
+					for (int j = previousClipIndex + 1; j < ReplayRecorder.Instance.clipEvents[MultiplayerUtils.audioPlayerNames[i]].Count; j++) {
+						newClipEvents[i].Add(ReplayRecorder.Instance.clipEvents[MultiplayerUtils.audioPlayerNames[i]][j]);
+					}
+				}
+				if (ReplayRecorder.Instance.volumeEvents != null && ReplayRecorder.Instance.volumeEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i])) {
+					for (int j = previousVolumeIndex + 1; j < ReplayRecorder.Instance.volumeEvents[MultiplayerUtils.audioPlayerNames[i]].Count; j++) {
+						newVolumeEvents[i].Add(ReplayRecorder.Instance.volumeEvents[MultiplayerUtils.audioPlayerNames[i]][j]);
+					}
+				}
+				if (ReplayRecorder.Instance.pitchEvents != null && ReplayRecorder.Instance.pitchEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i])) {
+					for (int j = previousPitchIndex + 1; j < ReplayRecorder.Instance.pitchEvents[MultiplayerUtils.audioPlayerNames[i]].Count; j++) {
+						newPitchEvents[i].Add(ReplayRecorder.Instance.pitchEvents[MultiplayerUtils.audioPlayerNames[i]][j]);
+					}
+				}
+				if (ReplayRecorder.Instance.cutoffEvents != null && ReplayRecorder.Instance.cutoffEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i])) {
+					for (int j = previousCutoffIndex + 1; j < ReplayRecorder.Instance.cutoffEvents[MultiplayerUtils.audioPlayerNames[i]].Count; j++) {
+						newCutoffEvents[i].Add(ReplayRecorder.Instance.cutoffEvents[MultiplayerUtils.audioPlayerNames[i]][j]);
+					}
+				}
+			}
+
+			// strings can be grabbed as index from dictionary Traverse.Create(SoundManager.Instance).Field("clipForName").GetValue<Dictionary<string, AudioClip>>();
+			//foreach (var KVP in clipDict) {
+			//	UnityModManagerNet.UnityModManager.Logger.Log(KVP.Key);
+			//}
+
+			
+			List<List<byte>> newOneShotBytes = new List<List<byte>>();
+			List<List<byte>> newClipBytes = new List<List<byte>>();
+			List<List<byte>> newVolumeBytes = new List<List<byte>>();
+			List<List<byte>> newPitchBytes = new List<List<byte>>();
+			List<List<byte>> newCutoffBytes = new List<List<byte>>();
+
+			List<byte> newAudioBytes = new List<byte>();
+			
+			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
+				newOneShotBytes.Add(new List<byte>());
+				newClipBytes.Add(new List<byte>());
+				newVolumeBytes.Add(new List<byte>());
+				newPitchBytes.Add(new List<byte>());
+				newCutoffBytes.Add(new List<byte>());
+
+				lastSentOneShots[i] = newOneShotEvents[i].Count > 0 ? newOneShotEvents[i][newOneShotEvents[i].Count - 1] : lastSentOneShots[i];
+				lastSentClipEvents[i] = newClipEvents[i].Count > 0 ? newClipEvents[i][newClipEvents[i].Count - 1] : lastSentClipEvents[i];
+				lastSentVolumeEvents[i] = newVolumeEvents[i].Count > 0 ? newVolumeEvents[i][newVolumeEvents[i].Count - 1] : lastSentVolumeEvents[i];
+				lastSentPitchEvents[i] = newPitchEvents[i].Count > 0 ? newPitchEvents[i][newPitchEvents[i].Count - 1] : lastSentPitchEvents[i];
+				lastSentCutoffEvents[i] = newCutoffEvents[i].Count > 0 ? newCutoffEvents[i][newCutoffEvents[i].Count - 1] : lastSentCutoffEvents[i];
+				
+				// 21 audio event players
+				// 2 floats, 1 string
+				// 1 float, 1 string, 1 bool
+				// 3x 2 floats
+
+				for (int j = 0; j < newOneShotEvents[i].Count; j++) {
+					ushort clipNameIndex = (ushort)MultiplayerUtils.audioClipNames.FindIndex(c => c.Equals(newOneShotEvents[i][j].clipName));
+					float time = newOneShotEvents[i][j].time;
+					float volume = newOneShotEvents[i][j].volumeScale;
+
+					newOneShotBytes[i].AddRange(BitConverter.GetBytes(clipNameIndex));
+					newOneShotBytes[i].AddRange(BitConverter.GetBytes(time));
+					newOneShotBytes[i].AddRange(BitConverter.GetBytes(volume));
+				}
+				for (int j = 0; j < newClipEvents[i].Count; j++) {
+					ushort clipNameIndex = (ushort)MultiplayerUtils.audioClipNames.FindIndex(c => c.Equals(newClipEvents[i][j].clipName));
+					float time = newClipEvents[i][j].time;
+					byte playing = newClipEvents[i][j].isPlaying ? (byte)1 : (byte)0;
+
+					newClipBytes[i].AddRange(BitConverter.GetBytes(clipNameIndex));
+					newClipBytes[i].AddRange(BitConverter.GetBytes(time));
+					newClipBytes[i].Add(playing);
+				}
+				for (int j = 0; j < newVolumeEvents[i].Count; j++) {
+					float time = newVolumeEvents[i][j].time;
+					float volume = newVolumeEvents[i][j].volume;
+
+					newVolumeBytes[i].AddRange(BitConverter.GetBytes(time));
+					newVolumeBytes[i].AddRange(BitConverter.GetBytes(volume));
+				}
+				for (int j = 0; j < newPitchEvents[i].Count; j++) {
+					float time = newPitchEvents[i][j].time;
+					float pitch = newPitchEvents[i][j].pitch;
+
+					newPitchBytes[i].AddRange(BitConverter.GetBytes(time));
+					newPitchBytes[i].AddRange(BitConverter.GetBytes(pitch));
+				}
+				for (int j = 0; j < newCutoffEvents[i].Count; j++) {
+					float time = newCutoffEvents[i][j].time;
+					float cutoff = newCutoffEvents[i][j].cutoff;
+
+					newCutoffBytes[i].AddRange(BitConverter.GetBytes(time));
+					newCutoffBytes[i].AddRange(BitConverter.GetBytes(cutoff));
+				}
+				
+				newAudioBytes.AddRange(BitConverter.GetBytes(newOneShotEvents[i].Count));
+				newAudioBytes.AddRange(newOneShotBytes[i]);
+
+				newAudioBytes.AddRange(BitConverter.GetBytes(newClipEvents[i].Count));
+				newAudioBytes.AddRange(newClipBytes[i]);
+
+				newAudioBytes.AddRange(BitConverter.GetBytes(newVolumeEvents[i].Count));
+				newAudioBytes.AddRange(newVolumeBytes[i]);
+
+				newAudioBytes.AddRange(BitConverter.GetBytes(newPitchEvents[i].Count));
+				newAudioBytes.AddRange(newPitchBytes[i]);
+
+				newAudioBytes.AddRange(BitConverter.GetBytes(newCutoffEvents[i].Count));
+				newAudioBytes.AddRange(newCutoffBytes[i]);
+			}
+
+			byte[] compressedAudio = MultiplayerController.Compress(newAudioBytes.ToArray());
+
+			byte[] sendPacket = new byte[compressedAudio.Length + 1];
+			sendPacket[0] = (byte)OpCode.Sound;
+			Array.Copy(compressedAudio, 0, sendPacket, 1, compressedAudio.Length);
+
+			return sendPacket;
 		}
 	}
 }

@@ -16,6 +16,7 @@ using System.Threading.Tasks;
 using Valve.Sockets;
 
 // TODO: Move the fileserver to main thread - using too much CPU resources
+// TODO: Keep track of all connection uints and close unused connections
 
 namespace XLMultiplayerServer {
 	public enum OpCode : byte {
@@ -30,6 +31,7 @@ namespace XLMultiplayerServer {
 		MapVote = 8,
 		MapList = 9,
 		ServerMessage = 10,
+		Sound = 11,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -374,6 +376,17 @@ namespace XLMultiplayerServer {
 
 								server.SendMessageToConnection(player.connection, buffer, reliable ? SendFlags.Reliable | SendFlags.NoNagle : SendFlags.Unreliable | SendFlags.NoNagle);
 							}
+						}
+					}
+					break;
+				case OpCode.Sound:
+					byte[] newBuffer = new byte[buffer.Length + 1];
+					Array.Copy(buffer, 0, newBuffer, 0, buffer.Length);
+					newBuffer[buffer.Length] = fromID;
+
+					foreach (Player player in players) {
+						if (player != null && player.playerID != fromID) {
+							server.SendMessageToConnection(player.connection, newBuffer, SendFlags.Reliable);
 						}
 					}
 					break;
