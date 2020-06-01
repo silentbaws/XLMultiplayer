@@ -10,6 +10,7 @@ using XLShredLib;
 using System.IO;
 using ReplayEditor;
 using System.Linq;
+using System.Security.Policy;
 
 namespace XLMultiplayer {
 	class Main {
@@ -28,6 +29,10 @@ namespace XLMultiplayer {
 		public static List<MultiplayerRemotePlayerController> remoteReplayControllers = new List<MultiplayerRemotePlayerController>();
 
 		public static StreamWriter debugWriter;
+
+		public static AssetBundle uiBundle;
+
+		public static GameObject newMenu;
 
 		static void Load(UnityModManager.ModEntry modEntry) {
 			Main.modEntry = modEntry;
@@ -51,6 +56,15 @@ namespace XLMultiplayer {
 				uiBox = ModMenu.Instance.RegisterModMaker("Silentbaws", "Silentbaws", 0);
 				uiBox.AddCustom("Patreon", DisplayPatreon, () => enabled);
 
+				// Maybe don't do this every load?
+				Assembly.LoadFile(modEntry.Path + "XLMultiplayerUI.dll");
+
+				uiBundle = AssetBundle.LoadFromFile(modEntry.Path + "multiplayerui");
+
+				newMenu = uiBundle.LoadAsset<GameObject>("Assets/Prefabs/Main Multiplayer Menu.prefab");
+				
+				GameObject lololol = GameObject.Instantiate(newMenu);
+
 				MultiplayerUtils.StartMapLoading();
 			} else {
 				//Unpatch the replay editor
@@ -67,7 +81,7 @@ namespace XLMultiplayer {
 
 			return true;
 		}
-		
+
 		static GUIStyle patreonStyle = null;
 		static Texture2D patreonButton = null;
 		static GUILayoutOption[] patreonOptions = null;

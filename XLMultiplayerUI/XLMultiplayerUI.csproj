@@ -4,88 +4,37 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{A406ECA9-E864-4EB8-93D7-2288AFDA3A38}</ProjectGuid>
+    <ProjectGuid>{E13DEEDC-57AC-4D7F-A656-321A553AD1CF}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>XLMultiplayer</RootNamespace>
-    <AssemblyName>XLMultiplayer</AssemblyName>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>XLMultiplayerUI</RootNamespace>
+    <AssemblyName>XLMultiplayerUI</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
-    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\..\..\..\..\Program Files %28x86%29\Steam\steamapps\common\Skater XL\Mods\XLMultiplayer\</OutputPath>
+    <OutputPath>..\..\..\..\Documents\Unity Projects\XLMultiplayerGUI\Assets\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\..\..\..\..\Program Files %28x86%29\Steam\steamapps\common\Skater XL\Mods\XLMultiplayer\</OutputPath>
+    <OutputPath>..\..\..\..\Documents\Unity Projects\XLMultiplayerGUI\Assets\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
-  </PropertyGroup>
-  <PropertyGroup>
-    <StartupObject />
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <PlatformTarget>x64</PlatformTarget>
-    <OutputPath>..\..\..\..\..\..\Program Files %28x86%29\Steam\steamapps\common\Skater XL\Mods\XLMultiplayer\</OutputPath>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <DefineConstants>DEBUG</DefineConstants>
-    <LangVersion>7.2</LangVersion>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
-    <PlatformTarget>x64</PlatformTarget>
-    <OutputPath>..\..\..\..\..\..\Program Files %28x86%29\Steam\steamapps\common\Skater XL\Mods\XLMultiplayer\</OutputPath>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>7.2</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="0Harmony12, Version=1.2.0.1, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\References\UnityModManager\0Harmony12.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Assembly-CSharp, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\References\Assembly-CSharp.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Assembly-CSharp-firstpass, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\References\Assembly-CSharp-firstpass.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>..\References\Newtonsoft.Json.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
-    <Reference Include="System.Buffers, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.Buffers.4.5.1\lib\net461\System.Buffers.dll</HintPath>
-    </Reference>
     <Reference Include="System.Core" />
-    <Reference Include="System.Memory, Version=4.0.1.1, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.Memory.4.5.4\lib\net461\System.Memory.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Numerics" />
-    <Reference Include="System.Numerics.Vectors, Version=4.1.4.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.Numerics.Vectors.4.5.0\lib\net46\System.Numerics.Vectors.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=4.0.4.1, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.4.5.3\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
-    </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -132,8 +81,7 @@
       <HintPath>..\References\Unity.TextMeshPro.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="UnityEngine">
       <HintPath>..\References\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
@@ -149,8 +97,7 @@
       <HintPath>..\References\UnityEngine.AIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.AnimationModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="UnityEngine.AnimationModule">
       <HintPath>..\References\UnityEngine.AnimationModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
@@ -182,8 +129,7 @@
       <HintPath>..\References\UnityEngine.ClusterRendererModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.CoreModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="UnityEngine.CoreModule">
       <HintPath>..\References\UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
@@ -211,8 +157,7 @@
       <HintPath>..\References\UnityEngine.HotReloadModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.ImageConversionModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="UnityEngine.ImageConversionModule">
       <HintPath>..\References\UnityEngine.ImageConversionModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
@@ -248,8 +193,7 @@
       <HintPath>..\References\UnityEngine.Physics2DModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.PhysicsModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>..\References\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
@@ -301,8 +245,7 @@
       <HintPath>..\References\UnityEngine.TextCoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.TextRenderingModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="UnityEngine.TextRenderingModule">
       <HintPath>..\References\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
@@ -330,8 +273,7 @@
       <HintPath>..\References\UnityEngine.UIElementsModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.UIModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="UnityEngine.UIModule">
       <HintPath>..\References\UnityEngine.UIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
@@ -399,76 +341,11 @@
       <HintPath>..\References\UnityEngine.XRModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityModManager, Version=0.17.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\References\UnityModManager\UnityModManager.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="ValveSockets">
-      <HintPath>..\ValveSockets\ValveSockets.dll</HintPath>
-    </Reference>
-    <Reference Include="XLShredLib, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\References\XLShredLib.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Half.cs" />
-    <Compile Include="HalfHelper.cs" />
-    <Compile Include="Main.cs" />
-    <Compile Include="MultiplayerController.cs" />
-    <Compile Include="MultiplayerLocalPlayerController.cs" />
-    <Compile Include="MultiplayerLocalTexture.cs" />
-    <Compile Include="MultiplayerMenu.cs" />
-    <Compile Include="MultiplayerPlayerController.cs" />
-    <Compile Include="MultiplayerRemotePlayerController.cs" />
-    <Compile Include="MultiplayerRemoteTexture.cs" />
-    <Compile Include="MultiplayerServerBrowser.cs" />
-    <Compile Include="MultiplayerUtilityMenu.cs" />
-    <Compile Include="MultiplayerTexture.cs" />
-    <Compile Include="MultiplayerUtils.cs" />
+    <Compile Include="NewMultiplayerMenu.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="App.config" />
-    <None Include="Info.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="..\ValveSockets\GameNetworkingSockets.dll">
-      <Link>GameNetworkingSockets.dll</Link>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Background.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="libcrypto-1_1-x64.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="libprotobuf.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="patreon_button.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Paypal.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\XLMultiplayerUI\XLMultiplayerUI.csproj">
-      <Project>{e13deedc-57ac-4d7f-a656-321a553ad1cf}</Project>
-      <Name>XLMultiplayerUI</Name>
-      <Private>True</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-    </ProjectReference>
+    <Compile Include="ServerListItem.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
-  </PropertyGroup>
 </Project>
