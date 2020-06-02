@@ -69,7 +69,6 @@ namespace XLMultiplayer {
 		private NetworkingSockets client = null;
 		private NetworkingSockets fileClient = null;
 		private StatusCallback status = null;
-		private StatusCallback fileStatus = null;
 		private uint connection;
 		private uint fileConnection;
 
@@ -440,7 +439,6 @@ namespace XLMultiplayer {
 				yield return new WaitForEndOfFrame();
 			}
 			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(false);
-			Main.menu.CloseMultiplayerMenu();
 			yield break;
 		}
 
@@ -1010,7 +1008,7 @@ namespace XLMultiplayer {
 		}
 
 		public void DisconnectFromServer() {
-			Main.menu.EndMultiplayer();
+			Main.OnClickDisconnect();
 		}
 
 		public void OnDestroy() {

@@ -10,17 +10,38 @@ using XLShredLib;
 using System.IO;
 using ReplayEditor;
 using System.Linq;
-using System.Security.Policy;
+using XLMultiplayerUI;
+using Newtonsoft.Json;
+using UnityEngine.UI;
+using UnityEngine.Networking;
+using Newtonsoft.Json.Linq;
+using System.Collections;
+
+// TODO: Move the installer into here
 
 namespace XLMultiplayer {
+	class Server {
+		public string name;
+		public string ip;
+		public string port;
+		public string version;
+		public string mapName;
+		public int playerMax;
+		public int playerCurrent;
+	}
+	
+	public class PreviousUsername {
+		[JsonProperty("Previous_Name")]
+		public string username = "Username";
+	}
+
 	class Main {
 		public static bool enabled;
 		public static String modId;
 		public static UnityModManager.ModEntry modEntry;
 
 		public static HarmonyInstance harmonyInstance;
-
-		public static MultiplayerMenu menu;
+		
 		public static MultiplayerUtilityMenu utilityMenu;
 		public static MultiplayerController multiplayerController;
 
@@ -31,8 +52,6 @@ namespace XLMultiplayer {
 		public static StreamWriter debugWriter;
 
 		public static AssetBundle uiBundle;
-
-		public static GameObject newMenu;
 
 		static void Load(UnityModManager.ModEntry modEntry) {
 			Main.modEntry = modEntry;
@@ -49,21 +68,24 @@ namespace XLMultiplayer {
 				//Patch the replay editor
 				harmonyInstance = HarmonyInstance.Create(modEntry.Info.Id);
 				harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());
-
-				menu = ModMenu.Instance.gameObject.AddComponent<MultiplayerMenu>();
+				
 				utilityMenu = ModMenu.Instance.gameObject.AddComponent<MultiplayerUtilityMenu>();
 
 				uiBox = ModMenu.Instance.RegisterModMaker("Silentbaws", "Silentbaws", 0);
 				uiBox.AddCustom("Patreon", DisplayPatreon, () => enabled);
-
-				// Maybe don't do this every load?
-				Assembly.LoadFile(modEntry.Path + "XLMultiplayerUI.dll");
-
-				uiBundle = AssetBundle.LoadFromFile(modEntry.Path + "multiplayerui");
-
-				newMenu = uiBundle.LoadAsset<GameObject>("Assets/Prefabs/Main Multiplayer Menu.prefab");
 				
-				GameObject lololol = GameObject.Instantiate(newMenu);
+				if (NewMultiplayerMenu.Instance == null) {
+					if (uiBundle == null) uiBundle = AssetBundle.LoadFromFile(modEntry.Path + "multiplayerui");
+					
+					GameObject newMenuObject = GameObject.Instantiate(uiBundle.LoadAsset<GameObject>("Assets/Prefabs/Main Multiplayer Menu.prefab"));
+					NewMultiplayerMenu.Instance.UpdateCallback = MenuUpdate;
+					NewMultiplayerMenu.Instance.OnClickConnectCallback = Main.OnClickConnect;
+					NewMultiplayerMenu.Instance.OnClickDisconnectCallback = Main.OnClickDisconnect;
+
+					GameObject.DontDestroyOnLoad(newMenuObject);
+
+					NewMultiplayerMenu.Instance.StartCoroutine(Main.StartUpdatingServerList());
+				}
 
 				MultiplayerUtils.StartMapLoading();
 			} else {
@@ -73,13 +95,168 @@ namespace XLMultiplayer {
 				MultiplayerUtils.StopMapLoading();
 
 				if (multiplayerController != null) multiplayerController.DisconnectFromServer();
-				menu.CloseMultiplayerMenu();
 
-				UnityEngine.Object.Destroy(menu);
+				GameObject.Destroy(NewMultiplayerMenu.Instance.gameObject);
 				UnityEngine.Object.Destroy(utilityMenu);
 			}
 
 			return true;
+		}
+		
+		public static IEnumerator StartUpdatingServerList() {
+			while (true) {
+				if (NewMultiplayerMenu.Instance != null && NewMultiplayerMenu.Instance.serverBrowserMenu.activeSelf) {
+					UnityWebRequest www = UnityWebRequest.Get("http://www.davisellwood.com/api/getservers/");
+					yield return www.SendWebRequest();
+
+					if (www.isNetworkError || www.isHttpError) {
+						yield return new WaitForSeconds(5);
+					} else {
+						foreach (RectTransform trans in NewMultiplayerMenu.Instance.serverItems) {
+							GameObject.Destroy(trans.gameObject);
+						}
+
+						yield return new WaitForEndOfFrame();
+
+						var responseString = www.downloadHandler.text;
+						responseString = responseString.Remove(0, 1).Remove(responseString.Length - 2, 1).Replace("\\\"", "\"");
+
+						JArray a = JArray.Parse(responseString);
+
+						while(NewMultiplayerMenu.Instance.serverItems.Count > 0) {
+							bool allDestroyed = true;
+							foreach(RectTransform trans in NewMultiplayerMenu.Instance.serverItems) {
+								if (trans != null) {
+									allDestroyed = false;
+									break;
+								}
+							}
+
+							if (allDestroyed) {
+								NewMultiplayerMenu.Instance.serverItems.Clear();
+								break;
+							} else {
+								yield return new WaitForEndOfFrame();
+							}
+						}
+
+						foreach (JObject o in a.Children<JObject>()) {
+							foreach (JProperty p in o.Properties()) {
+								if (p.Name == "fields") {
+									Server newServer = new Server();
+									foreach (JObject o2 in p.Children<JObject>()) {
+										foreach (JProperty p2 in o2.Properties()) {
+											switch (p2.Name) {
+												case "name":
+													newServer.name = (string)p2.Value;
+													break;
+												case "IP":
+													newServer.ip = (string)p2.Value;
+													break;
+												case "port":
+													newServer.port = (string)p2.Value;
+													break;
+												case "version":
+													newServer.version = (string)p2.Value;
+													break;
+												case "maxPlayers":
+													newServer.playerMax = (int)p2.Value;
+													break;
+												case "currentPlayers":
+													newServer.playerCurrent = (int)p2.Value;
+													break;
+												case "mapName":
+													newServer.mapName = (string)p2.Value;
+													break;
+											}
+										}
+									}
+									NewMultiplayerMenu.Instance.AddServerItem(newServer.ip, newServer.port, newServer.name, newServer.mapName, newServer.version, $"{newServer.playerCurrent} / {newServer.playerMax}", ClickServerItem);
+								}
+							}
+						}
+						yield return new WaitForSeconds(30);
+					}
+				} else {
+					yield return new WaitForSeconds(1);
+				}
+			}
+		}
+
+		private static void ClickServerItem(ServerListItem target) {
+			JoinServer(target.ipAddress, target.port, NewMultiplayerMenu.Instance.usernameFields[0].text);
+		}
+
+		private static void OnClickConnect() {
+			JoinServer(NewMultiplayerMenu.Instance.connectMenu.transform.Find("IP Address").GetComponent<InputField>().text, NewMultiplayerMenu.Instance.connectMenu.transform.Find("Port").GetComponent<InputField>().text, NewMultiplayerMenu.Instance.usernameFields[1].text);
+		}
+
+		private static void JoinServer(string ip, string port, string username) {
+			if (Main.multiplayerController == null) {
+				NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = false;
+				ModMenu.Instance.HideCursor(Main.modId);
+				Main.multiplayerController =  ModMenu.Instance.gameObject.AddComponent<MultiplayerController>();
+
+				username = username.Trim().Equals("") ? "Username" : username;
+
+				PreviousUsername previousUsername = new PreviousUsername();
+				if (File.Exists(Main.modEntry.Path + "\\PreviousName.json")) {
+					previousUsername = JsonConvert.DeserializeObject<PreviousUsername>(File.ReadAllText(Main.modEntry.Path + "\\PreviousName.json"));
+				}
+				previousUsername.username = username;
+
+				string newFile = JsonConvert.SerializeObject(previousUsername);
+				File.WriteAllText(Main.modEntry.Path + "\\PreviousName.json", newFile);
+
+				Main.multiplayerController.ConnectToServer(ip.Equals("") ? "127.0.0.1" : ip, (ushort)(port.Equals("") ? 7777 : int.Parse(port)), username);
+			}
+		}
+
+		public static void OnClickDisconnect() {
+			if (Main.multiplayerController != null) {
+				GameObject.Destroy(Main.multiplayerController);
+				NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = false;
+				ModMenu.Instance.HideCursor(Main.modId);
+			}
+		}
+
+		// TODO: Move this to another file
+		private static void MenuUpdate() {
+			if (NewMultiplayerMenu.Instance != null) {
+				if (Input.GetKeyDown(KeyCode.P)) {
+					NewMultiplayerMenu.Instance.serverBrowserMenu.SetActive(false);
+					NewMultiplayerMenu.Instance.connectMenu.SetActive(false);
+
+					NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = !NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled;
+
+					if (NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled) {
+						ModMenu.Instance.ShowCursor(Main.modId);
+						if (Main.multiplayerController != null) {
+							NewMultiplayerMenu.Instance.directConnectButton.SetActive(false);
+							NewMultiplayerMenu.Instance.serverBrowserButton.SetActive(false);
+							NewMultiplayerMenu.Instance.disconnectButton.SetActive(true);
+						} else {
+							NewMultiplayerMenu.Instance.directConnectButton.SetActive(true);
+							NewMultiplayerMenu.Instance.serverBrowserButton.SetActive(true);
+							NewMultiplayerMenu.Instance.disconnectButton.SetActive(false);
+							
+							PreviousUsername previousUsername = new PreviousUsername();
+
+							if (File.Exists(Main.modEntry.Path + "\\PreviousName.json")) {
+								previousUsername = JsonConvert.DeserializeObject<PreviousUsername>(File.ReadAllText(Main.modEntry.Path + "\\PreviousName.json"));
+							}
+
+							if (previousUsername.username != "") {
+								foreach (InputField usernameField in NewMultiplayerMenu.Instance.usernameFields) {
+									usernameField.text = previousUsername.username;
+								}
+							}
+						}
+					} else {
+						ModMenu.Instance.HideCursor(Main.modId);
+					}
+				}
+			}
 		}
 
 		static GUIStyle patreonStyle = null;

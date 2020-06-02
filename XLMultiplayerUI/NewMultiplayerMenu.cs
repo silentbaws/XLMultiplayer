@@ -1,8 +1,12 @@
 ﻿using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace XLMultiplayerUI {
+	public delegate void OnClickDisconnectDelegate();
+	public delegate void OnClickConnectDelegate();
+	public delegate void MenuUpdateDelegate();
+
 	public class NewMultiplayerMenu : MonoBehaviour{
 		public GameObject serverListItem;
 		public GameObject serverListBox;
@@ -14,9 +18,17 @@ namespace XLMultiplayerUI {
 		public GameObject serverBrowserButton;
 		public GameObject directConnectButton;
 
+		public GameObject disconnectButton;
+
+		public InputField[] usernameFields;
+
 		private Vector2 itemRealSize;
 
-		private List<RectTransform> serverItems = new List<RectTransform>();
+		public List<RectTransform> serverItems = new List<RectTransform>();
+
+		public OnClickConnectDelegate OnClickConnectCallback;
+		public OnClickDisconnectDelegate OnClickDisconnectCallback;
+		public MenuUpdateDelegate UpdateCallback;
 
 		private static NewMultiplayerMenu _instance;
 
@@ -54,7 +66,15 @@ namespace XLMultiplayerUI {
 		}
 
 		public void OnClickConnect() {
+			if (this.OnClickConnectCallback != null) OnClickConnectCallback();
+		}
 
+		public void OnClickDisconnect() {
+			if (this.OnClickDisconnectCallback != null) OnClickDisconnectCallback();
+		}
+
+		public void Update() {
+			if (this.UpdateCallback != null) UpdateCallback();
 		}
 
 		public void AddServerItem(string ip, string port, string name, string map, string version, string players, OnClickDelegate clickFunction) {
