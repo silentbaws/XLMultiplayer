@@ -122,6 +122,15 @@ namespace XLMultiplayer {
 			}
 		}
 
+		private static string[] GetMapFiles(string path) {
+			List<string> allMaps = new List<string>();
+			foreach (string dir in Directory.GetDirectories(path)) {
+				allMaps.AddRange(GetMapFiles(dir));
+			}
+			allMaps.AddRange(Directory.GetFiles(path));
+			return allMaps.ToArray();
+		}
+
 		private static void LoadMapHashes() {
 			if (!mapsDictionary.ContainsKey("0")) {
 				mapsDictionary.Add("0", "Assets/_Scenes/Prototyping testing courthouse 2.unity");

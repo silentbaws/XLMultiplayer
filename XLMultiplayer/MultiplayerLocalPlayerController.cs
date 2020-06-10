@@ -343,11 +343,11 @@ namespace XLMultiplayer {
 					lastSentCutoffEvents.Add(null);
 
 				// Out of range exception
-				int previousOneShotIndex = lastSentOneShots[i] == null || !ReplayRecorder.Instance.oneShotEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentOneShots[i]);
-				int previousClipIndex = lastSentClipEvents[i] == null || !ReplayRecorder.Instance.clipEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.clipEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentClipEvents[i]);
-				int previousVolumeIndex = lastSentVolumeEvents[i] == null || !ReplayRecorder.Instance.volumeEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.volumeEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentVolumeEvents[i]);
-				int previousPitchIndex = lastSentPitchEvents[i] == null || !ReplayRecorder.Instance.pitchEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.pitchEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentPitchEvents[i]);
-				int previousCutoffIndex = lastSentCutoffEvents[i] == null || !ReplayRecorder.Instance.cutoffEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.cutoffEvents[MultiplayerUtils.audioPlayerNames[i]].FindIndex(e => e == lastSentCutoffEvents[i]);
+				int previousOneShotIndex = lastSentOneShots[i] == null || !ReplayRecorder.Instance.oneShotEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]].IndexOf(lastSentOneShots[i]);
+				int previousClipIndex = lastSentClipEvents[i] == null || !ReplayRecorder.Instance.clipEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.clipEvents[MultiplayerUtils.audioPlayerNames[i]].IndexOf(lastSentClipEvents[i]);
+				int previousVolumeIndex = lastSentVolumeEvents[i] == null || !ReplayRecorder.Instance.volumeEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.volumeEvents[MultiplayerUtils.audioPlayerNames[i]].IndexOf(lastSentVolumeEvents[i]);
+				int previousPitchIndex = lastSentPitchEvents[i] == null || !ReplayRecorder.Instance.pitchEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.pitchEvents[MultiplayerUtils.audioPlayerNames[i]].IndexOf(lastSentPitchEvents[i]);
+				int previousCutoffIndex = lastSentCutoffEvents[i] == null || !ReplayRecorder.Instance.cutoffEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i]) ? -1 : ReplayRecorder.Instance.cutoffEvents[MultiplayerUtils.audioPlayerNames[i]].IndexOf(lastSentCutoffEvents[i]);
 				
 				if (ReplayRecorder.Instance.oneShotEvents != null && ReplayRecorder.Instance.oneShotEvents.ContainsKey(MultiplayerUtils.audioPlayerNames[i])) {
 					for (int j = previousOneShotIndex + 1; j < ReplayRecorder.Instance.oneShotEvents[MultiplayerUtils.audioPlayerNames[i]].Count; j++) {
@@ -375,12 +375,6 @@ namespace XLMultiplayer {
 					}
 				}
 			}
-
-			// strings can be grabbed as index from dictionary Traverse.Create(SoundManager.Instance).Field("clipForName").GetValue<Dictionary<string, AudioClip>>();
-			//foreach (var KVP in clipDict) {
-			//	UnityModManagerNet.UnityModManager.Logger.Log(KVP.Key);
-			//}
-
 			
 			List<List<byte>> newOneShotBytes = new List<List<byte>>();
 			List<List<byte>> newClipBytes = new List<List<byte>>();
@@ -412,13 +406,13 @@ namespace XLMultiplayer {
 					ushort clipNameIndex = (ushort)MultiplayerUtils.audioClipNames.FindIndex(c => c.Equals(newOneShotEvents[i][j].clipName));
 					float time = newOneShotEvents[i][j].time;
 					float volume = newOneShotEvents[i][j].volumeScale;
-
+					
 					newOneShotBytes[i].AddRange(BitConverter.GetBytes(clipNameIndex));
 					newOneShotBytes[i].AddRange(BitConverter.GetBytes(time));
 					newOneShotBytes[i].AddRange(BitConverter.GetBytes(volume));
 				}
 				for (int j = 0; j < newClipEvents[i].Count; j++) {
-					ushort clipNameIndex = (ushort)MultiplayerUtils.audioClipNames.FindIndex(c => c.Equals(newClipEvents[i][j].clipName));
+					ushort clipNameIndex = newClipEvents[i][j].clipName == null ? ushort.MaxValue : (ushort)MultiplayerUtils.audioClipNames.FindIndex(c => c.Equals(newClipEvents[i][j].clipName));
 					float time = newClipEvents[i][j].time;
 					byte playing = newClipEvents[i][j].isPlaying ? (byte)1 : (byte)0;
 

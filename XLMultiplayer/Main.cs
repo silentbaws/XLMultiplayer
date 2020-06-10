@@ -17,7 +17,9 @@ using UnityEngine.Networking;
 using Newtonsoft.Json.Linq;
 using System.Collections;
 
-// TODO: Move the installer into here
+// TODO: Test with more players
+// TODO: Make replays save audio
+// TODO: Volume control for remote clients
 
 namespace XLMultiplayer {
 	class Server {
@@ -65,6 +67,15 @@ namespace XLMultiplayer {
 			enabled = value;
 
 			if (enabled) {
+				string directory = Directory.GetCurrentDirectory();
+				File.Copy(modEntry.Path + "GameNetworkingSockets.dll", directory + "\\GameNetworkingSockets.dll", true);
+				File.Copy(modEntry.Path + "libprotobuf.dll", directory + "\\libprotobuf.dll", true);
+				File.Copy(modEntry.Path + "libcrypto-1_1-x64.dll", directory + "\\libcrypto-1_1-x64.dll", true);
+				File.Copy(modEntry.Path + "System.Buffers.dll", directory + "\\System.Buffers.dll", true);
+				File.Copy(modEntry.Path + "System.Memory.dll", directory + "\\System.Memory.dll", true);
+				File.Copy(modEntry.Path + "System.Numerics.Vectors.dll", directory + "\\System.Numerics.Vectors.dll", true);
+				File.Copy(modEntry.Path + "System.Runtime.CompilerServices.Unsafe.dll", directory + "\\System.Runtime.CompilerServices.Unsafe.dll", true);
+
 				//Patch the replay editor
 				harmonyInstance = HarmonyInstance.Create(modEntry.Info.Id);
 				harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());

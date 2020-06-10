@@ -20,24 +20,16 @@ using Valve.Sockets;
 using XLShredLib;
 using XLShredLib.UI;
 
-// TODO: Redo the multiplayer texture system
-//			-> Send paths for non-custom gear
-//			-> Send hashes of full size textures for custom gear along with compressed texture
-//			-> Only send hashes/paths from server unless client requests texture data
-
 // TODO: v0.9.0
-
-// TODO: Add sounds to remote clients
-
-// TODO: Move majority of reliable messages to file client
-
-// TODO: Usable GUI for servers
 
 // TODO: Console player list
 
 // TODO: game of skate.... maybe?
 
-// TODO: fix previous username saving, it doesn't work with server browser -> obviously dickhead you did it wrong 
+// TODO: Redo the multiplayer texture system
+//			-> Send paths for non-custom gear
+//			-> Send hashes of full size textures for custom gear along with compressed texture
+//			-> Only send hashes/paths from server unless client requests texture data
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -169,7 +161,6 @@ namespace XLMultiplayer {
 				}
 
 				MultiplayerUtils.audioClipNames.Sort();
-				MultiplayerUtils.audioPlayerNames.Sort();
 			}
 		}
 
@@ -297,6 +288,8 @@ namespace XLMultiplayer {
 			this.playerController.ConstructPlayer();
 			this.playerController.username = user;
 
+			// TODO: Add popup window with a download for vc_redistx64.exe
+			
 			Library.Initialize();
 
 			client = new NetworkingSockets();
@@ -392,17 +385,18 @@ namespace XLMultiplayer {
 
 				// Re-order 25% of packets and add 30ms delay on reordered packets
 				//float reorderPercent = 25f;
-				//int reorderTime = 30;
-				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&reorderPercent));
-				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketReorderTime, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&reorderTime));
+				//int reorderTime = 50;
+				//utils.SetConfigurationValue(ConfigurationValue.FakePacketReorderSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&reorderPercent));
+				//utils.SetConfigurationValue(ConfigurationValue.FakePacketReorderTime, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&reorderTime));
 
-				//// Fake 150ms ping
+				//Fake 150ms ping
 				//int pingTime = 150;
-				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketLagSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&pingTime));
+				//utils.SetConfigurationValue(ConfigurationValue.FakePacketLagSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Int32, new IntPtr(&pingTime));
 
-				//// Simulate 0.2% packet loss
+				//Simulate 0.2 % packet loss
 				//float lossPercent = 0.2f;
-				//utils.SetConfiguratioValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
+				//utils.SetConfigurationValue(ConfigurationValue.FakePacketLossSend, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
+				//utils.SetConfigurationValue(ConfigurationValue.FakePacketLossRecv, ConfigurationScope.Global, IntPtr.Zero, ConfigurationDataType.Float, new IntPtr(&lossPercent));
 #endif
 
 				int sendRateMin = 0;
@@ -473,6 +467,12 @@ namespace XLMultiplayer {
 						}
 
 						controller.EndReplay();
+
+						foreach (ReplayAudioEventPlayer replayAudioPlayer in controller.replayController.AudioEventPlayers) {
+							if (replayAudioPlayer != null) {
+								Traverse.Create(replayAudioPlayer).Method("UnloadEvents").GetValue();
+							}
+						}
 					}
 				}
 				replayStarted = false;
@@ -534,6 +534,7 @@ namespace XLMultiplayer {
 				if (controller != null) {
 					controller.ApplyTextures();
 
+
 					if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
 						controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
 						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
@@ -545,7 +546,7 @@ namespace XLMultiplayer {
 							controller.skater.SetActive(true);
 							controller.board.SetActive(true);
 						}
-					}
+					} 
 
 					if (controller.playerID == 255 && controller.replayAnimationFrames.Last(obj => obj.realFrameTime != -1f).realFrameTime < ReplayRecorder.Instance.RecordedFrames.First().time) {
 						RemovePlayer(controller);
@@ -638,7 +639,7 @@ namespace XLMultiplayer {
 			byte[] newBuffer = new byte[buffer.Length - 2];
 
 			if (newBuffer.Length != 0) {
-				Array.Copy(buffer, 1, newBuffer, 0, buffer.Length - 2);
+				Array.Copy(buffer, 1, newBuffer, 0, newBuffer.Length);
 			}
 
 			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive) this.debugWriter.WriteLine("Received message with opcode {0}, and length {1}", opCode, buffer.Length);

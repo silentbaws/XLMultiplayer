@@ -15,7 +15,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Valve.Sockets;
 
-// TODO: Move the fileserver to main thread - using too much CPU resources
 // TODO: Keep track of all connection uints and close unused connections
 
 namespace XLMultiplayerServer {
