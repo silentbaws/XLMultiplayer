@@ -403,28 +403,26 @@ namespace XLMultiplayer {
 				readBytes += 4;
 				for (int j = 0; j < oneShots; j++) {
 					newOneShots[i].Add(new AudioOneShotEvent());
-					newOneShots[i][j].clipName = MultiplayerUtils.audioClipNames[BitConverter.ToUInt16(soundBytes, readBytes)];
-					newOneShots[i][j].time = BitConverter.ToSingle(soundBytes, readBytes + 2);
-					newOneShots[i][j].volumeScale = BitConverter.ToSingle(soundBytes, readBytes + 6);
+					newOneShots[i][j].clipName = MultiplayerUtils.ClipNameFromArrayByte(soundBytes[readBytes]);
+					newOneShots[i][j].time = BitConverter.ToSingle(soundBytes, readBytes + 1);
+					newOneShots[i][j].volumeScale = BitConverter.ToSingle(soundBytes, readBytes + 5);
 
 					earliestSoundTime = Mathf.Min(newOneShots[i][j].time, earliestSoundTime);
 
-					readBytes += 10;
+					readBytes += 9;
 				}
 				
 				int clipEvents = BitConverter.ToInt32(soundBytes, readBytes);
 				readBytes += 4;
 				for (int j = 0; j < clipEvents; j++) {
 					newClipEvents[i].Add(new AudioClipEvent());
-					ushort index = BitConverter.ToUInt16(soundBytes, readBytes);
-					newClipEvents[i][j].clipName = null;
-					if (index < MultiplayerUtils.audioClipNames.Count) newClipEvents[i][j].clipName = MultiplayerUtils.audioClipNames[index];
-					newClipEvents[i][j].time = BitConverter.ToSingle(soundBytes, readBytes + 2);
-					newClipEvents[i][j].isPlaying = soundBytes[readBytes + 6] == 1 ? true : false;
+					newClipEvents[i][j].clipName = MultiplayerUtils.ClipNameFromArrayByte(soundBytes[readBytes]);
+					newClipEvents[i][j].time = BitConverter.ToSingle(soundBytes, readBytes + 1);
+					newClipEvents[i][j].isPlaying = soundBytes[readBytes + 5] == 1 ? true : false;
 
 					earliestSoundTime = Mathf.Min(newClipEvents[i][j].time, earliestSoundTime);
 
-					readBytes += 7;
+					readBytes += 6;
 				}
 
 				int volumeEvents = BitConverter.ToInt32(soundBytes, readBytes);

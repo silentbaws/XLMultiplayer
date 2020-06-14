@@ -403,20 +403,20 @@ namespace XLMultiplayer {
 				// 3x 2 floats
 
 				for (int j = 0; j < newOneShotEvents[i].Count; j++) {
-					ushort clipNameIndex = (ushort)MultiplayerUtils.audioClipNames.FindIndex(c => c.Equals(newOneShotEvents[i][j].clipName));
+					byte clipNameIndex = MultiplayerUtils.GetArrayByteFromClipName(newOneShotEvents[i][j].clipName);
 					float time = newOneShotEvents[i][j].time;
 					float volume = newOneShotEvents[i][j].volumeScale;
 					
-					newOneShotBytes[i].AddRange(BitConverter.GetBytes(clipNameIndex));
+					newOneShotBytes[i].Add(clipNameIndex);
 					newOneShotBytes[i].AddRange(BitConverter.GetBytes(time));
 					newOneShotBytes[i].AddRange(BitConverter.GetBytes(volume));
 				}
 				for (int j = 0; j < newClipEvents[i].Count; j++) {
-					ushort clipNameIndex = newClipEvents[i][j].clipName == null ? ushort.MaxValue : (ushort)MultiplayerUtils.audioClipNames.FindIndex(c => c.Equals(newClipEvents[i][j].clipName));
+					byte clipNameIndex = MultiplayerUtils.GetArrayByteFromClipName(newClipEvents[i][j].clipName);
 					float time = newClipEvents[i][j].time;
 					byte playing = newClipEvents[i][j].isPlaying ? (byte)1 : (byte)0;
 
-					newClipBytes[i].AddRange(BitConverter.GetBytes(clipNameIndex));
+					newClipBytes[i].Add(clipNameIndex);
 					newClipBytes[i].AddRange(BitConverter.GetBytes(time));
 					newClipBytes[i].Add(playing);
 				}

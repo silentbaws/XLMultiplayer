@@ -148,19 +148,16 @@ namespace XLMultiplayer {
 			uiBox.AddCustom("Player List", PlayerListOnGUI, () => isConnected);
 			uiBox.AddCustom("Network Stats", NetworkStatsOnGUI, () => isConnected);
 
+			
+			var clipDict = Traverse.Create(SoundManager.Instance).Field("clipForName").GetValue<Dictionary<string, AudioClip>>();
+			MultiplayerUtils.InitializeClipToArrayByteDict(clipDict);
+			foreach (var KVP in clipDict) {
+				UnityModManagerNet.UnityModManager.Logger.Log("Clip key " + MultiplayerUtils.GetArrayByteFromClipName(KVP.Key));
+			}
 
-			if (MultiplayerUtils.audioClipNames.Count == 0) {
-				var clipDict = Traverse.Create(SoundManager.Instance).Field("clipForName").GetValue<Dictionary<string, AudioClip>>();
-				foreach (var KVP in clipDict) {
-					MultiplayerUtils.audioClipNames.Add(KVP.Key);
-				}
-
-				foreach (ReplayAudioEventPlayer audioPlayer in ReplayEditorController.Instance.playbackController.AudioEventPlayers) {
-					AudioSource newSource = Traverse.Create(audioPlayer).Property("audioSource").GetValue<AudioSource>();
-					if (newSource != null) MultiplayerUtils.audioPlayerNames.Add(newSource.name);
-				}
-
-				MultiplayerUtils.audioClipNames.Sort();
+			foreach (ReplayAudioEventPlayer audioPlayer in ReplayEditorController.Instance.playbackController.AudioEventPlayers) {
+				AudioSource newSource = Traverse.Create(audioPlayer).Property("audioSource").GetValue<AudioSource>();
+				if (newSource != null) MultiplayerUtils.audioPlayerNames.Add(newSource.name);
 			}
 		}
 
@@ -649,7 +646,7 @@ namespace XLMultiplayer {
 					AddPlayer(playerID);
 					break;
 				case OpCode.Disconnect:
-					// TODO: Delay destruction and removal until after they're no longer in replay
+					// TODO: Remove players with id 255 from player list
 					MultiplayerRemotePlayerController player = remoteControllers.Find(c => c.playerID == playerID);
 					chatMessages.Add("Player <color=\"yellow\">" + player.username + "{" + player.playerID + "}</color> <b><color=\"red\">DISCONNECTED</color></b>");
 					if(player.replayAnimationFrames.Count > 5) {
