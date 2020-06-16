@@ -5,8 +5,6 @@ using Harmony12;
 using System.Reflection.Emit;
 using System.Collections.Generic;
 using System.Reflection;
-using XLShredLib.UI;
-using XLShredLib;
 using System.IO;
 using ReplayEditor;
 using System.Linq;
@@ -17,9 +15,7 @@ using UnityEngine.Networking;
 using Newtonsoft.Json.Linq;
 using System.Collections;
 
-// TODO: Test with more players
 // TODO: Make replays save audio
-// TODO: Volume control for remote clients
 
 namespace XLMultiplayer {
 	class Server {
@@ -31,10 +27,113 @@ namespace XLMultiplayer {
 		public int playerMax;
 		public int playerCurrent;
 	}
-	
+
 	public class PreviousUsername {
 		[JsonProperty("Previous_Name")]
 		public string username = "Username";
+	}
+
+	struct CustomUI {
+		public Func<bool> isEnabled;
+		public Action OnGUI;
+	}
+
+	public class OldUIBox : MonoBehaviour {
+		public static OldUIBox Instance { get; private set; } = null;
+
+		private bool renderWindow = false;
+		private List<CustomUI> customs = new List<CustomUI>();
+
+		public GUIStyle columnLeftStyle;
+
+		private static readonly int window_margin_sides = 10;
+
+		private static readonly int window_width = 600;
+		private static readonly int spacing = 14;
+
+		private Rect windowRect = new Rect(0f, 0f, 600f, 0f);
+
+		public readonly int label_column_width = (window_width - (window_margin_sides * 2) - (spacing * 3)) / 2;
+
+		public void AddCustom(Func<bool> enabled, Action render) {
+			customs.Add(new CustomUI() {
+				isEnabled = enabled,
+				OnGUI = render
+			});
+		}
+
+		private void Awake() {
+			if (Instance == null) {
+				Instance = this;
+			} else if (Instance != this) {
+				GameObject.Destroy(this.gameObject);
+			}
+		}
+
+		private void Update() {
+			if (Input.GetKeyDown(KeyCode.F2)) {
+				renderWindow = !renderWindow;
+				if (!renderWindow) Cursor.visible = false;
+				else Cursor.lockState = CursorLockMode.None;
+			}
+
+			if (renderWindow) Cursor.visible = true;
+		}
+
+		private void OnGUI() {
+			GUIStyle windowStyle = new GUIStyle(GUI.skin.window) {
+				padding = new RectOffset(10, 10, 25, 10),
+				contentOffset = new Vector2(0, -23.0f)
+			};
+
+			if (renderWindow) windowRect = GUILayout.Window(GUIUtility.GetControlID(FocusType.Passive), windowRect, RenderWindow, "XLMultiplayer Menu", windowStyle, GUILayout.Width(600));
+		}
+
+		private void RenderWindow(int ID) {
+			GUI.DragWindow(new Rect(0, 0, 10000, 20));
+			GUILayout.BeginVertical();
+			RenderBoxes();
+			GUILayout.EndVertical();
+		}
+
+		private void RenderBoxes() {
+			GUIStyle boxStyle = new GUIStyle(GUI.skin.box) {
+				padding = new RectOffset(14, 14, 24, 9),
+				contentOffset = new Vector2(0, -20f)
+			};
+
+			columnLeftStyle = new GUIStyle();
+			columnLeftStyle.margin.right = spacing;
+
+			GUILayout.BeginVertical(boxStyle);
+			{
+				GUILayout.BeginHorizontal();
+				{
+
+					GUILayout.BeginVertical();
+					{
+
+						foreach (CustomUI uiCustom in customs) {
+							if (uiCustom.isEnabled != null && uiCustom.isEnabled()) uiCustom.OnGUI();
+						}
+
+					}
+					GUILayout.EndVertical();
+
+				}
+				GUILayout.EndHorizontal();
+			}
+			GUILayout.EndVertical();
+		}
+	}
+
+	[Serializable]
+	public class MultiplayerSettings : UnityModManager.ModSettings {
+		public float volumeMultiplier = 1.0f;
+
+		public override void Save(UnityModManager.ModEntry modEntry) {
+			Save(this, modEntry);
+		}
 	}
 
 	class Main {
@@ -43,11 +142,9 @@ namespace XLMultiplayer {
 		public static UnityModManager.ModEntry modEntry;
 
 		public static HarmonyInstance harmonyInstance;
-		
+
 		public static MultiplayerUtilityMenu utilityMenu;
 		public static MultiplayerController multiplayerController;
-
-		private static ModUIBox uiBox;
 
 		public static List<MultiplayerRemotePlayerController> remoteReplayControllers = new List<MultiplayerRemotePlayerController>();
 
@@ -55,7 +152,12 @@ namespace XLMultiplayer {
 
 		public static AssetBundle uiBundle;
 
+		public static OldUIBox oldBox;
+
+		public static MultiplayerSettings settings;
+
 		static void Load(UnityModManager.ModEntry modEntry) {
+			settings = MultiplayerSettings.Load<MultiplayerSettings>(modEntry);
 			Main.modEntry = modEntry;
 			Main.modId = modEntry.Info.Id;
 
@@ -81,15 +183,19 @@ namespace XLMultiplayer {
 				//Patch the replay editor
 				harmonyInstance = HarmonyInstance.Create(modEntry.Info.Id);
 				harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());
-				
-				utilityMenu = ModMenu.Instance.gameObject.AddComponent<MultiplayerUtilityMenu>();
 
-				uiBox = ModMenu.Instance.RegisterModMaker("Silentbaws", "Silentbaws", 0);
-				uiBox.AddCustom("Patreon", DisplayPatreon, () => enabled);
-				
+				utilityMenu = new GameObject().AddComponent<MultiplayerUtilityMenu>();
+				GameObject.DontDestroyOnLoad(utilityMenu.gameObject);
+
+				oldBox = new GameObject().AddComponent<OldUIBox>();
+				GameObject.DontDestroyOnLoad(oldBox.gameObject);
+
+				oldBox.AddCustom(() => enabled, DisplayPatreon);
+				oldBox.AddCustom(() => enabled, DisplayVolume);
+
 				if (NewMultiplayerMenu.Instance == null) {
 					if (uiBundle == null) uiBundle = AssetBundle.LoadFromFile(modEntry.Path + "multiplayerui");
-					
+
 					GameObject newMenuObject = GameObject.Instantiate(uiBundle.LoadAsset<GameObject>("Assets/Prefabs/Main Multiplayer Menu.prefab"));
 					NewMultiplayerMenu.Instance.UpdateCallback = MenuUpdate;
 					NewMultiplayerMenu.Instance.OnClickConnectCallback = Main.OnClickConnect;
@@ -109,13 +215,14 @@ namespace XLMultiplayer {
 
 				if (multiplayerController != null) multiplayerController.DisconnectFromServer();
 
+				GameObject.Destroy(OldUIBox.Instance.gameObject);
 				GameObject.Destroy(NewMultiplayerMenu.Instance.gameObject);
-				UnityEngine.Object.Destroy(utilityMenu);
+				UnityEngine.Object.Destroy(utilityMenu.gameObject);
 			}
 
 			return true;
 		}
-		
+
 		public static IEnumerator StartUpdatingServerList() {
 			while (true) {
 				if (NewMultiplayerMenu.Instance != null && NewMultiplayerMenu.Instance.serverBrowserMenu.activeSelf) {
@@ -136,9 +243,9 @@ namespace XLMultiplayer {
 
 						JArray a = JArray.Parse(responseString);
 
-						while(NewMultiplayerMenu.Instance.serverItems.Count > 0) {
+						while (NewMultiplayerMenu.Instance.serverItems.Count > 0) {
 							bool allDestroyed = true;
-							foreach(RectTransform trans in NewMultiplayerMenu.Instance.serverItems) {
+							foreach (RectTransform trans in NewMultiplayerMenu.Instance.serverItems) {
 								if (trans != null) {
 									allDestroyed = false;
 									break;
@@ -207,8 +314,9 @@ namespace XLMultiplayer {
 		private static void JoinServer(string ip, string port, string username) {
 			if (Main.multiplayerController == null) {
 				NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = false;
-				ModMenu.Instance.HideCursor(Main.modId);
-				Main.multiplayerController =  ModMenu.Instance.gameObject.AddComponent<MultiplayerController>();
+				Cursor.visible = false;
+				multiplayerController = new GameObject().AddComponent<MultiplayerController>();
+				GameObject.DontDestroyOnLoad(multiplayerController.gameObject);
 
 				username = username.Trim().Equals("") ? "Username" : username;
 
@@ -229,7 +337,7 @@ namespace XLMultiplayer {
 			if (Main.multiplayerController != null) {
 				GameObject.Destroy(Main.multiplayerController);
 				NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = false;
-				ModMenu.Instance.HideCursor(Main.modId);
+				Cursor.visible = false;
 			}
 		}
 
@@ -243,7 +351,8 @@ namespace XLMultiplayer {
 					NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = !NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled;
 
 					if (NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled) {
-						ModMenu.Instance.ShowCursor(Main.modId);
+						Cursor.visible = true;
+						Cursor.lockState = CursorLockMode.None;
 						if (Main.multiplayerController != null) {
 							NewMultiplayerMenu.Instance.directConnectButton.SetActive(false);
 							NewMultiplayerMenu.Instance.serverBrowserButton.SetActive(false);
@@ -252,7 +361,7 @@ namespace XLMultiplayer {
 							NewMultiplayerMenu.Instance.directConnectButton.SetActive(true);
 							NewMultiplayerMenu.Instance.serverBrowserButton.SetActive(true);
 							NewMultiplayerMenu.Instance.disconnectButton.SetActive(false);
-							
+
 							PreviousUsername previousUsername = new PreviousUsername();
 
 							if (File.Exists(Main.modEntry.Path + "\\PreviousName.json")) {
@@ -266,7 +375,7 @@ namespace XLMultiplayer {
 							}
 						}
 					} else {
-						ModMenu.Instance.HideCursor(Main.modId);
+						Cursor.visible = false;
 					}
 				}
 			}
@@ -301,9 +410,38 @@ namespace XLMultiplayer {
 			GUILayout.FlexibleSpace();
 			GUILayout.BeginHorizontal();
 			GUILayout.FlexibleSpace();
-			
+
 			if (GUILayout.Button(patreonButton, patreonStyle, patreonOptions)) {
 				Application.OpenURL("https://www.patreon.com/silentbaws");
+			}
+
+			GUILayout.FlexibleSpace();
+			GUILayout.EndHorizontal();
+			GUILayout.FlexibleSpace();
+		}
+
+		static float LastSaveTime = 0f;
+		static float LastSavedVolume = 1f;
+
+		private static void DisplayVolume() {
+			patreonStyle.padding.bottom = 0;
+
+			GUILayout.Label("Multiplayer Remote Volume Multiplier", patreonStyle);
+
+			GUILayout.FlexibleSpace();
+			GUILayout.BeginHorizontal();
+			GUILayout.FlexibleSpace();
+
+			GUILayoutOption[] options = { GUILayout.MaxWidth(40f), GUILayout.MinWidth(40f) };
+
+			float newVolume = float.Parse(GUILayout.TextField(Main.settings.volumeMultiplier.ToString(), options));
+			newVolume = GUILayout.HorizontalSlider(newVolume, 0f, 3f, patreonOptions);
+
+			Main.settings.volumeMultiplier = newVolume;
+
+			if (Main.settings.volumeMultiplier != LastSavedVolume && Time.realtimeSinceStartup - LastSaveTime > 10f) {
+				Main.settings.Save(Main.modEntry);
+				LastSaveTime = Time.realtimeSinceStartup;
 			}
 
 			GUILayout.FlexibleSpace();
@@ -514,19 +652,19 @@ namespace XLMultiplayer {
 				using (MemoryStream memoryStream = new MemoryStream()) {
 					using (CustomFileWriter customFileWriter = new CustomFileWriter(memoryStream, "SXLDF001")) {
 						for (int i = 0; i < Main.multiplayerController.remoteControllers.Count; i++) {
-							if(Main.multiplayerController.remoteControllers[i].replayController.ClipFrames.Count > 0) {
+							if (Main.multiplayerController.remoteControllers[i].replayController.ClipFrames.Count > 0) {
 								List<ReplayRecordedFrame> recordedFrames = Main.multiplayerController.remoteControllers[i].replayController.ClipFrames;
 								ReplayPlayerData replayData = new ReplayPlayerData(recordedFrames.ToArray(), new List<GPEvent>().ToArray(), null, null, null, null, null, null, null, null, null, null, Main.multiplayerController.remoteControllers[i].characterCustomizer.CurrentCustomizations);
-								PlayerDataInfo dataInfo2 = new PlayerDataInfo("Player"+i.ToString());
+								PlayerDataInfo dataInfo2 = new PlayerDataInfo("Player" + i.ToString());
 								replayData.customizations = Main.multiplayerController.remoteControllers[i].characterCustomizer.CurrentCustomizations;
-								customFileWriter.AddData(replayData, "player"+i.ToString(), dataInfo2);
+								customFileWriter.AddData(replayData, "player" + i.ToString(), dataInfo2);
 								customFileWriter.Write();
 							}
 						}
 						result = memoryStream.ToArray();
 					}
 				}
-				
+
 				File.WriteAllBytes(replaysPath + "\\MultiplayerReplay.replay", result);
 			}
 		}
@@ -539,18 +677,18 @@ namespace XLMultiplayer {
 
 			if (Main.multiplayerController != null) {
 				foreach (MultiplayerRemotePlayerController controller in Main.multiplayerController.remoteControllers) {
-					if(controller.replayController == null || controller.replayController.ClipFrames == null) {
+					if (controller.replayController == null || controller.replayController.ClipFrames == null) {
 						continue;
-					}else if (controller.replayController.ClipFrames.Count > 0 && (controller.replayController.ClipFrames.Last().time <= newStartTime || controller.replayController.ClipFrames.First().time >= newEndTime)) {
+					} else if (controller.replayController.ClipFrames.Count > 0 && (controller.replayController.ClipFrames.Last().time <= newStartTime || controller.replayController.ClipFrames.First().time >= newEndTime)) {
 						controller.replayController.ClipFrames.Clear();
-					} else if(controller.replayController != null && controller.replayController.ClipFrames != null && controller.replayController.ClipFrames.Count > 0) {
+					} else if (controller.replayController != null && controller.replayController.ClipFrames != null && controller.replayController.ClipFrames.Count > 0) {
 						int framesToRemove = 0;
 						while (framesToRemove < controller.replayController.ClipFrames.Count && controller.replayController.ClipFrames[framesToRemove].time < newStartTime) {
 							framesToRemove++;
 						}
 						controller.replayController.ClipFrames.RemoveRange(0, framesToRemove);
 
-						if(controller.replayController.ClipFrames.Count > 0) {
+						if (controller.replayController.ClipFrames.Count > 0) {
 							framesToRemove = 0;
 							while (framesToRemove < controller.replayController.ClipFrames.Count && controller.replayController.ClipFrames[controller.replayController.ClipFrames.Count - 1 - framesToRemove].time > newEndTime) {
 								framesToRemove++;
@@ -558,9 +696,8 @@ namespace XLMultiplayer {
 							controller.replayController.ClipFrames.RemoveRange(controller.replayController.ClipFrames.Count - framesToRemove, framesToRemove);
 						}
 
-						if(controller.replayController.ClipFrames.Count > 0) {
-							controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f)
-							{
+						if (controller.replayController.ClipFrames.Count > 0) {
+							controller.replayController.ClipFrames.ForEach(delegate (ReplayRecordedFrame f) {
 								f.time -= newStartTime;
 							});
 
@@ -575,7 +712,7 @@ namespace XLMultiplayer {
 			foreach (MultiplayerRemotePlayerController controller in Main.remoteReplayControllers) {
 				if (controller.replayController == null || controller.replayController.ClipFrames == null) {
 					continue;
-				} else if(controller.replayController.ClipFrames.Count > 0 && (controller.replayController.ClipFrames.Last().time <= newStartTime || controller.replayController.ClipFrames.First().time >= newEndTime)) {
+				} else if (controller.replayController.ClipFrames.Count > 0 && (controller.replayController.ClipFrames.Last().time <= newStartTime || controller.replayController.ClipFrames.First().time >= newEndTime)) {
 					Main.multiplayerController.remoteControllers.Remove(controller);
 					controller.Destroy();
 				} else if (controller.replayController != null && controller.replayController.ClipFrames != null && controller.replayController.ClipFrames.Count > 0) {
@@ -605,6 +742,39 @@ namespace XLMultiplayer {
 					}
 				}
 			}
+		}
+	}
+
+	[HarmonyPatch(typeof(AudioSource), "PlayOneShot", new Type[] { typeof(AudioClip), typeof(float) })]
+	static class PlayOneShotPatch {
+		private static bool Prefix(AudioSource __instance, float volumeScale) {
+			bool isLocal = false;
+
+			foreach (ReplayAudioEventPlayer player in ReplayEditorController.Instance.playbackController.AudioEventPlayers) {
+				if (__instance == Traverse.Create(player).Property("audioSource").GetValue() as ReplayAudioEventPlayer) {
+					isLocal = true;
+					break;
+				}
+			}
+
+			if (!isLocal) volumeScale *= Main.settings.volumeMultiplier;
+
+			return true;
+		}
+	}
+
+	[HarmonyPatch(typeof(ReplayAudioEventPlayer), "DoVolumeEventAt")]
+	static class VolumeEventPatch {
+		private static bool Prefix(ReplayAudioEventPlayer __instance, int index) {
+			if (ReplayEditorController.Instance.playbackController.AudioEventPlayers.Contains(__instance)) {
+				return true;
+			}
+
+			Traverse.Create(__instance).Field("lastVolumeEventIndex").SetValue(index);
+			AudioVolumeEvent audioVolumeEvent = __instance.volumeEvents[index];
+			Traverse.Create(__instance).Property("audioSource").GetValue<AudioSource>().volume = audioVolumeEvent.volume * Main.settings.volumeMultiplier;
+
+			return false;
 		}
 	}
 

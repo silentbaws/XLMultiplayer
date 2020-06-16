@@ -405,7 +405,7 @@ namespace XLMultiplayer {
 					newOneShots[i].Add(new AudioOneShotEvent());
 					newOneShots[i][j].clipName = MultiplayerUtils.ClipNameFromArrayByte(soundBytes[readBytes]);
 					newOneShots[i][j].time = BitConverter.ToSingle(soundBytes, readBytes + 1);
-					newOneShots[i][j].volumeScale = BitConverter.ToSingle(soundBytes, readBytes + 5);
+					newOneShots[i][j].volumeScale = BitConverter.ToSingle(soundBytes, readBytes + 5) * Main.settings.volumeMultiplier;
 
 					earliestSoundTime = Mathf.Min(newOneShots[i][j].time, earliestSoundTime);
 
@@ -430,7 +430,7 @@ namespace XLMultiplayer {
 				for (int j = 0; j < volumeEvents; j++) {
 					newVolumeEvents[i].Add(new AudioVolumeEvent());
 					newVolumeEvents[i][j].time = BitConverter.ToSingle(soundBytes, readBytes);
-					newVolumeEvents[i][j].volume = BitConverter.ToSingle(soundBytes, readBytes + 4);
+					newVolumeEvents[i][j].volume = BitConverter.ToSingle(soundBytes, readBytes + 4) * Main.settings.volumeMultiplier;
 
 					earliestSoundTime = Mathf.Min(newVolumeEvents[i][j].time, earliestSoundTime);
 

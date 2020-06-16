@@ -3,8 +3,9 @@
   "DisplayName": "Silents Multiplayer Mod",
   "Author": "Silentbaws",
   "Version": "0.9.0",
+  "GameVersion": "0.3.0",
   "ManagerVersion": "0.17.0",
-  "Requirements": [ "blendermf.XLShredMenu-0.0.4" ],
+  "Requirements": [ ],
   "AssemblyName": "XLMultiplayer.dll",
   "EntryMethod": "XLMultiplayer.Main.Load"
 }

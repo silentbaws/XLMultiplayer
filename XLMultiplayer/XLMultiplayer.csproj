@@ -407,11 +407,6 @@
     <Reference Include="ValveSockets">
       <HintPath>..\ValveSockets\ValveSockets.dll</HintPath>
     </Reference>
-    <Reference Include="XLShredLib, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\References\XLShredLib.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Half.cs" />

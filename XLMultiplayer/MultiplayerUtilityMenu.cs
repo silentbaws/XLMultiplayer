@@ -61,10 +61,7 @@ namespace XLMultiplayer {
 
 			if (Input.GetKeyDown(KeyCode.M)) {
 				showVoteMenu = !showVoteMenu;
-				if (showVoteMenu)
-					XLShredLib.ModMenu.Instance.ShowCursor(Main.modId);
-				else
-					XLShredLib.ModMenu.Instance.HideCursor(Main.modId);
+				Cursor.visible = showVoteMenu;
 			}
 		}
 

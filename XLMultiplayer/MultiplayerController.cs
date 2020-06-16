@@ -17,8 +17,6 @@ using System.Threading;
 using UnityEngine;
 using UnityEngine.Networking;
 using Valve.Sockets;
-using XLShredLib;
-using XLShredLib.UI;
 
 // TODO: v0.9.0
 
@@ -114,8 +112,6 @@ namespace XLMultiplayer {
 		private int receivedAlive10Seconds = 0;
 		private int sentAlive10Seconds = 0;
 
-		private ModUIBox uiBox;
-
 		private GUIStyle modMenuStyle = null;
 
 		private string playerListText = "Player List Test";
@@ -143,10 +139,9 @@ namespace XLMultiplayer {
 				GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(true);
 				StartCoroutine(TurnOffReplay());
 			}
-
-			uiBox = ModMenu.Instance.RegisterModMaker("Silentbaws", "Silentbaws", 5);
-			uiBox.AddCustom("Player List", PlayerListOnGUI, () => isConnected);
-			uiBox.AddCustom("Network Stats", NetworkStatsOnGUI, () => isConnected);
+			
+			Main.oldBox.AddCustom(() => isConnected, PlayerListOnGUI);
+			Main.oldBox.AddCustom(() => isConnected, NetworkStatsOnGUI);
 
 			
 			var clipDict = Traverse.Create(SoundManager.Instance).Field("clipForName").GetValue<Dictionary<string, AudioClip>>();
@@ -189,6 +184,8 @@ namespace XLMultiplayer {
 				playerListLocalUser = playerController.username;
 
 				foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
+					if (controller.playerID == 255) continue;
+
 					switch (column) {
 						case 0:
 							column1Usernames.Add(controller.username + $"({controller.playerID})");
@@ -234,15 +231,15 @@ namespace XLMultiplayer {
 			GUILayout.BeginHorizontal();
 
 			// Split usernames into 3 rows
-			GUILayout.BeginVertical(ModMenu.Instance.columnLeftStyle, GUILayout.Width(ModMenu.label_column_width * 2 / 3));
+			GUILayout.BeginVertical(OldUIBox.Instance.columnLeftStyle, GUILayout.Width(OldUIBox.Instance.label_column_width * 2 / 3));
 			GUILayout.Label(usernameColumnText[0], modMenuStyle, null);
 			GUILayout.EndVertical();
 
-			GUILayout.BeginVertical(modMenuStyle, GUILayout.Width(ModMenu.label_column_width * 2 / 3));
+			GUILayout.BeginVertical(modMenuStyle, GUILayout.Width(OldUIBox.Instance.label_column_width * 2 / 3));
 			GUILayout.Label(usernameColumnText[1], modMenuStyle, null);
 			GUILayout.EndVertical();
 
-			GUILayout.BeginVertical(GUILayout.Width(ModMenu.label_column_width * 2 / 3));
+			GUILayout.BeginVertical(GUILayout.Width(OldUIBox.Instance.label_column_width * 2 / 3));
 			GUILayout.Label(usernameColumnText[2], modMenuStyle, null);
 			GUILayout.EndVertical();
 
@@ -530,8 +527,7 @@ namespace XLMultiplayer {
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
 				if (controller != null) {
 					controller.ApplyTextures();
-
-
+					
 					if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
 						controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
 						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
@@ -646,7 +642,6 @@ namespace XLMultiplayer {
 					AddPlayer(playerID);
 					break;
 				case OpCode.Disconnect:
-					// TODO: Remove players with id 255 from player list
 					MultiplayerRemotePlayerController player = remoteControllers.Find(c => c.playerID == playerID);
 					chatMessages.Add("Player <color=\"yellow\">" + player.username + "{" + player.playerID + "}</color> <b><color=\"red\">DISCONNECTED</color></b>");
 					if(player.replayAnimationFrames.Count > 5) {
@@ -654,6 +649,9 @@ namespace XLMultiplayer {
 						player.skater.SetActive(false);
 						player.board.SetActive(false);
 						player.usernameObject.SetActive(false);
+						if (column2Usernames.Count > 0) column2Usernames.RemoveAt(0);
+						else if (column1Usernames.Count > 0) column1Usernames.RemoveAt(0);
+						else if (column3Usernames.Count > 0) column3Usernames.RemoveAt(0);
 					} else {
 						RemovePlayer(player);
 					}
