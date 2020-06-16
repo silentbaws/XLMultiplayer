@@ -55,6 +55,8 @@ namespace XLMultiplayer {
 
 		public readonly int label_column_width = (window_width - (window_margin_sides * 2) - (spacing * 3)) / 2;
 
+		float lastPatchTime = 0f;
+
 		public void AddCustom(Func<bool> enabled, Action render) {
 			customs.Add(new CustomUI() {
 				isEnabled = enabled,
@@ -78,6 +80,17 @@ namespace XLMultiplayer {
 			}
 
 			if (renderWindow) Cursor.visible = true;
+
+			if (!Main.patched && Time.realtimeSinceStartup - lastPatchTime > 10f && AccessTools.TypeByName("ModMenu") != null) {
+				Main.ModMenuGUIMethod = AccessTools.Method(AccessTools.TypeByName("ModMenu"), "OnGUI");
+				Main.ModMenuGUIPrefix = typeof(ModMenuGUIPatch).GetMethod("Prefix");
+
+				Main.harmonyInstance.Patch(Main.ModMenuGUIMethod, new HarmonyMethod(Main.ModMenuGUIPrefix));
+				Main.patched = true;
+			}
+			if (Time.realtimeSinceStartup - lastPatchTime > 10f) {
+				lastPatchTime = Time.realtimeSinceStartup;
+			}
 		}
 
 		private void OnGUI() {
@@ -136,6 +149,12 @@ namespace XLMultiplayer {
 		}
 	}
 
+	static class ModMenuGUIPatch {
+		public static bool Prefix() {
+			return !Main.enabled;
+		}
+	}
+
 	class Main {
 		public static bool enabled;
 		public static String modId;
@@ -155,6 +174,10 @@ namespace XLMultiplayer {
 		public static OldUIBox oldBox;
 
 		public static MultiplayerSettings settings;
+
+		public static MethodInfo ModMenuGUIMethod = null;
+		public static MethodInfo ModMenuGUIPrefix = null;
+		public static bool patched = false;
 
 		static void Load(UnityModManager.ModEntry modEntry) {
 			settings = MultiplayerSettings.Load<MultiplayerSettings>(modEntry);
@@ -210,6 +233,12 @@ namespace XLMultiplayer {
 			} else {
 				//Unpatch the replay editor
 				harmonyInstance.UnpatchAll(harmonyInstance.Id);
+				if(ModMenuGUIMethod != null) {
+					harmonyInstance.Unpatch(ModMenuGUIMethod, ModMenuGUIPrefix);
+					ModMenuGUIMethod = null;
+					ModMenuGUIPrefix = null;
+					patched = false;
+				}
 
 				MultiplayerUtils.StopMapLoading();
 

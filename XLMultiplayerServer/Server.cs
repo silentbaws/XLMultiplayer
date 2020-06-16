@@ -1,6 +1,7 @@
 ﻿#define VALVESOCKETS_SPAN
 #define VALVESOCKETS_INLINING
 
+using HarmonyLib;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -8,6 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -50,7 +52,23 @@ namespace XLMultiplayerServer {
 
 	public delegate void LogMessage(string message, ConsoleColor textColor, params object[] objects);
 	public delegate void LogChatMessage(string message);
-	
+
+	public class Plugin {
+		[JsonRequired]
+		[JsonProperty("StartupMethod")]
+		public string startMethod = "";
+
+		[JsonRequired]
+		[JsonProperty("AssemblyName")]
+		public string dllName = "";
+
+		[JsonRequired]
+		[JsonProperty("Name")]
+		public string name = "";
+
+		public string path = "";
+	}
+
 	public class Server {
 		// TODO: Update version number with versions
 		private string VERSION_NUMBER = "0.9.0";
@@ -65,13 +83,13 @@ namespace XLMultiplayerServer {
 		public bool RUNNING { get; private set; } = true;
 
 		[JsonProperty("Server_Name")]
-		private static string SERVER_NAME = "";
+		public static string SERVER_NAME { get; private set; } = "";
 
 		[JsonProperty("Port")]
 		public static ushort port { get; private set;  } = 7777;
 
 		[JsonProperty("Max_Players")]
-		private static byte MAX_PLAYERS = 10;
+		public static byte MAX_PLAYERS { get; private set; } = 10;
 
 		[JsonProperty("Enforce_Map")]
 		private static bool ENFORCE_MAPS = true;
@@ -86,7 +104,7 @@ namespace XLMultiplayerServer {
 		private static string mapsDir = "";
 
 		[JsonProperty("Paypal_Link")]
-		private static string PAYPAL = "";
+		public static string PAYPAL { get; private set; } = "";
 
 		[JsonProperty("Max_Upload_Bytes_Per_Second")]
 		private static int MAX_UPLOAD = 15400000;
@@ -106,16 +124,18 @@ namespace XLMultiplayerServer {
 		private string sep = Path.DirectorySeparatorChar.ToString();
 		
 		private byte[] mapListBytes = null;
-		private Dictionary<string, string> mapList = new Dictionary<string, string>();
+		public Dictionary<string, string> mapList { get; private set; } = new Dictionary<string, string>();
 		private Dictionary<string, int> mapVotes = new Dictionary<string, int>();
 
 		private Stopwatch mapVoteTimer = new Stopwatch();
 
-		private string currentMapHash = "1";
+		public string currentMapHash { get; private set; } = "1";
 
 		public List<string> bannedIPs = new List<string>();
 		public byte[] motdBytes = null;
 		public string motdString = "";
+
+		private List<Plugin> loadedPlugins = new List<Plugin>();
 
 		public Server(LogMessage logCallback, LogChatMessage logChatCallback) {
 			LogMessageCallback = logCallback;
@@ -583,6 +603,46 @@ namespace XLMultiplayerServer {
 			}
 		}
 
+		private void LoadServerPlugins() {
+			string path = Directory.GetCurrentDirectory() + sep + "Plugins";
+			if (Directory.Exists(path)) {
+				foreach(string dir in Directory.GetDirectories(path)) {
+					if(File.Exists(dir + sep + "info.json")) {
+						Console.WriteLine("Found plugin");
+						Plugin newPlugin = JsonConvert.DeserializeObject<Plugin>(File.ReadAllText(dir + sep + "info.json"));
+						if (newPlugin != null && newPlugin.dllName != "" && newPlugin.startMethod != "") {
+							newPlugin.path = dir + sep;
+							loadedPlugins.Add(newPlugin);
+						}
+					}
+				}
+			}
+
+			foreach (Plugin plugin in loadedPlugins) {
+				string dll = plugin.dllName;
+
+				var loadedDLL = Assembly.LoadFile(plugin.path + dll);
+
+				Console.WriteLine(plugin.path + dll);
+				if (loadedDLL != null) {
+					MethodInfo entryMethod = AccessTools.Method(plugin.startMethod);
+
+					if (entryMethod != null) {
+						try {
+							//new object[] { this }
+							entryMethod.Invoke(null, new object[] { this });
+						} catch (Exception e) {
+							LogMessageCallback($"Exception calling entry method of plugin {plugin.name}: " + e.ToString(), ConsoleColor.Red);
+						}
+					} else {
+						LogMessageCallback($"Specified entry method of plugin {plugin.name} could not be found", ConsoleColor.Red);
+					}
+				} else {
+					LogMessageCallback($"DLL for plugin {plugin.name} could not be found", ConsoleColor.Red);
+				}
+			}
+		}
+
 		public void ServerLoop() {
 			LogMessageCallback("Starting server initialization", ConsoleColor.White);
 
@@ -614,6 +674,12 @@ namespace XLMultiplayerServer {
 			}
 
 			LogMessageCallback("Finished server initialization", ConsoleColor.White);
+
+			LogMessageCallback("Loading plugins", ConsoleColor.White);
+
+			LoadServerPlugins();
+
+			LogMessageCallback("Finished loading plugins", ConsoleColor.White);
 
 			Library.Initialize();
 
@@ -916,7 +982,7 @@ namespace XLMultiplayerServer {
 					{ "serverVersion", VERSION_NUMBER },
 					{ "apiKey", API_KEY },
 					{ "mapName", ENFORCE_MAPS ? mapList[currentMapHash] : "Not enforcing maps" },
-					{ "paypal", PAYPAL} };
+					{ "paypal", PAYPAL } };
 
 					var content = new FormUrlEncodedContent(values);
 

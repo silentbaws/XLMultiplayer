@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XLMultiplayerGUIApp", "XLMu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XLMultiplayerUI", "XLMultiplayerUI\XLMultiplayerUI.csproj", "{E13DEEDC-57AC-4D7F-A656-321A553AD1CF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExamplePlugin", "ExamplePlugin\ExamplePlugin.csproj", "{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -63,6 +65,14 @@ Global
 		{E13DEEDC-57AC-4D7F-A656-321A553AD1CF}.Release|Any CPU.Build.0 = Release|Any CPU
 		{E13DEEDC-57AC-4D7F-A656-321A553AD1CF}.Release|x64.ActiveCfg = Release|Any CPU
 		{E13DEEDC-57AC-4D7F-A656-321A553AD1CF}.Release|x64.Build.0 = Release|Any CPU
+		{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}.Debug|x64.Build.0 = Debug|Any CPU
+		{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}.Release|x64.ActiveCfg = Release|Any CPU
+		{E6316B90-4BC9-4936-9F6B-30EBCD9487CD}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

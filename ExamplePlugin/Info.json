@@ -1,0 +1,5 @@
+﻿{
+  "Name": "Awesome Example Mod",
+  "AssemblyName": "ExamplePlugin.dll",
+  "StartupMethod": "ExamplePlugin.Main:Load"
+}
