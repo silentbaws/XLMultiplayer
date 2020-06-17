@@ -1,7 +1,7 @@
 ﻿using System;
 using UnityEngine;
 using UnityModManagerNet;
-using Harmony12;
+using HarmonyLib;
 using System.Reflection.Emit;
 using System.Collections.Generic;
 using System.Reflection;
@@ -160,7 +160,7 @@ namespace XLMultiplayer {
 		public static String modId;
 		public static UnityModManager.ModEntry modEntry;
 
-		public static HarmonyInstance harmonyInstance;
+		public static Harmony harmonyInstance;
 
 		public static MultiplayerUtilityMenu utilityMenu;
 		public static MultiplayerController multiplayerController;
@@ -204,7 +204,7 @@ namespace XLMultiplayer {
 				} catch (Exception) { }
 
 				//Patch the replay editor
-				harmonyInstance = HarmonyInstance.Create(modEntry.Info.Id);
+				harmonyInstance = new Harmony(modEntry.Info.Id);
 				harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());
 
 				utilityMenu = new GameObject().AddComponent<MultiplayerUtilityMenu>();
@@ -380,6 +380,8 @@ namespace XLMultiplayer {
 					NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = !NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled;
 
 					if (NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled) {
+						if (MultiplayerUtils.hashedMaps != LevelManager.Instance.CustomLevels.Count)
+							MultiplayerUtils.StartMapLoading();
 						Cursor.visible = true;
 						Cursor.lockState = CursorLockMode.None;
 						if (Main.multiplayerController != null) {

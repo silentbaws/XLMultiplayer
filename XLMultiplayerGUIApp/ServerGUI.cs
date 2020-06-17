@@ -17,8 +17,6 @@ namespace XLMultiplayerGUIApp {
 		Server multiplayerServer;
 		FileServer fileServer;
 
-		//TODO: Hook valve debug callback delegate for GUI
-
 		public void LogMessageCallbackHandler(string message, ConsoleColor color, params object[] objects) {
 			if (objects != null && objects.Length > 0)
 				newLogQueue.Add(Tuple.Create(String.Format(message, objects) + "\n", color));

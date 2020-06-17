@@ -1,6 +1,6 @@
 ﻿#define VALVESOCKETS_SPAN
 
-using Harmony12;
+using HarmonyLib;
 using Newtonsoft.Json;
 using ReplayEditor;
 using System;
@@ -1005,6 +1005,11 @@ namespace XLMultiplayer {
 
 		public void DisconnectFromServer() {
 			Main.OnClickDisconnect();
+		}
+
+		public void OnApplicationFocus(bool focused) {
+			if (MultiplayerUtils.hashedMaps != LevelManager.Instance.CustomLevels.Count)
+				MultiplayerUtils.StartMapLoading();
 		}
 
 		public void OnDestroy() {

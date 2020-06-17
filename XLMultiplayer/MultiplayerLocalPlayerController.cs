@@ -1,5 +1,4 @@
-﻿using Harmony12;
-using ReplayEditor;
+﻿using ReplayEditor;
 using System;
 using System.Collections.Generic;
 using System.IO;

@@ -25,6 +25,8 @@ namespace XLMultiplayer {
 
 		private static Dictionary<string, byte> clipNameToArrayByteDict = new Dictionary<string, byte>();
 
+		public static int hashedMaps = 0;
+
 		public static string CalculateMD5Bytes(byte[] bytes) {
 			using (var md5 = MD5.Create()) {
 				byte[] hash = null;
@@ -124,16 +126,9 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private static string[] GetMapFiles(string path) {
-			List<string> allMaps = new List<string>();
-			foreach (string dir in Directory.GetDirectories(path)) {
-				allMaps.AddRange(GetMapFiles(dir));
-			}
-			allMaps.AddRange(Directory.GetFiles(path));
-			return allMaps.ToArray();
-		}
-
 		private static void LoadMapHashes() {
+			mapsDictionary.Clear();
+
 			if (!mapsDictionary.ContainsKey("0")) {
 				mapsDictionary.Add("0", "Assets/_Scenes/Prototyping testing courthouse 2.unity");
 			}
@@ -143,25 +138,19 @@ namespace XLMultiplayer {
 			if (!mapsDictionary.ContainsKey("2")) {
 				mapsDictionary.Add("2", "Assets/_Scenes/CopingTests.unity");
 			}
-
-			string mapsFolder = "";
-			string[] files = null;
+			
+			List<string> files = null;
 			int i = 0;
 
-			try {
-				mapsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL\\Maps\\";
-				files = Directory.GetFiles(mapsFolder);
+			files = LevelManager.Instance.CustomLevels.ConvertAll(levelInfo => levelInfo.path);
 
-				loadingMaps = true;
-			} catch (Exception) {
-				UnityModManagerNet.UnityModManager.Logger.Log("Failed to find maps folder or retrieve files from folder");
-			}
+			hashedMaps = files.Count;
 
-			if (files == null || files.Length < 1) {
+			if (files == null || files.Count < 1) {
 				UnityModManagerNet.UnityModManager.Logger.Log("**WARNING** XLMultiplayer COULD NOT find any maps in " + Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL\\Maps\\");
 			}
 
-			while (loadingMaps && files != null && files.Length > 0) {
+			while (loadingMaps && files != null && files.Count > 0) {
 				string fileHash = CalculateMD5(files[i]);
 				try {
 					mapsDictionary.Add(fileHash, files[i]);
@@ -170,11 +159,11 @@ namespace XLMultiplayer {
 					duplicates++;
 				}
 				i++;
-				if (i == files.Length) {
+				if (i == files.Count) {
 					loadedMaps = true;
 					loadingMaps = false;
 					hashingWatch.Stop();
-					UnityModManagerNet.UnityModManager.Logger.Log($"[XLMultiplayer] Finished loading {files.Length} maps in {hashingWatch.ElapsedMilliseconds}ms with {duplicates} duplicates");
+					UnityModManagerNet.UnityModManager.Logger.Log($"[XLMultiplayer] Finished loading {files.Count} maps in {hashingWatch.ElapsedMilliseconds}ms with {duplicates} duplicates");
 					break;
 				}
 			}
