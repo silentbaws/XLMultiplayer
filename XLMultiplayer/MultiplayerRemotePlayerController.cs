@@ -391,14 +391,14 @@ namespace XLMultiplayer {
 			List<List<AudioCutoffEvent>> newCutoffEvents = new List<List<AudioCutoffEvent>>();
 
 			float earliestSoundTime = float.MaxValue;
-
+			
 			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
 				newOneShots.Add(new List<AudioOneShotEvent>());
 				newClipEvents.Add(new List<AudioClipEvent>());
 				newVolumeEvents.Add(new List<AudioVolumeEvent>());
 				newPitchEvents.Add(new List<AudioPitchEvent>());
 				newCutoffEvents.Add(new List<AudioCutoffEvent>());
-
+				
 				int oneShots = BitConverter.ToInt32(soundBytes, readBytes);
 				readBytes += 4;
 				for (int j = 0; j < oneShots; j++) {
@@ -424,7 +424,7 @@ namespace XLMultiplayer {
 
 					readBytes += 6;
 				}
-
+				
 				int volumeEvents = BitConverter.ToInt32(soundBytes, readBytes);
 				readBytes += 4;
 				for (int j = 0; j < volumeEvents; j++) {
@@ -436,7 +436,7 @@ namespace XLMultiplayer {
 
 					readBytes += 8;
 				}
-
+				
 				int pitchEvents = BitConverter.ToInt32(soundBytes, readBytes);
 				readBytes += 4;
 				for (int j = 0; j < pitchEvents; j++) {
@@ -448,7 +448,7 @@ namespace XLMultiplayer {
 
 					readBytes += 8;
 				}
-
+				
 				int cutoffEvents = BitConverter.ToInt32(soundBytes, readBytes);
 				readBytes += 4;
 				for ( int j = 0; j < cutoffEvents; j++) {
@@ -464,21 +464,20 @@ namespace XLMultiplayer {
 
 			MultiplayerSoundBufferObject newSoundBufferObject = new MultiplayerSoundBufferObject();
 			soundQueue.Add(newSoundBufferObject);
-
+			
 			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
 				newSoundBufferObject.audioClipEvents.Add(new List<AudioClipEvent>());
 				newSoundBufferObject.audioOneShots.Add(new List<AudioOneShotEvent>());
 				newSoundBufferObject.audioCutoffEvents.Add(new List<AudioCutoffEvent>());
 				newSoundBufferObject.audioPitchEvents.Add(new List<AudioPitchEvent>());
 				newSoundBufferObject.audioVolumeEvents.Add(new List<AudioVolumeEvent>());
-
+				
 				newSoundBufferObject.audioClipEvents[i] = newClipEvents[i];
 				newSoundBufferObject.audioOneShots[i] = newOneShots[i];
 				newSoundBufferObject.audioCutoffEvents[i] = newCutoffEvents[i];
 				newSoundBufferObject.audioPitchEvents[i] = newPitchEvents[i];
 				newSoundBufferObject.audioVolumeEvents[i] = newVolumeEvents[i];
-
-
+				
 				foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
 					if (audioPlayer.name.Equals(MultiplayerUtils.audioPlayerNames[i])) {
 						if (audioPlayer.clipEvents != null) audioPlayer.clipEvents.RemoveEventsOlderThanExcept(this.replayAnimationFrames.First(f => f.realFrameTime != -1f).realFrameTime, 0);

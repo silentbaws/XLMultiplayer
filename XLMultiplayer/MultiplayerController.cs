@@ -143,13 +143,10 @@ namespace XLMultiplayer {
 			Main.oldBox.AddCustom(() => isConnected, PlayerListOnGUI);
 			Main.oldBox.AddCustom(() => isConnected, NetworkStatsOnGUI);
 
-			
 			var clipDict = Traverse.Create(SoundManager.Instance).Field("clipForName").GetValue<Dictionary<string, AudioClip>>();
 			MultiplayerUtils.InitializeClipToArrayByteDict(clipDict);
-			foreach (var KVP in clipDict) {
-				UnityModManagerNet.UnityModManager.Logger.Log("Clip key " + MultiplayerUtils.GetArrayByteFromClipName(KVP.Key));
-			}
 
+			MultiplayerUtils.audioPlayerNames.Clear();
 			foreach (ReplayAudioEventPlayer audioPlayer in ReplayEditorController.Instance.playbackController.AudioEventPlayers) {
 				AudioSource newSource = Traverse.Create(audioPlayer).Property("audioSource").GetValue<AudioSource>();
 				if (newSource != null) MultiplayerUtils.audioPlayerNames.Add(newSource.name);
@@ -524,6 +521,8 @@ namespace XLMultiplayer {
 			ProcessMessageQueue();
 
 			// Lerp frames using frame buffer
+			List<MultiplayerRemotePlayerController> controllerToRemove = new List<MultiplayerRemotePlayerController>();
+
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
 				if (controller != null) {
 					controller.ApplyTextures();
@@ -542,12 +541,14 @@ namespace XLMultiplayer {
 					} 
 
 					if (controller.playerID == 255 && controller.replayAnimationFrames.Last(obj => obj.realFrameTime != -1f).realFrameTime < ReplayRecorder.Instance.RecordedFrames.First().time) {
-						RemovePlayer(controller);
+						controllerToRemove.Add(controller);
 					}
 
 					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
 				}
 			}
+			foreach(MultiplayerRemotePlayerController player in controllerToRemove)
+				RemovePlayer(player);
 		}
 		
 		private void ProcessMessageQueue() {

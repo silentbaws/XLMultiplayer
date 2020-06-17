@@ -37,7 +37,8 @@ namespace XLMultiplayer {
 		public Func<bool> isEnabled;
 		public Action OnGUI;
 	}
-
+	
+	// TODO: Redo this UI in unity
 	public class OldUIBox : MonoBehaviour {
 		public static OldUIBox Instance { get; private set; } = null;
 
