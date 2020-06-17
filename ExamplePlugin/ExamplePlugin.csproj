@@ -26,7 +26,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\XLMultiplayerServerConsoleApp\bin\Release\Plugins\ExamplePlugin\</OutputPath>
+    <OutputPath>..\XLMultiplayerServerConsoleApp\bin\Debug\Plugins\ExamplePlugin\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>

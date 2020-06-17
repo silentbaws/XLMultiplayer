@@ -203,6 +203,13 @@ namespace XLMultiplayer {
 					File.Copy(modEntry.Path + "System.Runtime.CompilerServices.Unsafe.dll", directory + "\\System.Runtime.CompilerServices.Unsafe.dll", true);
 				} catch (Exception) { }
 
+				var mod = UnityModManager.FindMod("blendermf.XLShredMenu");
+				if (mod != null) {
+					modEntry.CustomRequirements = $"Mod {mod.Info.DisplayName} incompatible";
+					enabled = false;
+					return false;
+				}
+
 				//Patch the replay editor
 				harmonyInstance = new Harmony(modEntry.Info.Id);
 				harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());

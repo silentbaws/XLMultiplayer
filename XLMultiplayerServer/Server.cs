@@ -377,12 +377,12 @@ namespace XLMultiplayerServer {
 					}
 					break;
 				case OpCode.Animation:
-					if(players[fromID] != null) {
+					if (players[fromID] != null) {
 						bool reliable = buffer[buffer.Length - 1] == (byte)1 ? true : false;
 						buffer[buffer.Length - 1] = fromID;
 
 						foreach (Player player in players) {
-							if(player != null && player.playerID != fromID) {
+							if (player != null && player.playerID != fromID) {
 								ConnectionStatus status = new ConnectionStatus();
 								if (server.GetQuickConnectionStatus(player.connection, ref status)) {
 									int bytesPending = status.pendingReliable + status.sentUnackedReliable;
@@ -412,17 +412,52 @@ namespace XLMultiplayerServer {
 				case OpCode.Chat:
 					string contents = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
 					LogMessageCallback("Chat Message from {0} saying: {1}", ConsoleColor.White, fromID, contents);
-					if (LogChatMessageCallback != null) LogChatMessageCallback($"{RemoveMarkup(players[fromID].username)}({fromID}): {contents}");
+					LogChatMessageCallback?.Invoke($"{RemoveMarkup(players[fromID].username)}({fromID}): {contents}");
 
 					byte[] sendBuffer = new byte[buffer.Length + 1];
 					Array.Copy(buffer, 0, sendBuffer, 0, buffer.Length);
 					sendBuffer[buffer.Length] = fromID;
+					
+					if (contents.StartsWith("/")) {
+						if (contents.StartsWith("/report ", StringComparison.CurrentCultureIgnoreCase)) {
+							string[] splitContents = contents.Split(new char[] { ' ' }, 2);
+							if (splitContents.Length == 2) {
+								int reportedID = -1;
+								if (Int32.TryParse(splitContents[1], out reportedID)) {
+									if (players[reportedID] != null) {
+										StreamWriter writer = new StreamWriter($"Report {((ulong)DateTime.Now.ToBinary()).ToString()}.txt");
+										writer.WriteLine($"Player {RemoveMarkup(players[reportedID].username)} with the IP: {players[reportedID].ipAddr.GetIP()} was reported following these messages");
+										foreach (string msg in players[reportedID].previousMessages) {
+											writer.WriteLine(msg);
+											writer.Flush();
+										}
+										writer.Close();
 
-					foreach (Player player in players) {
-						if(player != null) {
-							server.SendMessageToConnection(player.connection, sendBuffer, SendFlags.Reliable);
+										byte[] response = ProcessMessageCommand($"msg:5:ff0 Successfully reported player {players[reportedID].username}");
+										server.SendMessageToConnection(players[fromID].connection, response, SendFlags.Reliable);
+										break;
+									}
+								}
+							}
+
+							byte[] invalidReport = ProcessMessageCommand($"msg:5:f00 Improperly formatted report message or player with given ID does not exist");
+							server.SendMessageToConnection(players[fromID].connection, invalidReport, SendFlags.Reliable);
+							break;
+						}
+
+						byte[] invalidCommand = ProcessMessageCommand($"msg:5:f00 Given command does not exist");
+						server.SendMessageToConnection(players[fromID].connection, invalidCommand, SendFlags.Reliable);
+						break;
+					} else {
+						players[fromID].previousMessages.Add(contents);
+						if (players[fromID].previousMessages.Count > 10) players[fromID].previousMessages.RemoveAt(0);
+						foreach (Player player in players) {
+							if (player != null) {
+								server.SendMessageToConnection(player.connection, sendBuffer, SendFlags.Reliable);
+							}
 						}
 					}
+
 					break;
 				case OpCode.MapVote:
 					if (ENFORCE_MAPS) {

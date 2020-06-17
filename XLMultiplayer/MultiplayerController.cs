@@ -950,7 +950,7 @@ namespace XLMultiplayer {
 			string afterMarkup = RemoveMarkup(msg);
 
 			if(afterMarkup.Length > 0) {
-				chatMessages.Add(this.playerController.username + "<b><color=\"blue\"> (You): </color></b>" + afterMarkup);
+				if (!afterMarkup.StartsWith("/")) chatMessages.Add(this.playerController.username + "<b><color=\"blue\"> (You): </color></b>" + afterMarkup);
 				this.SendBytes(OpCode.Chat, ASCIIEncoding.ASCII.GetBytes(afterMarkup), true);
 			}
 		}

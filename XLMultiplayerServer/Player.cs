@@ -20,6 +20,8 @@ namespace XLMultiplayerServer {
 
 		public Stopwatch timeoutWatch = new Stopwatch();
 
+		public List<string> previousMessages = new List<string>();
+
 		public Player(byte pID, uint conn, Address addr) {
 			this.playerID = pID;
 			this.connection = conn;
