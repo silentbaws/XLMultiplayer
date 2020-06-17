@@ -145,6 +145,7 @@ namespace XLMultiplayer {
 			files = LevelManager.Instance.CustomLevels.ConvertAll(levelInfo => levelInfo.path);
 
 			hashedMaps = files.Count;
+			loadingMaps = true;
 
 			if (files == null || files.Count < 1) {
 				UnityModManagerNet.UnityModManager.Logger.Log("**WARNING** XLMultiplayer COULD NOT find any maps in " + Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "\\SkaterXL\\Maps\\");

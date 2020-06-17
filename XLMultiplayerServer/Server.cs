@@ -689,6 +689,10 @@ namespace XLMultiplayerServer {
 				Console.In.Read();
 				return;
 			}
+			
+			Thread fileServerThread = new Thread(fileServer.ServerLoop);
+			fileServerThread.IsBackground = true;
+			fileServerThread.Start();
 
 			players = new Player[MAX_PLAYERS];
 

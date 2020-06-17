@@ -180,6 +180,8 @@ namespace XLMultiplayer {
 		public static MethodInfo ModMenuGUIPrefix = null;
 		public static bool patched = false;
 
+		public static float lastConnect = 0f;
+
 		static void Load(UnityModManager.ModEntry modEntry) {
 			settings = MultiplayerSettings.Load<MultiplayerSettings>(modEntry);
 			Main.modEntry = modEntry;
@@ -303,11 +305,11 @@ namespace XLMultiplayer {
 									Server newServer = new Server();
 									foreach (JObject o2 in p.Children<JObject>()) {
 										foreach (JProperty p2 in o2.Properties()) {
-											switch (p2.Name) {
+											switch (p2.Name.ToLower()) {
 												case "name":
 													newServer.name = (string)p2.Value;
 													break;
-												case "IP":
+												case "ip":
 													newServer.ip = (string)p2.Value;
 													break;
 												case "port":
@@ -316,13 +318,13 @@ namespace XLMultiplayer {
 												case "version":
 													newServer.version = (string)p2.Value;
 													break;
-												case "maxPlayers":
+												case "maxplayers":
 													newServer.playerMax = (int)p2.Value;
 													break;
-												case "currentPlayers":
+												case "currentplayers":
 													newServer.playerCurrent = (int)p2.Value;
 													break;
-												case "mapName":
+												case "mapname":
 													newServer.mapName = (string)p2.Value;
 													break;
 											}
@@ -341,7 +343,11 @@ namespace XLMultiplayer {
 		}
 
 		private static void ClickServerItem(ServerListItem target) {
-			JoinServer(target.ipAddress, target.port, NewMultiplayerMenu.Instance.usernameFields[0].text);
+			if(Time.realtimeSinceStartup - lastConnect > 1f) {
+				UnityModManager.Logger.Log($"Attempting to connect to server {target.ServerName.text} with ip {target.ipAddress} port {target.port}");
+				JoinServer(target.ipAddress, target.port, NewMultiplayerMenu.Instance.usernameFields[0].text);
+				lastConnect = Time.realtimeSinceStartup;
+			}
 		}
 
 		private static void OnClickConnect() {

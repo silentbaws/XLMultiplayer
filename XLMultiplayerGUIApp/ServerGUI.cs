@@ -15,7 +15,6 @@ namespace XLMultiplayerGUIApp {
 		private readonly ContextMenuStrip playerListMenu;
 		private readonly ContextMenuStrip banListMenu;
 		Server multiplayerServer;
-		FileServer fileServer;
 
 		public void LogMessageCallbackHandler(string message, ConsoleColor color, params object[] objects) {
 			if (objects != null && objects.Length > 0)
@@ -51,15 +50,8 @@ namespace XLMultiplayerGUIApp {
 			LogMessage LogMessageCallback = LogMessageCallbackHandler;
 
 			multiplayerServer = new Server(LogMessageCallback, LogChatMessageCallback);
-			fileServer = new FileServer(multiplayerServer);
-
-			multiplayerServer.fileServer = fileServer;
 
 			var serverTask = Task.Run(() => multiplayerServer.ServerLoop());
-
-			Thread fileServerThread = new Thread(fileServer.ServerLoop);
-			fileServerThread.IsBackground = true;
-			fileServerThread.Start();
 		}
 
 		private void lsbPlayerList_MouseDown(object sender, MouseEventArgs e) {

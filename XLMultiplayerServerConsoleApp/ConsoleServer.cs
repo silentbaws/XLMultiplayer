@@ -24,10 +24,6 @@ namespace XLMultiplayerServerConsoleApp {
 
 			var serverTask = Task.Run(() => multiplayerServer.ServerLoop());
 
-			Thread fileServerThread = new Thread(fileServer.ServerLoop);
-			fileServerThread.IsBackground = true;
-			fileServerThread.Start();
-
 			Task.Run(() => multiplayerServer.CommandLoop());
 
 			serverTask.Wait();
