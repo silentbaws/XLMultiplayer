@@ -33,6 +33,7 @@ namespace XLMultiplayerServer {
 		MapList = 9,
 		ServerMessage = 10,
 		Sound = 11,
+		Plugin = 12,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -56,17 +57,60 @@ namespace XLMultiplayerServer {
 	public class Plugin {
 		[JsonRequired]
 		[JsonProperty("StartupMethod")]
-		public string startMethod = "";
+		public string startMethod { get; private set; } = "";
 
 		[JsonRequired]
 		[JsonProperty("AssemblyName")]
-		public string dllName = "";
+		public string dllName { get; private set; } = "";
 
 		[JsonRequired]
 		[JsonProperty("Name")]
-		public string name = "";
+		public string name { get; private set; } = "";
 
-		public string path = "";
+		public string path { get; private set; } = "";
+
+		public byte pluginID { get; private set; } = 255;
+
+		private List<byte[]> outboundMessages = new List<byte[]>();
+		
+		public LogMessage LogMessage { get; private set; }
+		public Action<string, int, string> SendServerAnnouncement { get; private set; }
+		public Action<string> ChangeMap { get; private set; }
+
+		public List<Player> playerList = new List<Player>();
+
+		public Dictionary<string, string> mapList = new Dictionary<string, string>();
+
+		// TODO: Add OnPlayerMessage
+		// TODO: Add ClientSide Dependency
+		// TODO: Send Message to Player
+
+		public Action<string> ServerCommand;
+		public Action<string> PlayerCommand;
+		public Action<byte[]> ProcessMessage;
+
+		public Plugin(string PluginName, string PluginDLL, string PluginStartMethod, string PluginPath, byte ID, LogMessage MessageCallback, Action<string, int, string> AnnouncementCallback, Action<string> MapChangeCallback) {
+			name = PluginName;
+			dllName = PluginDLL;
+			startMethod = PluginStartMethod;
+			path = PluginPath;
+			pluginID = ID;
+			LogMessage = MessageCallback;
+			SendServerAnnouncement = AnnouncementCallback;
+			ChangeMap = MapChangeCallback;
+		}
+
+		public byte[][] GetMessages() {
+			byte[][] returnVal = outboundMessages.ToArray();
+			outboundMessages.Clear();
+
+			return returnVal;
+		}
+
+		// TODO: make this work
+		public void SendMessage(byte[] content, bool reliable = false, bool largePacket = false) {
+
+		}
 	}
 
 	public class Server {
@@ -86,7 +130,7 @@ namespace XLMultiplayerServer {
 		public static string SERVER_NAME { get; private set; } = "";
 
 		[JsonProperty("Port")]
-		public static ushort port { get; private set;  } = 7777;
+		public static ushort port { get; private set; } = 7777;
 
 		[JsonProperty("Max_Players")]
 		public static byte MAX_PLAYERS { get; private set; } = 10;
@@ -122,7 +166,7 @@ namespace XLMultiplayerServer {
 		private int total_players = 0;
 
 		private string sep = Path.DirectorySeparatorChar.ToString();
-		
+
 		private byte[] mapListBytes = null;
 		public Dictionary<string, string> mapList { get; private set; } = new Dictionary<string, string>();
 		private Dictionary<string, int> mapVotes = new Dictionary<string, int>();
@@ -137,9 +181,19 @@ namespace XLMultiplayerServer {
 
 		private List<Plugin> loadedPlugins = new List<Plugin>();
 
+		public void DefaultMessageCallback(string message, ConsoleColor textColor, params object[] objects) {
+			Console.ForegroundColor = textColor;
+			Console.WriteLine(message, objects);
+			Console.ForegroundColor = ConsoleColor.White;
+		}
+
+		public void DefaultChatMessageCallback(string message) {
+			LogMessageCallback(message, ConsoleColor.White);
+		}
+
 		public Server(LogMessage logCallback, LogChatMessage logChatCallback) {
-			LogMessageCallback = logCallback;
-			LogChatMessageCallback = logChatCallback;
+			LogMessageCallback = logCallback != null ? logCallback : DefaultMessageCallback;
+			LogChatMessageCallback = logChatCallback != null ? LogChatMessageCallback : DefaultChatMessageCallback;
 		}
 
 		public static string CalculateMD5(string filename) {
@@ -170,7 +224,7 @@ namespace XLMultiplayerServer {
 				}
 
 				foreach (Player player in players) {
-					if(player != null) {
+					if (player != null) {
 						server.SendMessageToConnection(player.connection, mapListBytes);
 						player.currentVote = "current";
 					}
@@ -254,9 +308,13 @@ namespace XLMultiplayerServer {
 			while (RUNNING) {
 				string input = Console.ReadLine();
 
-				if(input.Equals("QUIT", StringComparison.CurrentCultureIgnoreCase)) {
+				foreach (Plugin plugin in loadedPlugins) {
+					plugin.ServerCommand?.Invoke(input);
+				}
+
+				if (input.Equals("QUIT", StringComparison.CurrentCultureIgnoreCase)) {
 					RUNNING = false;
-				}else if (input.ToLower().StartsWith("kick")) {
+				} else if (input.ToLower().StartsWith("kick")) {
 					string kickIDString = input.ToLower().Replace("kick ", "");
 					int kickID = -1;
 					if (Int32.TryParse(kickIDString, out kickID)) {
@@ -278,8 +336,8 @@ namespace XLMultiplayerServer {
 				} else if (input.ToLower().StartsWith("msg")) {
 					byte[] messageBytes = ProcessMessageCommand(input);
 					if (messageBytes != null) {
-						foreach(Player player in players) {
-							if(player != null) {
+						foreach (Player player in players) {
+							if (player != null) {
 								fileServer.server.SendMessageToConnection(player.fileConnection, messageBytes, SendFlags.Reliable);
 							}
 						}
@@ -289,6 +347,15 @@ namespace XLMultiplayerServer {
 					if (messageBytes != null) {
 						motdBytes = messageBytes;
 					}
+				}
+			}
+		}
+
+		private void SendAnnouncement(string content, int duration, string color) {
+			byte[] messageBytes = ProcessMessageCommand("msg:" + duration + ":" + color + " " + content);
+			foreach (Player p in players) {
+				if (p != null) {
+					server.SendMessageToConnection(p.connection, messageBytes, SendFlags.Reliable);
 				}
 			}
 		}
@@ -345,7 +412,7 @@ namespace XLMultiplayerServer {
 		}
 
 		public void ProcessMessage(byte[] buffer, byte fromID, NetworkingSockets server) {
-			if(!Enum.IsDefined(typeof(OpCode), (OpCode)buffer[0]) || players[fromID] == null) {
+			if (!Enum.IsDefined(typeof(OpCode), (OpCode)buffer[0]) || players[fromID] == null) {
 				return;
 			}
 
@@ -411,14 +478,18 @@ namespace XLMultiplayerServer {
 					break;
 				case OpCode.Chat:
 					string contents = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
-					LogMessageCallback("Chat Message from {0} saying: {1}", ConsoleColor.White, fromID, contents);
+					LogChatMessageCallback?.Invoke($"Chat Message from {fromID} saying: {contents}");
 					LogChatMessageCallback?.Invoke($"{RemoveMarkup(players[fromID].username)}({fromID}): {contents}");
 
 					byte[] sendBuffer = new byte[buffer.Length + 1];
 					Array.Copy(buffer, 0, sendBuffer, 0, buffer.Length);
 					sendBuffer[buffer.Length] = fromID;
-					
+
 					if (contents.StartsWith("/")) {
+						foreach (Plugin plugin in loadedPlugins) {
+							plugin.PlayerCommand?.Invoke(contents);
+						}
+
 						if (contents.StartsWith("/report ", StringComparison.CurrentCultureIgnoreCase)) {
 							string[] splitContents = contents.Split(new char[] { ' ' }, 2);
 							if (splitContents.Length == 2) {
@@ -463,7 +534,7 @@ namespace XLMultiplayerServer {
 					if (ENFORCE_MAPS) {
 						string vote = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
 
-						if(mapList.ContainsKey(vote) || vote.ToLower().Equals("current")) {
+						if (mapList.ContainsKey(vote) || vote.ToLower().Equals("current")) {
 							vote = mapList.ContainsKey(vote) && mapList[vote].Equals(currentMapHash) ? "current" : vote;
 							players[fromID].currentVote = vote;
 
@@ -473,6 +544,14 @@ namespace XLMultiplayerServer {
 					break;
 				case OpCode.StillAlive:
 					if (players[fromID] != null) server.SendMessageToConnection(players[fromID].connection, buffer, SendFlags.Unreliable | SendFlags.NoNagle);
+					break;
+				case OpCode.Plugin:
+					foreach (Plugin plugin in loadedPlugins) {
+						if (plugin.pluginID == buffer[0]) {
+							// TODO: Trim the buffer first
+							plugin.ProcessMessage?.Invoke(buffer);
+						}
+					}
 					break;
 			}
 		}
@@ -547,6 +626,8 @@ namespace XLMultiplayerServer {
 								}
 
 								server.FlushMessagesOnConnection(players[i].connection);
+								
+								UpdatePluginPlayerList();
 
 								openSlot = true;
 								break;
@@ -596,7 +677,7 @@ namespace XLMultiplayerServer {
 				File.WriteAllText("ipban.txt", ipBanString);
 			}
 		}
-		
+
 		public void RemoveBan(string ip) {
 			LogMessageCallback("Removing ban for IP {0}", ConsoleColor.White, ip);
 			bannedIPs.Remove(ip);
@@ -636,18 +717,19 @@ namespace XLMultiplayerServer {
 				}
 				players[removedPlayer.playerID] = null;
 			}
+
+			UpdatePluginPlayerList();
 		}
 
 		private void LoadServerPlugins() {
 			string path = Directory.GetCurrentDirectory() + sep + "Plugins";
 			if (Directory.Exists(path)) {
-				foreach(string dir in Directory.GetDirectories(path)) {
-					if(File.Exists(dir + sep + "info.json")) {
-						Console.WriteLine("Found plugin");
+				foreach (string dir in Directory.GetDirectories(path)) {
+					if (File.Exists(dir + sep + "info.json")) {
 						Plugin newPlugin = JsonConvert.DeserializeObject<Plugin>(File.ReadAllText(dir + sep + "info.json"));
 						if (newPlugin != null && newPlugin.dllName != "" && newPlugin.startMethod != "") {
-							newPlugin.path = dir + sep;
-							loadedPlugins.Add(newPlugin);
+							string pluginPath = dir + sep;
+							loadedPlugins.Add(new Plugin(newPlugin.name, newPlugin.dllName, newPlugin.startMethod, pluginPath, (byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap));
 						}
 					}
 				}
@@ -658,7 +740,7 @@ namespace XLMultiplayerServer {
 
 				var loadedDLL = Assembly.LoadFile(plugin.path + dll);
 
-				Console.WriteLine(plugin.path + dll);
+				LogMessageCallback($"{plugin.path + dll}", ConsoleColor.White);
 				if (loadedDLL != null) {
 					MethodInfo entryMethod = AccessTools.Method(plugin.startMethod);
 
@@ -678,6 +760,29 @@ namespace XLMultiplayerServer {
 			}
 		}
 
+		private void ChangeMap(string hash) {
+			currentMapHash = hash;
+
+			byte[] newMapMessage = GetCurrentMapHashMessage();
+
+			foreach (Player player in players) {
+				if (player != null) {
+					server.SendMessageToConnection(player.connection, newMapMessage, SendFlags.Reliable);
+
+					player.currentVote = "current";
+				}
+			}
+		}
+
+		private void UpdatePluginPlayerList() {
+			foreach (Plugin plugin in loadedPlugins) {
+				plugin.playerList.Clear();
+				foreach (Player player in players) {
+					if (player != null) plugin.playerList.Add(player);
+				}
+			}
+		}
+
 		public void ServerLoop() {
 			LogMessageCallback("Starting server initialization", ConsoleColor.White);
 
@@ -689,7 +794,9 @@ namespace XLMultiplayerServer {
 				Console.In.Read();
 				return;
 			}
-			
+
+			fileServer = new FileServer(this);
+
 			Thread fileServerThread = new Thread(fileServer.ServerLoop);
 			fileServerThread.IsBackground = true;
 			fileServerThread.Start();
@@ -760,6 +867,9 @@ namespace XLMultiplayerServer {
 			NetworkingMessage[] netMessages = new NetworkingMessage[maxMessages];
 #endif
 			while (RUNNING) {
+				GC.KeepAlive(status);
+				GC.KeepAlive(messageCallback);
+
 				server.DispatchCallback(status);
 
 #if VALVESOCKETS_SPAN
@@ -854,17 +964,7 @@ namespace XLMultiplayerServer {
 							}
 						}
 
-						currentMapHash = mostVoted.Item1;
-
-						byte[] newMapMessage = GetCurrentMapHashMessage();
-
-						foreach (Player player in players) {
-							if (player != null) {
-								server.SendMessageToConnection(player.connection, newMapMessage, SendFlags.Reliable);
-
-								player.currentVote = "current";
-							}
-						}
+						ChangeMap(mostVoted.Item1);
 					} else if (total_players == 0) {
 						mapVoteTimer.Stop();
 					}

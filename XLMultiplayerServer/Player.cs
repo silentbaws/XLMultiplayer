@@ -41,5 +41,9 @@ namespace XLMultiplayerServer {
 				}
 			}
 		}
+
+		public string GetIPAddress() {
+			return ipAddr.GetIP();
+		}
 	}
 }

@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using Valve.Sockets;
 
+// TODO: Use Callback for writeline stuff
+
 namespace XLMultiplayerServer {
 	public class FileServer {
 		public NetworkingSockets server;
@@ -27,10 +29,10 @@ namespace XLMultiplayerServer {
 							break;
 						}
 
-						Console.WriteLine("connecting on file server");
+						//Console.WriteLine("connecting on file server");
 
 						if (mainServer.bannedIPs.Contains(info.connectionInfo.address.GetIP())) {
-							Console.WriteLine("Ban player attempted to connect to the server, IP: {0}", info.connectionInfo.address.GetIP());
+							//Console.WriteLine("Ban player attempted to connect to the server, IP: {0}", info.connectionInfo.address.GetIP());
 							server.CloseConnection(info.connection);
 						} else {
 							server.AcceptConnection(info.connection);
@@ -46,7 +48,7 @@ namespace XLMultiplayerServer {
 
 						if (mainServer.motdBytes != null) server.SendMessageToConnection(info.connection, mainServer.motdBytes);
 
-						Console.WriteLine("connected on file server");
+						//Console.WriteLine("connected on file server");
 					} break;
 
 					case ConnectionState.ClosedByPeer:
@@ -62,7 +64,7 @@ namespace XLMultiplayerServer {
 			server = new NetworkingSockets();
 			Address address = new Address();
 
-			Console.WriteLine($"Gameplay port: {Server.port}, File Server Port: {(ushort)(Server.port + 1)}");
+			//Console.WriteLine($"Gameplay port: {Server.port}, File Server Port: {(ushort)(Server.port + 1)}");
 
 			address.SetAddress("::0", (ushort)(Server.port + 1));
 
@@ -96,7 +98,7 @@ namespace XLMultiplayerServer {
 					}
 
 					if (newPlayer == null) {
-						Console.WriteLine("Connection on file server doesn't exist on gameplay server");
+						//Console.WriteLine("Connection on file server doesn't exist on gameplay server");
 
 						server.CloseConnection(netMessage.connection);
 					} else {

@@ -2,6 +2,7 @@
 using ReplayEditor;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using UnityEngine;
@@ -378,10 +379,11 @@ namespace XLMultiplayer {
 			currentBufferObject.quaternions.CopyTo(replayFrameObject.quaternions, 0);
 
 			this.replayAnimationFrames.Add(replayFrameObject);
-			this.replayAnimationFrames = this.replayAnimationFrames.OrderBy(f => f.animFrame).ToList();
 		}
 
 		public void UnpackSounds(byte[] soundBytes) {
+			Stopwatch animationTime = new Stopwatch();
+			animationTime.Restart();
 			int readBytes = 0;
 
 			List<List<AudioOneShotEvent>> newOneShots = new List<List<AudioOneShotEvent>>();
@@ -462,6 +464,8 @@ namespace XLMultiplayer {
 				}
 			}
 
+			double newEventsTime = animationTime.Elapsed.TotalMilliseconds;
+
 			MultiplayerSoundBufferObject newSoundBufferObject = new MultiplayerSoundBufferObject();
 			soundQueue.Add(newSoundBufferObject);
 			
@@ -477,17 +481,27 @@ namespace XLMultiplayer {
 				newSoundBufferObject.audioCutoffEvents[i] = newCutoffEvents[i];
 				newSoundBufferObject.audioPitchEvents[i] = newPitchEvents[i];
 				newSoundBufferObject.audioVolumeEvents[i] = newVolumeEvents[i];
-				
+			}
+
+			double newBufferObjectTime = animationTime.Elapsed.TotalMilliseconds - newEventsTime;
+
+			try {
+				MultiplayerFrameBufferObject firstRealTime = this.replayAnimationFrames.First(f => f.realFrameTime != -1f);
+
 				foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
-					if (audioPlayer.name.Equals(MultiplayerUtils.audioPlayerNames[i])) {
-						if (audioPlayer.clipEvents != null) audioPlayer.clipEvents.RemoveEventsOlderThanExcept(this.replayAnimationFrames.First(f => f.realFrameTime != -1f).realFrameTime, 0);
-						if (audioPlayer.cutoffEvents != null) audioPlayer.cutoffEvents.RemoveEventsOlderThanExcept(this.replayAnimationFrames.First(f => f.realFrameTime != -1f).realFrameTime, 0);
-						if (audioPlayer.oneShotEvents != null) audioPlayer.oneShotEvents.RemoveEventsOlderThanExcept(this.replayAnimationFrames.First(f => f.realFrameTime != -1f).realFrameTime, 0);
-						if (audioPlayer.pitchEvents != null) audioPlayer.pitchEvents.RemoveEventsOlderThanExcept(this.replayAnimationFrames.First(f => f.realFrameTime != -1f).realFrameTime, 0);
-						if (audioPlayer.volumeEvents != null) audioPlayer.volumeEvents.RemoveEventsOlderThanExcept(this.replayAnimationFrames.First(f => f.realFrameTime != -1f).realFrameTime, 0);
+					if (audioPlayer != null) {
+						if (audioPlayer.clipEvents != null) audioPlayer.clipEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
+						if (audioPlayer.cutoffEvents != null) audioPlayer.cutoffEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
+						if (audioPlayer.oneShotEvents != null) audioPlayer.oneShotEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
+						if (audioPlayer.pitchEvents != null) audioPlayer.pitchEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
+						if (audioPlayer.volumeEvents != null) audioPlayer.volumeEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
 					}
 				}
-			}
+			} catch (Exception) { }
+
+			animationTime.Stop();
+			double removeOldTime = animationTime.Elapsed.TotalMilliseconds - newBufferObjectTime;
+			this.debugWriter.WriteLine($"{newEventsTime}ms, {newBufferObjectTime}ms, {removeOldTime}ms");
 		}
 
 		// TODO: refactor all this shit, I'm sure there's a better way

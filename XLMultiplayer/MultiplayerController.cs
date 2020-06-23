@@ -6,6 +6,7 @@ using ReplayEditor;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -14,11 +15,12 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 using Valve.Sockets;
 
-// TODO: v0.9.0
+// TODO: v0.10.0
 
 // TODO: Console player list
 
@@ -80,13 +82,20 @@ namespace XLMultiplayer {
 		private ushort serverPort = 7777;
 
 		private Thread networkMessageThread;
-
+		private Thread decompressionThread;
+		
 		public List<string> chatMessages = new List<string>();
 
 		public bool isConnected { get; private set; } = false;
 		public bool isFileConnected { get; private set; } = false;
 
 		private List<Tuple<byte[], uint>> networkMessageQueue = new List<Tuple<byte[], uint>>();
+		private List<Tuple<byte, byte[]>> CompressedSounds = new List<Tuple<byte, byte[]>>();
+		private List<Tuple<byte, byte[]>> DecompressedSounds = new List<Tuple<byte, byte[]>>();
+		private List<Tuple<byte, byte[]>> CompressedAnimations = new List<Tuple<byte, byte[]>>();
+		private List<Tuple<byte, byte[]>> DecompressedAnimations = new List<Tuple<byte, byte[]>>();
+
+		private bool modifyingCompressionList = false;
 
 		public StreamWriter debugWriter;
 
@@ -130,6 +139,17 @@ namespace XLMultiplayer {
 		private byte[] usernameMessage = null;
 
 		public static MultiplayerController Instance { get; private set; }
+
+		private Stopwatch FrameWatch = new Stopwatch();
+		private double StateManagementTime = 0;
+		private double NetworkDiagnosticTime = 0;
+		private double MessageQueueTime = 0;
+		private double SoundAndAnimationTime = 0;
+		
+		private List<double> previousQueueTimes = new List<double>();
+		private List<Tuple<double, OpCode>> proccessedMessages = new List<Tuple<double, OpCode>>();
+
+		private int messagesProcessed = 0;
 
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
@@ -314,6 +334,10 @@ namespace XLMultiplayer {
 			networkMessageThread = new Thread(UpdateClient);
 			networkMessageThread.IsBackground = true;
 			networkMessageThread.Start();
+
+			decompressionThread = new Thread(DecompressSoundAnimationQueue);
+			decompressionThread.IsBackground = true;
+			decompressionThread.Start();
 		}
 
 		private void StatusCallback(ref StatusInfo info, IntPtr context) {
@@ -428,6 +452,7 @@ namespace XLMultiplayer {
 		}
 
 		public void Update() {
+			FrameWatch.Restart();
 			if (closedByPeer) {
 				//Client disconnected from server
 				this.debugWriter.WriteLine("Disconnected from server");
@@ -486,6 +511,8 @@ namespace XLMultiplayer {
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0 && isConnected) {
 				GameManagement.GameStateMachine.Instance.RequestPlayState();
 			}
+
+			StateManagementTime = FrameWatch.Elapsed.TotalMilliseconds;
 			
 			if (sendingUpdates) {
 				this.playerController.SendTextures();
@@ -518,7 +545,19 @@ namespace XLMultiplayer {
 				pingTimes.Clear();
 			}
 
+			NetworkDiagnosticTime = FrameWatch.Elapsed.TotalMilliseconds - StateManagementTime;
+
+			modifyingCompressionList = true;
+
 			ProcessMessageQueue();
+
+			MessageQueueTime = FrameWatch.Elapsed.TotalMilliseconds - NetworkDiagnosticTime;
+
+			ProcessSoundAnimationQueue();
+
+			double SoundAnimationTime = FrameWatch.Elapsed.TotalMilliseconds - MessageQueueTime;
+
+			modifyingCompressionList = false;
 
 			// Lerp frames using frame buffer
 			List<MultiplayerRemotePlayerController> controllerToRemove = new List<MultiplayerRemotePlayerController>();
@@ -547,12 +586,43 @@ namespace XLMultiplayer {
 					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
 				}
 			}
-			foreach(MultiplayerRemotePlayerController player in controllerToRemove)
+			SoundAndAnimationTime = FrameWatch.Elapsed.TotalMilliseconds - MessageQueueTime;
+
+			foreach (MultiplayerRemotePlayerController player in controllerToRemove)
 				RemovePlayer(player);
+
+			//private double StateManagementTime = 0;
+			//private double NetworkDiagnosticTime = 0;
+			//private double MessageQueueTime = 0;
+			//private double SoundAndAnimationTime = 0;
+
+			FrameWatch.Stop();
+			previousQueueTimes.Add(MessageQueueTime);
+
+			double averageTime = 0;
+			if(previousQueueTimes.Count > 100) {
+				previousQueueTimes.RemoveAt(previousQueueTimes.Count - 1);
+				foreach(double t in previousQueueTimes) {
+					averageTime += t;
+				}
+
+				averageTime /= previousQueueTimes.Count;
+
+				if(MessageQueueTime > averageTime * 1.5) {
+					this.debugWriter.WriteLine($"Frame Time Multiplayer: {FrameWatch.Elapsed.TotalMilliseconds} - Sound and Animation Queue Processing {SoundAndAnimationTime}, State management {StateManagementTime}, Network Diagnostics {NetworkDiagnosticTime}, Message Queue Processing {MessageQueueTime}, Sound and Animations {SoundAndAnimationTime}, Messages Processed {messagesProcessed}");
+					foreach(Tuple<double, OpCode> item in proccessedMessages) {
+						this.debugWriter.WriteLine($"Opcode {item.Item2} took {item.Item1}ms");
+					}
+				}
+			}
 		}
 		
 		private void ProcessMessageQueue() {
+			proccessedMessages.Clear();
+			messagesProcessed = 0;
+
 			for (int i = networkMessageQueue.Count; i > 0; i--) {
+				messagesProcessed++;
 				byte[] message = null;
 				uint inboundConnection = 0;
 				if (networkMessageQueue[0] != null) {
@@ -572,13 +642,13 @@ namespace XLMultiplayer {
 			byte[] messageData = new byte[netMessage.length];
 			netMessage.CopyTo(messageData);
 
-			MultiplayerController.Instance.networkMessageQueue.Add(Tuple.Create(messageData, netMessage.connection));
+			Instance.networkMessageQueue.Add(Tuple.Create(messageData, netMessage.connection));
 		}
 #endif
 
 		private void UpdateClient() {
-			statisticsResetTime = Time.time;
-			lastAliveTime = Time.time;
+			statisticsResetTime = Time.realtimeSinceStartup;
+			lastAliveTime = Time.realtimeSinceStartup;
 			while (this.playerController != null) {
 				if(client != null) {
 					client.DispatchCallback(status);
@@ -592,8 +662,8 @@ namespace XLMultiplayer {
 					if (client != null)
 						GC.KeepAlive(client);
 
-					if (isConnected && Time.time - lastAliveTime >= 0.2f) {
-						byte[] currentTime = BitConverter.GetBytes(Time.time);
+					if (isConnected && Time.realtimeSinceStartup - lastAliveTime >= 0.2f) {
+						byte[] currentTime = BitConverter.GetBytes(Time.realtimeSinceStartup);
 						byte[] message = new byte[5];
 						message[0] = (byte)OpCode.StillAlive;
 						Array.Copy(currentTime, 0, message, 1, 4);
@@ -603,7 +673,7 @@ namespace XLMultiplayer {
 
 						alivePacketCount++;
 						sentAlive10Seconds++;
-						lastAliveTime = Time.time;
+						lastAliveTime = Time.realtimeSinceStartup;
 					}
 
 #if VALVESOCKETS_SPAN
@@ -627,6 +697,8 @@ namespace XLMultiplayer {
 		}
 
 		private void ProcessMessage(byte[] buffer, uint inboundConnection) {
+			Stopwatch messageTime = new Stopwatch();
+			messageTime.Restart();
 			OpCode opCode = (OpCode)buffer[0];
 			byte playerID = buffer[buffer.Length - 1];
 
@@ -636,7 +708,7 @@ namespace XLMultiplayer {
 				Array.Copy(buffer, 1, newBuffer, 0, newBuffer.Length);
 			}
 
-			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive) this.debugWriter.WriteLine("Received message with opcode {0}, and length {1}", opCode, buffer.Length);
+			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive && opCode != OpCode.Sound) this.debugWriter.WriteLine("Received message with opcode {0}, and length {1}", opCode, buffer.Length);
 
 			switch (opCode) {
 				case OpCode.Connect:
@@ -741,20 +813,10 @@ namespace XLMultiplayer {
 					}
 					break;
 				case OpCode.Animation:
-					byte[] packetData = new byte[newBuffer.Length - 4];
-					Array.Copy(newBuffer, 4, packetData, 0, packetData.Length);
-
-					byte[] decompressedData = Decompress(packetData);
-
-					byte[] animationData = new byte[decompressedData.Length + 4];
-					Array.Copy(newBuffer, 0, animationData, 0, 4);
-					Array.Copy(decompressedData, 0, animationData, 4, decompressedData.Length);
-
-					this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(animationData);
+					CompressedAnimations.Add(Tuple.Create(playerID, newBuffer));
 					break;
 				case OpCode.Sound:
-					byte[] decompressedSounds = Decompress(newBuffer);
-					this.remoteControllers.Find(p => p.playerID == playerID).UnpackSounds(decompressedSounds);
+					CompressedSounds.Add(Tuple.Create(playerID, newBuffer));
 					break;
 				case OpCode.Chat:
 					MultiplayerRemotePlayerController remoteSender = this.remoteControllers.Find(p => p.playerID == playerID);
@@ -789,11 +851,64 @@ namespace XLMultiplayer {
 				case OpCode.StillAlive:
 					if (inboundConnection == connection) {
 						float sentTime = BitConverter.ToSingle(buffer, 1);
-						pingTimes.Add(Time.time - sentTime);
+						pingTimes.Add(Time.realtimeSinceStartup - sentTime);
 						receivedAlivePackets++;
 						receivedAlive10Seconds++;
 					}
 					break;
+			}
+
+			messageTime.Stop();
+			proccessedMessages.Add(Tuple.Create(messageTime.Elapsed.TotalMilliseconds, opCode));
+		}
+
+		private void DecompressSoundAnimationQueue() {
+			debugWriter.WriteLine("Start Decompress thread");
+			while (playerController != null) {
+				if (!modifyingCompressionList) {
+					while (CompressedSounds.Count > 0) {
+						if (CompressedSounds[0] != null) {
+							debugWriter.WriteLine($"decompressing sound");
+							byte[] decompressed = Decompress(CompressedSounds[0].Item2);
+							DecompressedSounds.Add(Tuple.Create(CompressedSounds[0].Item1, decompressed));
+						}
+						CompressedSounds.RemoveAt(0);
+					}
+					while (CompressedAnimations.Count > 0) {
+						if (CompressedAnimations[0] != null) {
+							debugWriter.WriteLine($"decompressing animation");
+							byte[] packetData = new byte[CompressedAnimations[0].Item2.Length - 4];
+							Array.Copy(CompressedAnimations[0].Item2, 4, packetData, 0, packetData.Length);
+
+							byte[] decompressedData = Decompress(packetData);
+
+							byte[] animationData = new byte[decompressedData.Length + 4];
+							Array.Copy(CompressedAnimations[0].Item2, 0, animationData, 0, 4);
+							Array.Copy(decompressedData, 0, animationData, 4, decompressedData.Length);
+
+							DecompressedAnimations.Add(Tuple.Create(CompressedAnimations[0].Item1, animationData));
+						}
+						CompressedAnimations.RemoveAt(0);
+					}
+				}
+			}
+			Instance.debugWriter.WriteLine("End Decompress thread");
+		}
+
+		private void ProcessSoundAnimationQueue() {
+			while (DecompressedSounds.Count > 0) {
+				byte playerID = DecompressedSounds[0].Item1;
+				byte[] array = new byte[DecompressedSounds[0].Item2.Length];
+				Array.Copy(DecompressedSounds[0].Item2, array, array.Length);
+				DecompressedSounds.RemoveAt(0);
+				this.remoteControllers.Find(p => p.playerID == playerID).UnpackSounds(array);
+			}
+			while (DecompressedAnimations.Count > 0) {
+				byte playerID = DecompressedAnimations[0].Item1;
+				byte[] array = new byte[DecompressedAnimations[0].Item2.Length];
+				Array.Copy(DecompressedAnimations[0].Item2, array, array.Length);
+				DecompressedAnimations.RemoveAt(0);
+				this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(array);
 			}
 		}
 
@@ -1043,6 +1158,7 @@ namespace XLMultiplayer {
 			
 			if (usernameThread != null && usernameThread.IsAlive) usernameThread.Abort();
 			if (networkMessageThread != null && networkMessageThread.IsAlive) networkMessageThread.Abort();
+			if (decompressionThread != null && decompressionThread.IsAlive) decompressionThread.Abort();
 
 			this.debugWriter.Close();
 			this.debugWriter.Dispose();

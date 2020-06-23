@@ -20,6 +20,7 @@ namespace XLMultiplayerUI {
 		}
 
 		public void OnClick() {
+			NewMultiplayerMenu.Instance.OnClickCloseServerBrowser();
 			onClickCallback(this);
 		}
 	}

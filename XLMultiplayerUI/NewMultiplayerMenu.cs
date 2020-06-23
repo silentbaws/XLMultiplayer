@@ -66,6 +66,7 @@ namespace XLMultiplayerUI {
 		}
 
 		public void OnClickConnect() {
+			OnClickCloseDirect();
 			if (this.OnClickConnectCallback != null) OnClickConnectCallback();
 		}
 

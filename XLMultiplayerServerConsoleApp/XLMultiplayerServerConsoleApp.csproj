@@ -53,6 +53,7 @@
     <ProjectReference Include="..\XLMultiplayerServer\XLMultiplayerServer.csproj">
       <Project>{06a13d65-cf19-44f3-94d3-28b94727b64f}</Project>
       <Name>XLMultiplayerServer</Name>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
