@@ -1,0 +1,4 @@
+﻿{
+  "AssemblyName": "ExampleClientPlugin.dll",
+  "StartupMethod": "ExampleClientPlugin.PluginMain:Load"
+}

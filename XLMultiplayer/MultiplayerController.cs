@@ -45,6 +45,9 @@ namespace XLMultiplayer {
 		MapList = 9,
 		ServerMessage = 10,
 		Sound = 11,
+		Plugin = 12,
+		PluginHash = 13,
+		PluginFile = 14,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -856,10 +859,99 @@ namespace XLMultiplayer {
 						receivedAlive10Seconds++;
 					}
 					break;
+				case OpCode.PluginHash:
+					byte pluginID = buffer[1];
+					string hash = ASCIIEncoding.ASCII.GetString(buffer, 2, buffer.Length - 2);
+
+					bool hasPlugin = false;
+					Plugin localPlugin = null;
+					foreach (Plugin plugin in Main.pluginList) {
+						if (plugin.hash == hash) {
+							hasPlugin = true;
+							localPlugin = plugin;
+							break;
+						}
+					}
+
+					if (hasPlugin) {
+						EnablePlugin(localPlugin, pluginID);
+					} else {
+						byte[] PluginMissingMessage = new byte[buffer.Length];
+						PluginMissingMessage[0] = (byte)OpCode.PluginHash;
+						PluginMissingMessage[1] = 0;
+						Array.Copy(buffer, 2, PluginMissingMessage, 2, buffer.Length - 2);
+
+						client.SendMessageToConnection(connection, PluginMissingMessage, SendFlags.Reliable);
+					}
+
+					break;
+				case OpCode.PluginFile:
+					List<Plugin> oldPluginList = new List<Plugin>();
+					foreach (Plugin p in Main.pluginList) {
+						oldPluginList.Add(p);
+					}
+
+					int fileNameLength = BitConverter.ToInt32(buffer, 2);
+					string fileName = ASCIIEncoding.ASCII.GetString(buffer, 6, fileNameLength);
+					int fileLength = BitConverter.ToInt32(buffer, 6 + fileNameLength);
+					byte[] fileContents = new byte[fileLength];
+
+					Array.Copy(buffer, 10 + fileNameLength, fileContents, 0, fileLength);
+
+					File.WriteAllBytes(Path.Combine(Main.modEntry.Path, "Plugins", fileName), fileContents);
+
+					Main.LoadPlugins();
+
+					byte newPluginID = buffer[1];
+					Plugin newPlugin = null;
+					foreach (Plugin p in Main.pluginList) {
+						if (!oldPluginList.Contains(p)) {
+							newPlugin = p;
+							break;
+						}
+					}
+
+					Traverse.Create(newPlugin).Field("pluginID").SetValue(newPluginID);
+
+					EnablePlugin(newPlugin, newPluginID);
+
+					byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(newPlugin.hash);
+					byte[] EnablePluginMessage = new byte[hashBytes.Length + 2];
+					EnablePluginMessage[0] = (byte)OpCode.PluginHash;
+					EnablePluginMessage[1] = 1;
+					Array.Copy(hashBytes, 0, EnablePluginMessage, 2, hashBytes.Length);
+
+					client.SendMessageToConnection(connection, EnablePluginMessage, SendFlags.Reliable);
+					break;
+				case OpCode.Plugin:
+					byte destinationPlugin = buffer[1];
+					byte[] pluginMessage = new byte[buffer.Length - 2];
+					Array.Copy(buffer, 2, pluginMessage, 0, pluginMessage.Length);
+
+					foreach (Plugin p in Main.pluginList) {
+						if (p.pluginID == destinationPlugin) {
+							p.ProcessMessage?.Invoke(pluginMessage);
+							break;
+						}
+					}
+					break;
 			}
 
 			messageTime.Stop();
 			proccessedMessages.Add(Tuple.Create(messageTime.Elapsed.TotalMilliseconds, opCode));
+		}
+
+		private void EnablePlugin(Plugin localPlugin, byte pluginID) {
+			Traverse.Create(localPlugin).Property("pluginID").SetValue(pluginID);
+			localPlugin.TogglePlugin(true);
+
+			byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(localPlugin.hash);
+			byte[] PluginEnabledMessage = new byte[hashBytes.Length + 2];
+			PluginEnabledMessage[0] = (byte)OpCode.PluginHash;
+			PluginEnabledMessage[1] = 1;
+			Array.Copy(hashBytes, 0, PluginEnabledMessage, 2, hashBytes.Length);
+
+			client.SendMessageToConnection(connection, PluginEnabledMessage, SendFlags.Reliable);
 		}
 
 		private void DecompressSoundAnimationQueue() {

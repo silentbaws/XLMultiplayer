@@ -180,6 +180,8 @@ namespace XLMultiplayer {
 		public static MethodInfo ModMenuGUIPrefix = null;
 		public static bool patched = false;
 
+		public static List<Plugin> pluginList = new List<Plugin>();
+
 		public static float lastConnect = 0f;
 
 		static void Load(UnityModManager.ModEntry modEntry) {
@@ -188,6 +190,25 @@ namespace XLMultiplayer {
 			Main.modId = modEntry.Info.Id;
 
 			modEntry.OnToggle = OnToggle;
+
+			string directory = Directory.GetCurrentDirectory();
+			try {
+				File.Copy(modEntry.Path + "GameNetworkingSockets.dll", directory + "\\GameNetworkingSockets.dll", true);
+				File.Copy(modEntry.Path + "libprotobuf.dll", directory + "\\libprotobuf.dll", true);
+				File.Copy(modEntry.Path + "libcrypto-1_1-x64.dll", directory + "\\libcrypto-1_1-x64.dll", true);
+				File.Copy(modEntry.Path + "System.Buffers.dll", directory + "\\System.Buffers.dll", true);
+				File.Copy(modEntry.Path + "System.Memory.dll", directory + "\\System.Memory.dll", true);
+				File.Copy(modEntry.Path + "System.Numerics.Vectors.dll", directory + "\\System.Numerics.Vectors.dll", true);
+				File.Copy(modEntry.Path + "System.Runtime.CompilerServices.Unsafe.dll", directory + "\\System.Runtime.CompilerServices.Unsafe.dll", true);
+			} catch (Exception) { }
+
+			string pluginDirectory = Path.Combine(modEntry.Path, "Plugins");
+			if (Directory.Exists(pluginDirectory)) {
+				foreach(string subdir in Directory.GetDirectories(pluginDirectory))
+					ClearDirectory(subdir);
+			}
+
+			LoadPlugins();
 		}
 
 		static bool OnToggle(UnityModManager.ModEntry modEntry, bool value) {
@@ -195,17 +216,6 @@ namespace XLMultiplayer {
 			enabled = value;
 
 			if (enabled) {
-				string directory = Directory.GetCurrentDirectory();
-				try {
-					File.Copy(modEntry.Path + "GameNetworkingSockets.dll", directory + "\\GameNetworkingSockets.dll", true);
-					File.Copy(modEntry.Path + "libprotobuf.dll", directory + "\\libprotobuf.dll", true);
-					File.Copy(modEntry.Path + "libcrypto-1_1-x64.dll", directory + "\\libcrypto-1_1-x64.dll", true);
-					File.Copy(modEntry.Path + "System.Buffers.dll", directory + "\\System.Buffers.dll", true);
-					File.Copy(modEntry.Path + "System.Memory.dll", directory + "\\System.Memory.dll", true);
-					File.Copy(modEntry.Path + "System.Numerics.Vectors.dll", directory + "\\System.Numerics.Vectors.dll", true);
-					File.Copy(modEntry.Path + "System.Runtime.CompilerServices.Unsafe.dll", directory + "\\System.Runtime.CompilerServices.Unsafe.dll", true);
-				} catch (Exception) { }
-
 				var mod = UnityModManager.FindMod("blendermf.XLShredMenu");
 				if (mod != null) {
 					modEntry.CustomRequirements = $"Mod {mod.Info.DisplayName} incompatible";
@@ -260,6 +270,109 @@ namespace XLMultiplayer {
 			}
 
 			return true;
+		}
+
+		public static void LoadPlugins() {
+			string pluginDirectory = Path.Combine(modEntry.Path, "Plugins");
+
+			if (!Directory.Exists(pluginDirectory)) {
+				Directory.CreateDirectory(pluginDirectory);
+				return;
+			}
+
+			List<string> pluginDirectories = new List<string>();
+			foreach (string dir in Directory.GetDirectories(pluginDirectory)) {
+				pluginDirectories.Add(dir);
+			}
+
+			List<Tuple<string, string>> directoryToHash = new List<Tuple<string, string>>();
+
+			foreach (string file in Directory.GetFiles(pluginDirectory)) {
+				if (Path.GetExtension(file).Equals(".zip", StringComparison.CurrentCultureIgnoreCase)) {
+					string fileHash = MultiplayerUtils.CalculateMD5Bytes(File.ReadAllBytes(file));
+					bool pluginLoaded = false;
+					foreach (Plugin plugin in pluginList) {
+						if (plugin.hash == fileHash) {
+							pluginLoaded = true;
+							break;
+						}
+					}
+
+					if (!pluginLoaded) {
+						MultiplayerUtils.ExtractZipContent(file, pluginDirectory + "\\");
+						
+						foreach (string dir in Directory.GetDirectories(pluginDirectory)) {
+							if (!pluginDirectories.Contains(dir)) {
+								directoryToHash.Add(Tuple.Create(dir, fileHash));
+								break;
+							}
+						}
+					}
+				}
+			}
+
+			foreach (string folder in Directory.GetDirectories(pluginDirectory)) {
+				string infoFile = Path.Combine(folder, "Info.json");
+				if (File.Exists(infoFile)) {
+					Plugin newPlugin = JsonConvert.DeserializeObject<Plugin>(File.ReadAllText(infoFile));
+
+					// TODO: Replace null action
+					pluginList.Add(new Plugin(newPlugin.dllName, newPlugin.startMethod, folder, SendMessageFromPlugin));
+
+					foreach (Tuple<string, string> hashDirPair in directoryToHash) {
+						if (hashDirPair.Item1 == folder) {
+							Traverse.Create(pluginList[pluginList.Count - 1]).Property("hash").SetValue(hashDirPair.Item2);
+						}
+					}
+				}
+			}
+
+			foreach (Plugin plugin in pluginList) {
+				if (plugin.loadedDLL == null) {
+					// TODO: Add log statements
+					string targetDLLFile = Path.Combine(plugin.path, plugin.dllName);
+					if (!File.Exists(targetDLLFile)) continue;
+					var loadedDLL = Assembly.LoadFile(targetDLLFile);
+
+					Traverse.Create(plugin).Property("loadedDLL").SetValue(loadedDLL);
+
+					if (loadedDLL != null) {
+						MethodInfo entryMethod = AccessTools.Method(plugin.startMethod);
+
+						if (entryMethod != null) {
+							try {
+								//new object[] { this }
+								entryMethod.Invoke(null, new object[] { plugin });
+							} catch (Exception e) { }
+						} else { }
+					} else { }
+				}
+			}
+		}
+
+		private static void SendMessageFromPlugin(Plugin source, byte[] message, bool reliable) {
+			if (multiplayerController != null) {
+				byte[] sendMessage = new byte[message.Length + 2];
+				sendMessage[0] = (byte)OpCode.Plugin;
+				sendMessage[1] = source.pluginID;
+
+				Array.Copy(message, 0, sendMessage, 2, message.Length);
+
+				multiplayerController.SendBytesRaw(sendMessage, reliable, false, false, message.Length > 1024);
+			}
+		}
+
+		// TODO: Move to utils class
+		public static void ClearDirectory(string dir) {
+			foreach (string file in Directory.GetFiles(dir)) {
+				File.Delete(file);
+			}
+
+			foreach (string subdir in Directory.GetDirectories(dir)) {
+				ClearDirectory(subdir);
+			}
+
+			Directory.Delete(dir);
 		}
 
 		public static IEnumerator StartUpdatingServerList() {

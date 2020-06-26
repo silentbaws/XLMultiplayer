@@ -5,6 +5,8 @@ using Valve.Sockets;
 
 namespace XLMultiplayerServer {
 	public class Player {
+		// TODO: Dict with queued messages for plugins
+
 		public byte playerID;
 		public string username;
 		public uint connection;
@@ -21,6 +23,7 @@ namespace XLMultiplayerServer {
 		public Stopwatch timeoutWatch = new Stopwatch();
 
 		public List<string> previousMessages = new List<string>();
+		public List<byte> loadedPlugins = new List<byte>();
 
 		public Player(byte pID, uint conn, Address addr) {
 			this.playerID = pID;

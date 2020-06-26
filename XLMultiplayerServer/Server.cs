@@ -34,6 +34,8 @@ namespace XLMultiplayerServer {
 		ServerMessage = 10,
 		Sound = 11,
 		Plugin = 12,
+		PluginHash = 13,
+		PluginFile = 14,
 		StillAlive = 254,
 		Disconnect = 255
 	}
@@ -53,66 +55,7 @@ namespace XLMultiplayerServer {
 
 	public delegate void LogMessage(string message, ConsoleColor textColor, params object[] objects);
 	public delegate void LogChatMessage(string message);
-
-	public class Plugin {
-		[JsonRequired]
-		[JsonProperty("StartupMethod")]
-		public string startMethod { get; private set; } = "";
-
-		[JsonRequired]
-		[JsonProperty("AssemblyName")]
-		public string dllName { get; private set; } = "";
-
-		[JsonRequired]
-		[JsonProperty("Name")]
-		public string name { get; private set; } = "";
-
-		public string path { get; private set; } = "";
-
-		public byte pluginID { get; private set; } = 255;
-
-		private List<byte[]> outboundMessages = new List<byte[]>();
-		
-		public LogMessage LogMessage { get; private set; }
-		public Action<string, int, string> SendServerAnnouncement { get; private set; }
-		public Action<string> ChangeMap { get; private set; }
-
-		public List<Player> playerList = new List<Player>();
-
-		public Dictionary<string, string> mapList = new Dictionary<string, string>();
-
-		// TODO: Add OnPlayerMessage
-		// TODO: Add ClientSide Dependency
-		// TODO: Send Message to Player
-
-		public Action<string> ServerCommand;
-		public Action<string> PlayerCommand;
-		public Action<byte[]> ProcessMessage;
-
-		public Plugin(string PluginName, string PluginDLL, string PluginStartMethod, string PluginPath, byte ID, LogMessage MessageCallback, Action<string, int, string> AnnouncementCallback, Action<string> MapChangeCallback) {
-			name = PluginName;
-			dllName = PluginDLL;
-			startMethod = PluginStartMethod;
-			path = PluginPath;
-			pluginID = ID;
-			LogMessage = MessageCallback;
-			SendServerAnnouncement = AnnouncementCallback;
-			ChangeMap = MapChangeCallback;
-		}
-
-		public byte[][] GetMessages() {
-			byte[][] returnVal = outboundMessages.ToArray();
-			outboundMessages.Clear();
-
-			return returnVal;
-		}
-
-		// TODO: make this work
-		public void SendMessage(byte[] content, bool reliable = false, bool largePacket = false) {
-
-		}
-	}
-
+	
 	public class Server {
 		// TODO: Update version number with versions
 		private string VERSION_NUMBER = "0.9.1";
@@ -308,10 +251,6 @@ namespace XLMultiplayerServer {
 			while (RUNNING) {
 				string input = Console.ReadLine();
 
-				foreach (Plugin plugin in loadedPlugins) {
-					plugin.ServerCommand?.Invoke(input);
-				}
-
 				if (input.Equals("QUIT", StringComparison.CurrentCultureIgnoreCase)) {
 					RUNNING = false;
 				} else if (input.ToLower().StartsWith("kick")) {
@@ -346,6 +285,57 @@ namespace XLMultiplayerServer {
 					byte[] messageBytes = ProcessMessageCommand(input);
 					if (messageBytes != null) {
 						motdBytes = messageBytes;
+					}
+				} else if (input.ToLower().StartsWith("plugins")) {
+
+					foreach (Plugin plugin in loadedPlugins) {
+						LogMessageCallback($"Plugin \"{plugin.name}\", ID: {plugin.pluginID}, Enabled: {plugin.enabled}", ConsoleColor.White);
+					}
+				} else if (input.ToLower().StartsWith("disable")) {
+					string[] args = input.Split(' ');
+					if (args.Length > 1) {
+						byte outByte = 255;
+						Plugin target = null;
+						if (byte.TryParse(args[1], out outByte)) {
+							foreach(Plugin plugin in loadedPlugins) {
+								if (plugin.pluginID == outByte) {
+									target = plugin;
+									target.TogglePlugin(false);
+								}
+							}
+							if (target == null) {
+								LogMessageCallback("Invalid Target Plugin", ConsoleColor.Yellow);
+							}
+						} else {
+							LogMessageCallback("Second argument is not a byte", ConsoleColor.Yellow);
+						}
+					} else {
+						LogMessageCallback("Command improperly formatted", ConsoleColor.Yellow);
+					}
+				} else if (input.ToLower().StartsWith("enable")) {
+					string[] args = input.Split(' ');
+					if (args.Length > 1) {
+						byte outByte = 255;
+						Plugin target = null;
+						if (byte.TryParse(args[1], out outByte)) {
+							foreach (Plugin plugin in loadedPlugins) {
+								if (plugin.pluginID == outByte) {
+									target = plugin;
+									target.TogglePlugin(true);
+								}
+							}
+							if (target == null) {
+								LogMessageCallback("Invalid Target Plugin", ConsoleColor.Yellow);
+							}
+						} else {
+							LogMessageCallback("Second argument is not a byte", ConsoleColor.Yellow);
+						}
+					} else {
+						LogMessageCallback("Command improperly formatted", ConsoleColor.Yellow);
+					}
+				} else {
+					foreach (Plugin plugin in loadedPlugins) {
+						if (plugin.enabled) plugin.ServerCommand?.Invoke(input);
 					}
 				}
 			}
@@ -487,7 +477,7 @@ namespace XLMultiplayerServer {
 
 					if (contents.StartsWith("/")) {
 						foreach (Plugin plugin in loadedPlugins) {
-							plugin.PlayerCommand?.Invoke(contents);
+							if (plugin.enabled) plugin.PlayerCommand?.Invoke(contents, players[fromID]);
 						}
 
 						if (contents.StartsWith("/report ", StringComparison.CurrentCultureIgnoreCase)) {
@@ -522,9 +512,22 @@ namespace XLMultiplayerServer {
 					} else {
 						players[fromID].previousMessages.Add(contents);
 						if (players[fromID].previousMessages.Count > 10) players[fromID].previousMessages.RemoveAt(0);
-						foreach (Player player in players) {
-							if (player != null) {
-								server.SendMessageToConnection(player.connection, sendBuffer, SendFlags.Reliable);
+
+						bool sendMessage = true;
+						foreach (Plugin plugin in loadedPlugins) {
+							if (plugin.enabled) {
+								bool? result = plugin.OnChatMessage?.Invoke(players[fromID], contents);
+								if (result == false) {
+									sendMessage = false;
+								}
+							}
+						}
+
+						if (sendMessage) {
+							foreach (Player player in players) {
+								if (player != null) {
+									server.SendMessageToConnection(player.connection, sendBuffer, SendFlags.Reliable);
+								}
 							}
 						}
 					}
@@ -546,11 +549,48 @@ namespace XLMultiplayerServer {
 					if (players[fromID] != null) server.SendMessageToConnection(players[fromID].connection, buffer, SendFlags.Unreliable | SendFlags.NoNagle);
 					break;
 				case OpCode.Plugin:
+					byte[] newMsg = new byte[buffer.Length - 2];
+					Array.Copy(buffer, 2, newMsg, 0, buffer.Length - 2);
+
 					foreach (Plugin plugin in loadedPlugins) {
-						if (plugin.pluginID == buffer[0]) {
-							// TODO: Trim the buffer first
-							plugin.ProcessMessage?.Invoke(buffer);
+						if (plugin.pluginID == buffer[1]) {
+							if (plugin.enabled) {
+								plugin.ProcessMessage?.Invoke(players[fromID], newMsg);
+							}
 						}
+					}
+					break;
+				case OpCode.PluginHash:
+					Plugin targetPlugin = null;
+					string hash = ASCIIEncoding.ASCII.GetString(buffer, 2, buffer.Length - 2);
+					foreach (Plugin plugin in loadedPlugins) {
+						if (plugin.hash.Equals(hash)) {
+							targetPlugin = plugin;
+						}
+					}
+
+					if (targetPlugin == null) break;
+
+					if (buffer[1] == 1) {
+						LogMessageCallback("Client has plugin loaded", ConsoleColor.White);
+						players[fromID].loadedPlugins.Add(targetPlugin.pluginID);
+					} else {
+						LogMessageCallback("Client does not have plugin, sending now", ConsoleColor.White);
+						byte[] fileName = ASCIIEncoding.ASCII.GetBytes(Path.GetFileName(targetPlugin.dependencyFile));
+						byte[] fileNameLength = BitConverter.GetBytes(fileName.Length);
+						byte[] fileContents = File.ReadAllBytes(targetPlugin.dependencyFile);
+						byte[] fileContentsLength = BitConverter.GetBytes(fileContents.Length);
+
+						byte[] pluginMessage = new byte[fileContents.Length + fileName.Length + 10];
+
+						pluginMessage[0] = (byte)OpCode.PluginFile;
+						pluginMessage[1] = targetPlugin.pluginID;
+						Array.Copy(fileNameLength, 0, pluginMessage, 2, 4);
+						Array.Copy(fileName, 0, pluginMessage, 6, fileName.Length);
+						Array.Copy(fileContentsLength, 0, pluginMessage, 6 + fileName.Length, 4);
+						Array.Copy(fileContents, 0, pluginMessage, 10 + fileName.Length, fileContents.Length);
+
+						fileServer.server.SendMessageToConnection(players[fromID].connection, pluginMessage);
 					}
 					break;
 			}
@@ -592,6 +632,21 @@ namespace XLMultiplayerServer {
 							server.CloseConnection(info.connection);
 							break;
 						}
+
+						bool acceptConnection = true;
+						foreach (Plugin plugin in loadedPlugins) {
+							if (plugin.enabled) {
+								bool? result = plugin.OnConnect?.Invoke(info.connectionInfo.address.GetIP());
+								if (result == false)
+									acceptConnection = false;
+							}
+						}
+
+						if (!acceptConnection) {
+							server.CloseConnection(info.connection);
+							break;
+						}
+
 						LogMessageCallback("connected on game server", ConsoleColor.White);
 
 						bool openSlot = false;
@@ -622,6 +677,19 @@ namespace XLMultiplayerServer {
 										if (player.usernameMessage != null) {
 											server.SendMessageToConnection(players[i].connection, player.usernameMessage, SendFlags.Reliable);
 										}
+									}
+								}
+								
+								foreach (Plugin plugin in loadedPlugins) {
+									if (plugin.hash != "") {
+										byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(plugin.hash);
+										byte[] hashMessage = new byte[hashBytes.Length + 2];
+
+										hashMessage[0] = (byte)OpCode.PluginHash;
+										hashMessage[1] = plugin.pluginID;
+										Array.Copy(hashBytes, 0, hashMessage, 2, hashBytes.Length);
+
+										fileServer.server.SendMessageToConnection(players[i].connection, hashMessage);
 									}
 								}
 
@@ -690,6 +758,13 @@ namespace XLMultiplayerServer {
 			File.WriteAllText("ipban.txt", ipBanString);
 		}
 
+		public void DisconnectPlayer(Player player) {
+			Player target = players[player.playerID];
+			if (target != null) {
+				RemovePlayer(target.connection, target.playerID);
+			}
+		}
+
 		public void RemovePlayer(uint connection, int ID = -1, bool kicked = false) {
 			Player removedPlayer = null;
 			if (ID == -1) {
@@ -707,6 +782,10 @@ namespace XLMultiplayerServer {
 
 			server.CloseConnection(removedPlayer.connection);
 			fileServer.server.CloseConnection(removedPlayer.fileConnection);
+
+			foreach (Plugin plugin in loadedPlugins) {
+				if (plugin.enabled) plugin.OnDisconnect?.Invoke(removedPlayer.GetIPAddress(), removedPlayer.playerID);
+			}
 
 			if (removedPlayer != null) {
 				if (!kicked) LogMessageCallback("Client disconnected - ID: " + removedPlayer.playerID, ConsoleColor.White);
@@ -728,8 +807,14 @@ namespace XLMultiplayerServer {
 					if (File.Exists(dir + sep + "info.json")) {
 						Plugin newPlugin = JsonConvert.DeserializeObject<Plugin>(File.ReadAllText(dir + sep + "info.json"));
 						if (newPlugin != null && newPlugin.dllName != "" && newPlugin.startMethod != "") {
-							string pluginPath = dir + sep;
-							loadedPlugins.Add(new Plugin(newPlugin.name, newPlugin.dllName, newPlugin.startMethod, pluginPath, (byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap));
+							if (newPlugin.serverVersion == VERSION_NUMBER) {
+								string pluginPath = dir + sep;
+								// TODO: Replace NULL action
+								loadedPlugins.Add(new Plugin(newPlugin.name, newPlugin.dllName, newPlugin.startMethod, newPlugin.dependencyFile, newPlugin.serverVersion, pluginPath,
+									(byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap, SendMessageFromPluginToPlayer, DisconnectPlayer));
+							} else {
+								LogMessageCallback($"Plugin {newPlugin.name} is for a different server version.  Current Version {VERSION_NUMBER}, Plugin version {newPlugin.serverVersion}", ConsoleColor.Red);
+							}
 						}
 					}
 				}
@@ -738,16 +823,18 @@ namespace XLMultiplayerServer {
 			foreach (Plugin plugin in loadedPlugins) {
 				string dll = plugin.dllName;
 
+				LogMessageCallback($"{plugin.path + dll}", ConsoleColor.White);
+
 				var loadedDLL = Assembly.LoadFile(plugin.path + dll);
 
-				LogMessageCallback($"{plugin.path + dll}", ConsoleColor.White);
 				if (loadedDLL != null) {
 					MethodInfo entryMethod = AccessTools.Method(plugin.startMethod);
 
 					if (entryMethod != null) {
 						try {
 							//new object[] { this }
-							entryMethod.Invoke(null, new object[] { this });
+							entryMethod.Invoke(null, new object[] { plugin });
+							plugin.TogglePlugin(true);
 						} catch (Exception e) {
 							LogMessageCallback($"Exception calling entry method of plugin {plugin.name}: " + e.ToString(), ConsoleColor.Red);
 						}
@@ -757,6 +844,20 @@ namespace XLMultiplayerServer {
 				} else {
 					LogMessageCallback($"DLL for plugin {plugin.name} could not be found", ConsoleColor.Red);
 				}
+			}
+		}
+
+		private void SendMessageFromPluginToPlayer(Plugin source, Player destination, byte[] buffer, bool reliable) {
+			byte[] sendBuffer = new byte[buffer.Length + 2];
+			sendBuffer[0] = (byte)OpCode.Plugin;
+			sendBuffer[1] = source.pluginID;
+
+			Array.Copy(buffer, 0, sendBuffer, 2, buffer.Length);
+
+			if (sendBuffer.Length > 1024 && reliable) {
+				fileServer.server.SendMessageToConnection(destination.connection, sendBuffer, reliable ? SendFlags.Reliable : SendFlags.Unreliable);
+			} else {
+				server.SendMessageToConnection(destination.connection, sendBuffer, reliable ? SendFlags.Reliable : SendFlags.Unreliable);
 			}
 		}
 
@@ -785,6 +886,7 @@ namespace XLMultiplayerServer {
 
 		public void ServerLoop() {
 			LogMessageCallback("Starting server initialization", ConsoleColor.White);
+
 
 			if (File.Exists(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json")) {
 				JsonConvert.DeserializeObject<Server>(File.ReadAllText(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json"));
@@ -1082,6 +1184,9 @@ namespace XLMultiplayerServer {
 			if (players[fromID] != null) {
 				players[fromID].username = username;
 
+				foreach (Plugin plugin in loadedPlugins) {
+					if (plugin.enabled) plugin.ReceiveUsername?.Invoke(players[fromID], RemoveMarkup(username));
+				}
 
 				byte[] usernameAdjustmentBytes = new byte[username.Length + 1];
 				usernameAdjustmentBytes[0] = (byte)OpCode.UsernameAdjustment;

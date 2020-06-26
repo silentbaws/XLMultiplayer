@@ -1,5 +1,7 @@
 ﻿{
   "Name": "Awesome Example Mod",
   "AssemblyName": "ExamplePlugin.dll",
-  "StartupMethod": "ExamplePlugin.Main:Load"
+  "StartupMethod": "ExamplePlugin.Main:Load",
+  "ServerVersion": "0.9.1",
+  "DependencyZIP": "ExampleClientPlugin.zip"
 }
