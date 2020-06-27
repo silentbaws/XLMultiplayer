@@ -30,9 +30,11 @@ namespace XLMultiplayerServer {
 		public string path { get; private set; } = "";
 
 		public byte pluginID { get; private set; } = 255;
-
+		
 		public bool enabled { get; private set; } = false;
 		public byte maxPlayers { get; private set; }
+
+		public string currentMap = "";
 
 		private List<Tuple<Player, byte[]>> outboundMessages = new List<Tuple<Player, byte[]>>();
 
@@ -41,6 +43,7 @@ namespace XLMultiplayerServer {
 		public Action<string> ChangeMap { get; private set; }
 		public Action<Plugin, Player, byte[], bool> SendMessage { get; private set; }
 		public Action<Player> DisconnectPlayer { get; private set; }
+		public Action<string, int, string, Player> SendImportantMessageToPlayer { get; private set; }
 
 		public List<Player> playerList = new List<Player>();
 
@@ -57,7 +60,7 @@ namespace XLMultiplayerServer {
 
 		public Plugin(string PluginName, string PluginDLL, string PluginStartMethod, string Dependency, string version, string PluginPath, byte ID, 
 			LogMessage MessageCallback, Action<string, int, string> AnnouncementCallback, Action<string> MapChangeCallback, Action<Plugin, Player, byte[], bool> Send, 
-			Action<Player> disconnect) {
+			Action<Player> disconnect, Action<string, int, string, Player> sendImportant) {
 			name = PluginName;
 			dllName = PluginDLL;
 			startMethod = PluginStartMethod;
@@ -70,6 +73,7 @@ namespace XLMultiplayerServer {
 			SendMessage = Send;
 			DisconnectPlayer = disconnect;
 			dependencyFile = Dependency;
+			SendImportantMessageToPlayer = sendImportant;
 			
 			if (dependencyFile != "" && PluginPath != null && File.Exists(Path.Combine(path, dependencyFile))) {
 				dependencyFile = Path.Combine(path, dependencyFile);

@@ -873,6 +873,9 @@ namespace XLMultiplayer {
 						}
 					}
 
+					if (localPlugin != null)
+						UnityModManagerNet.UnityModManager.Logger.Log($"Plugin {localPlugin.dllName} has id {pluginID}");
+
 					if (hasPlugin) {
 						EnablePlugin(localPlugin, pluginID);
 					} else {
@@ -886,10 +889,7 @@ namespace XLMultiplayer {
 
 					break;
 				case OpCode.PluginFile:
-					List<Plugin> oldPluginList = new List<Plugin>();
-					foreach (Plugin p in Main.pluginList) {
-						oldPluginList.Add(p);
-					}
+					string[] oldPluginList = Main.pluginList.Select(p => p.hash).ToArray();
 
 					int fileNameLength = BitConverter.ToInt32(buffer, 2);
 					string fileName = ASCIIEncoding.ASCII.GetString(buffer, 6, fileNameLength);
@@ -905,7 +905,7 @@ namespace XLMultiplayer {
 					byte newPluginID = buffer[1];
 					Plugin newPlugin = null;
 					foreach (Plugin p in Main.pluginList) {
-						if (!oldPluginList.Contains(p)) {
+						if (!oldPluginList.Where(s => s == p.hash).Any()) {
 							newPlugin = p;
 							break;
 						}
@@ -914,6 +914,8 @@ namespace XLMultiplayer {
 					Traverse.Create(newPlugin).Field("pluginID").SetValue(newPluginID);
 
 					EnablePlugin(newPlugin, newPluginID);
+
+					UnityModManagerNet.UnityModManager.Logger.Log($"New plugin {newPlugin.dllName} has id {newPluginID}");
 
 					byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(newPlugin.hash);
 					byte[] EnablePluginMessage = new byte[hashBytes.Length + 2];
@@ -1227,6 +1229,10 @@ namespace XLMultiplayer {
 			Main.utilityMenu.isLoading = false;
 
 			this.playerController = null;
+
+			foreach (Plugin plugin in Main.pluginList) {
+				plugin.TogglePlugin(false);
+			}
 
 			if (client != null) client.CloseConnection(connection);
 			if (fileClient != null) fileClient.CloseConnection(fileConnection);

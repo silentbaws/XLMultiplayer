@@ -572,10 +572,10 @@ namespace XLMultiplayerServer {
 					if (targetPlugin == null) break;
 
 					if (buffer[1] == 1) {
-						LogMessageCallback("Client has plugin loaded", ConsoleColor.White);
+						LogMessageCallback($"Client has plugin loaded {targetPlugin.name}", ConsoleColor.White);
 						players[fromID].loadedPlugins.Add(targetPlugin.pluginID);
 					} else {
-						LogMessageCallback("Client does not have plugin, sending now", ConsoleColor.White);
+						LogMessageCallback($"Client does not have plugin {targetPlugin.name}, sending now", ConsoleColor.White);
 						byte[] fileName = ASCIIEncoding.ASCII.GetBytes(Path.GetFileName(targetPlugin.dependencyFile));
 						byte[] fileNameLength = BitConverter.GetBytes(fileName.Length);
 						byte[] fileContents = File.ReadAllBytes(targetPlugin.dependencyFile);
@@ -689,7 +689,7 @@ namespace XLMultiplayerServer {
 										hashMessage[1] = plugin.pluginID;
 										Array.Copy(hashBytes, 0, hashMessage, 2, hashBytes.Length);
 
-										fileServer.server.SendMessageToConnection(players[i].connection, hashMessage);
+										server.SendMessageToConnection(players[i].connection, hashMessage, SendFlags.Reliable);
 									}
 								}
 
@@ -811,7 +811,7 @@ namespace XLMultiplayerServer {
 								string pluginPath = dir + sep;
 								// TODO: Replace NULL action
 								loadedPlugins.Add(new Plugin(newPlugin.name, newPlugin.dllName, newPlugin.startMethod, newPlugin.dependencyFile, newPlugin.serverVersion, pluginPath,
-									(byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap, SendMessageFromPluginToPlayer, DisconnectPlayer));
+									(byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap, SendMessageFromPluginToPlayer, DisconnectPlayer, SendImportantChatToPlayer));
 							} else {
 								LogMessageCallback($"Plugin {newPlugin.name} is for a different server version.  Current Version {VERSION_NUMBER}, Plugin version {newPlugin.serverVersion}", ConsoleColor.Red);
 							}
@@ -844,6 +844,14 @@ namespace XLMultiplayerServer {
 				} else {
 					LogMessageCallback($"DLL for plugin {plugin.name} could not be found", ConsoleColor.Red);
 				}
+			}
+		}
+
+		private void SendImportantChatToPlayer(string message, int duration, string color, Player target) {
+			byte[] sendBuffer = ProcessMessageCommand($"msg:{duration}:{color} {message}");
+
+			if(sendBuffer != null) {
+				server.SendMessageToConnection(target.connection, sendBuffer, SendFlags.Reliable);
 			}
 		}
 
@@ -1070,6 +1078,10 @@ namespace XLMultiplayerServer {
 					} else if (total_players == 0) {
 						mapVoteTimer.Stop();
 					}
+				}
+
+				foreach (Plugin plugin in loadedPlugins) {
+					plugin.currentMap = currentMapHash;
 				}
 			}
 

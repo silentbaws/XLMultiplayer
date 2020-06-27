@@ -304,6 +304,8 @@ namespace XLMultiplayer {
 						foreach (string dir in Directory.GetDirectories(pluginDirectory)) {
 							if (!pluginDirectories.Contains(dir)) {
 								directoryToHash.Add(Tuple.Create(dir, fileHash));
+								pluginDirectories.Add(dir);
+								UnityModManager.Logger.Log($"New plugin {dir}");
 								break;
 							}
 						}
@@ -312,16 +314,18 @@ namespace XLMultiplayer {
 			}
 
 			foreach (string folder in Directory.GetDirectories(pluginDirectory)) {
+				if(!Main.pluginList.Where(p => p.path == folder).Any()) {
 				string infoFile = Path.Combine(folder, "Info.json");
 				if (File.Exists(infoFile)) {
 					Plugin newPlugin = JsonConvert.DeserializeObject<Plugin>(File.ReadAllText(infoFile));
+						// TODO: Replace null action
+						UnityModManager.Logger.Log(newPlugin.path);
+						pluginList.Add(new Plugin(newPlugin.dllName, newPlugin.startMethod, folder, SendMessageFromPlugin));
 
-					// TODO: Replace null action
-					pluginList.Add(new Plugin(newPlugin.dllName, newPlugin.startMethod, folder, SendMessageFromPlugin));
-
-					foreach (Tuple<string, string> hashDirPair in directoryToHash) {
-						if (hashDirPair.Item1 == folder) {
-							Traverse.Create(pluginList[pluginList.Count - 1]).Property("hash").SetValue(hashDirPair.Item2);
+						foreach (Tuple<string, string> hashDirPair in directoryToHash) {
+							if (hashDirPair.Item1 == folder) {
+								Traverse.Create(pluginList[pluginList.Count - 1]).Property("hash").SetValue(hashDirPair.Item2);
+							}
 						}
 					}
 				}
