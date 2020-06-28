@@ -343,9 +343,11 @@ namespace XLMultiplayerServer {
 
 		private void SendAnnouncement(string content, int duration, string color) {
 			byte[] messageBytes = ProcessMessageCommand("msg:" + duration + ":" + color + " " + content);
-			foreach (Player p in players) {
-				if (p != null) {
-					server.SendMessageToConnection(p.connection, messageBytes, SendFlags.Reliable);
+			if (messageBytes != null) {
+				foreach (Player p in players) {
+					if (p != null) {
+						server.SendMessageToConnection(p.connection, messageBytes, SendFlags.Reliable);
+					}
 				}
 			}
 		}
@@ -850,8 +852,8 @@ namespace XLMultiplayerServer {
 		private void SendImportantChatToPlayer(string message, int duration, string color, Player target) {
 			byte[] sendBuffer = ProcessMessageCommand($"msg:{duration}:{color} {message}");
 
-			if(sendBuffer != null) {
-				server.SendMessageToConnection(target.connection, sendBuffer, SendFlags.Reliable);
+			if(sendBuffer != null && target != null) {
+				server.SendMessageToConnection(target.fileConnection, sendBuffer, SendFlags.Reliable);
 			}
 		}
 

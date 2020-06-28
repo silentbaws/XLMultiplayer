@@ -45,6 +45,7 @@ namespace ExamplePlugin {
 				foreach (Player p in pluginInfo.playerList) {
 					byte[] b = new byte[] { 1, 2, 3, 4 };
 					pluginInfo.SendMessage(pluginInfo, p, b, true);
+					pluginInfo.SendImportantMessageToPlayer("Hello Friend", 10, "f00", p);
 				}
 
 				pluginInfo.LogMessage("Hello friend", ConsoleColor.Green);
