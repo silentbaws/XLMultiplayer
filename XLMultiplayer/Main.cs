@@ -15,8 +15,6 @@ using UnityEngine.Networking;
 using Newtonsoft.Json.Linq;
 using System.Collections;
 
-// TODO: Make replays save audio
-
 namespace XLMultiplayer {
 	class Server {
 		public string name;
@@ -318,7 +316,6 @@ namespace XLMultiplayer {
 				string infoFile = Path.Combine(folder, "Info.json");
 				if (File.Exists(infoFile)) {
 					Plugin newPlugin = JsonConvert.DeserializeObject<Plugin>(File.ReadAllText(infoFile));
-						// TODO: Replace null action
 						UnityModManager.Logger.Log(newPlugin.path);
 						pluginList.Add(new Plugin(newPlugin.dllName, newPlugin.startMethod, folder, SendMessageFromPlugin));
 
@@ -968,6 +965,20 @@ namespace XLMultiplayer {
 					yield return instruction;
 				}
 			}
+		}
+	}
+
+	[HarmonyPatch(typeof(Input), "GetKeyDown", typeof(KeyCode))]
+	static class InputKeyDownPatch {
+		static void Postfix(ref bool __result) {
+			if (XLMultiplayerUI.NewMultiplayerMenu.Instance.IsFocusedInput()) __result = false;
+		}
+	}
+
+	[HarmonyPatch(typeof(Input), "GetKeyUp", typeof(KeyCode))]
+	static class InputKeyUpPatch {
+		static void Postfix(ref bool __result) {
+			if (XLMultiplayerUI.NewMultiplayerMenu.Instance.IsFocusedInput()) __result = false;
 		}
 	}
 }

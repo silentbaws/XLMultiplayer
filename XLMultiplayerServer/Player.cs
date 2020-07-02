@@ -5,13 +5,13 @@ using Valve.Sockets;
 
 namespace XLMultiplayerServer {
 	public class Player {
-		// TODO: Dict with queued messages for plugins
-
 		public byte playerID;
 		public string username;
 		public uint connection;
 		public uint fileConnection;
 		public Address ipAddr;
+
+		public PluginPlayer pluginPlayer = null;
 
 		public byte[] usernameMessage = null;
 

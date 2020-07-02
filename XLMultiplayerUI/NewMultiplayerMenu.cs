@@ -22,6 +22,8 @@ namespace XLMultiplayerUI {
 
 		public InputField[] usernameFields;
 
+		public InputField[] textFields;
+
 		private Vector2 itemRealSize;
 
 		public List<RectTransform> serverItems = new List<RectTransform>();
@@ -47,6 +49,14 @@ namespace XLMultiplayerUI {
 			} else {
 				Instance = this;
 			}
+		}
+
+		public bool IsFocusedInput() {
+			bool result = false;
+			foreach (InputField f in textFields) {
+				result |= f.isFocused;
+			}
+			return result;
 		}
 
 		public void OnClickDirect() {

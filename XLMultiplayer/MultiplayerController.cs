@@ -26,6 +26,8 @@ using Valve.Sockets;
 
 // TODO: game of skate.... maybe?
 
+// TODO: Make replays save audio
+
 // TODO: Redo the multiplayer texture system
 //			-> Send paths for non-custom gear
 //			-> Send hashes of full size textures for custom gear along with compressed texture
@@ -957,12 +959,10 @@ namespace XLMultiplayer {
 		}
 
 		private void DecompressSoundAnimationQueue() {
-			debugWriter.WriteLine("Start Decompress thread");
 			while (playerController != null) {
 				if (!modifyingCompressionList) {
 					while (CompressedSounds.Count > 0) {
 						if (CompressedSounds[0] != null) {
-							debugWriter.WriteLine($"decompressing sound");
 							byte[] decompressed = Decompress(CompressedSounds[0].Item2);
 							DecompressedSounds.Add(Tuple.Create(CompressedSounds[0].Item1, decompressed));
 						}
@@ -970,7 +970,6 @@ namespace XLMultiplayer {
 					}
 					while (CompressedAnimations.Count > 0) {
 						if (CompressedAnimations[0] != null) {
-							debugWriter.WriteLine($"decompressing animation");
 							byte[] packetData = new byte[CompressedAnimations[0].Item2.Length - 4];
 							Array.Copy(CompressedAnimations[0].Item2, 4, packetData, 0, packetData.Length);
 
@@ -986,7 +985,6 @@ namespace XLMultiplayer {
 					}
 				}
 			}
-			Instance.debugWriter.WriteLine("End Decompress thread");
 		}
 
 		private void ProcessSoundAnimationQueue() {

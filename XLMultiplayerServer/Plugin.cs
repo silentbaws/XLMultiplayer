@@ -45,18 +45,18 @@ namespace XLMultiplayerServer {
 		public Action<Player> DisconnectPlayer { get; private set; }
 		public Action<string, int, string, Player> SendImportantMessageToPlayer { get; private set; }
 
-		public List<Player> playerList = new List<Player>();
+		public List<PluginPlayer> playerList = new List<PluginPlayer>();
 
 		public Dictionary<string, string> mapList = new Dictionary<string, string>();
 
 		public Action<bool> OnToggle;
 		public Action<string> ServerCommand;
-		public Action<string, Player> PlayerCommand;
-		public Action<Player, byte[]> ProcessMessage;
-		public Action<Player, string> ReceiveUsername;
+		public Func<string, PluginPlayer, bool> PlayerCommand;
+		public Action<PluginPlayer, byte[]> ProcessMessage;
+		public Action<PluginPlayer, string> ReceiveUsername;
 		public Action<string, byte> OnDisconnect;
 		public Func<string, bool> OnConnect;
-		public Func<Player, string, bool> OnChatMessage;
+		public Func<PluginPlayer, string, bool> OnChatMessage;
 
 		public Plugin(string PluginName, string PluginDLL, string PluginStartMethod, string Dependency, string version, string PluginPath, byte ID, 
 			LogMessage MessageCallback, Action<string, int, string> AnnouncementCallback, Action<string> MapChangeCallback, Action<Plugin, Player, byte[], bool> Send, 

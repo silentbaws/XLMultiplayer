@@ -58,7 +58,7 @@ namespace XLMultiplayerServer {
 	
 	public class Server {
 		// TODO: Update version number with versions
-		private string VERSION_NUMBER = "0.9.1";
+		private string VERSION_NUMBER = "0.9.2";
 
 		public LogMessage LogMessageCallback;
 		public LogChatMessage LogChatMessageCallback;
@@ -478,8 +478,14 @@ namespace XLMultiplayerServer {
 					sendBuffer[buffer.Length] = fromID;
 
 					if (contents.StartsWith("/")) {
+						bool validCommand = false;
 						foreach (Plugin plugin in loadedPlugins) {
-							if (plugin.enabled) plugin.PlayerCommand?.Invoke(contents, players[fromID]);
+							if (plugin.enabled) {
+								bool? result = plugin.PlayerCommand?.Invoke(contents, players[fromID].pluginPlayer);
+								if(result.HasValue) {
+									validCommand |= result.Value;
+								}
+							}
 						}
 
 						if (contents.StartsWith("/report ", StringComparison.CurrentCultureIgnoreCase)) {
@@ -497,6 +503,7 @@ namespace XLMultiplayerServer {
 										writer.Close();
 
 										byte[] response = ProcessMessageCommand($"msg:5:ff0 Successfully reported player {players[reportedID].username}");
+										validCommand = true;
 										server.SendMessageToConnection(players[fromID].connection, response, SendFlags.Reliable);
 										break;
 									}
@@ -508,8 +515,10 @@ namespace XLMultiplayerServer {
 							break;
 						}
 
-						byte[] invalidCommand = ProcessMessageCommand($"msg:5:f00 Given command does not exist");
-						server.SendMessageToConnection(players[fromID].connection, invalidCommand, SendFlags.Reliable);
+						if (!validCommand) {
+							byte[] invalidCommand = ProcessMessageCommand($"msg:5:f00 Given command does not exist");
+							server.SendMessageToConnection(players[fromID].connection, invalidCommand, SendFlags.Reliable);
+						}
 						break;
 					} else {
 						players[fromID].previousMessages.Add(contents);
@@ -518,7 +527,7 @@ namespace XLMultiplayerServer {
 						bool sendMessage = true;
 						foreach (Plugin plugin in loadedPlugins) {
 							if (plugin.enabled) {
-								bool? result = plugin.OnChatMessage?.Invoke(players[fromID], contents);
+								bool? result = plugin.OnChatMessage?.Invoke(players[fromID].pluginPlayer, contents);
 								if (result == false) {
 									sendMessage = false;
 								}
@@ -557,7 +566,7 @@ namespace XLMultiplayerServer {
 					foreach (Plugin plugin in loadedPlugins) {
 						if (plugin.pluginID == buffer[1]) {
 							if (plugin.enabled) {
-								plugin.ProcessMessage?.Invoke(players[fromID], newMsg);
+								plugin.ProcessMessage?.Invoke(players[fromID].pluginPlayer, newMsg);
 							}
 						}
 					}
@@ -811,7 +820,6 @@ namespace XLMultiplayerServer {
 						if (newPlugin != null && newPlugin.dllName != "" && newPlugin.startMethod != "") {
 							if (newPlugin.serverVersion == VERSION_NUMBER) {
 								string pluginPath = dir + sep;
-								// TODO: Replace NULL action
 								loadedPlugins.Add(new Plugin(newPlugin.name, newPlugin.dllName, newPlugin.startMethod, newPlugin.dependencyFile, newPlugin.serverVersion, pluginPath,
 									(byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap, SendMessageFromPluginToPlayer, DisconnectPlayer, SendImportantChatToPlayer));
 							} else {
@@ -889,14 +897,31 @@ namespace XLMultiplayerServer {
 			foreach (Plugin plugin in loadedPlugins) {
 				plugin.playerList.Clear();
 				foreach (Player player in players) {
-					if (player != null) plugin.playerList.Add(player);
+					if (player != null) {
+						if(player.pluginPlayer == null) {
+							player.pluginPlayer = new PluginPlayer(player, OnUsernameUpdate);
+						}
+						plugin.playerList.Add(player.pluginPlayer);
+					}
 				}
 			}
 		}
 
+		public void OnUsernameUpdate(Player player) {
+			foreach (Player p in players) {
+				if (p != null && p.playerID != player.playerID) {
+					server.SendMessageToConnection(p.connection, player.usernameMessage, SendFlags.Reliable);
+				}
+			}
+
+			byte[] usernameAdjustment = new byte[player.usernameMessage.Length - 1];
+			usernameAdjustment[0] = (byte)OpCode.UsernameAdjustment;
+			Array.Copy(player.usernameMessage, 1, usernameAdjustment, 1, usernameAdjustment.Length - 1);
+			server.SendMessageToConnection(player.connection, usernameAdjustment, SendFlags.Reliable);
+		}
+
 		public void ServerLoop() {
 			LogMessageCallback("Starting server initialization", ConsoleColor.White);
-
 
 			if (File.Exists(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json")) {
 				JsonConvert.DeserializeObject<Server>(File.ReadAllText(Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar.ToString() + "ServerConfig.json"));
@@ -1199,7 +1224,7 @@ namespace XLMultiplayerServer {
 				players[fromID].username = username;
 
 				foreach (Plugin plugin in loadedPlugins) {
-					if (plugin.enabled) plugin.ReceiveUsername?.Invoke(players[fromID], RemoveMarkup(username));
+					if (plugin.enabled) plugin.ReceiveUsername?.Invoke(players[fromID].pluginPlayer, RemoveMarkup(username));
 				}
 
 				byte[] usernameAdjustmentBytes = new byte[username.Length + 1];
