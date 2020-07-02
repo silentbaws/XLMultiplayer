@@ -958,17 +958,19 @@ namespace XLMultiplayer {
 			client.SendMessageToConnection(connection, PluginEnabledMessage, SendFlags.Reliable);
 		}
 
-		private void DecompressSoundAnimationQueue() {
+		private async void DecompressSoundAnimationQueue() {
 			while (playerController != null) {
 				if (!modifyingCompressionList) {
-					while (CompressedSounds.Count > 0) {
+					if (CompressedSounds.Count > 0 && !modifyingCompressionList) {
 						if (CompressedSounds[0] != null) {
 							byte[] decompressed = Decompress(CompressedSounds[0].Item2);
+
+							while (modifyingCompressionList) { }
 							DecompressedSounds.Add(Tuple.Create(CompressedSounds[0].Item1, decompressed));
 						}
 						CompressedSounds.RemoveAt(0);
 					}
-					while (CompressedAnimations.Count > 0) {
+					if (CompressedAnimations.Count > 0 && !modifyingCompressionList) {
 						if (CompressedAnimations[0] != null) {
 							byte[] packetData = new byte[CompressedAnimations[0].Item2.Length - 4];
 							Array.Copy(CompressedAnimations[0].Item2, 4, packetData, 0, packetData.Length);
@@ -979,6 +981,7 @@ namespace XLMultiplayer {
 							Array.Copy(CompressedAnimations[0].Item2, 0, animationData, 0, 4);
 							Array.Copy(decompressedData, 0, animationData, 4, decompressedData.Length);
 
+							while (modifyingCompressionList) { }
 							DecompressedAnimations.Add(Tuple.Create(CompressedAnimations[0].Item1, animationData));
 						}
 						CompressedAnimations.RemoveAt(0);
@@ -988,19 +991,19 @@ namespace XLMultiplayer {
 		}
 
 		private void ProcessSoundAnimationQueue() {
-			while (DecompressedSounds.Count > 0) {
-				byte playerID = DecompressedSounds[0].Item1;
-				byte[] array = new byte[DecompressedSounds[0].Item2.Length];
-				Array.Copy(DecompressedSounds[0].Item2, array, array.Length);
-				DecompressedSounds.RemoveAt(0);
-				this.remoteControllers.Find(p => p.playerID == playerID).UnpackSounds(array);
-			}
 			while (DecompressedAnimations.Count > 0) {
 				byte playerID = DecompressedAnimations[0].Item1;
 				byte[] array = new byte[DecompressedAnimations[0].Item2.Length];
 				Array.Copy(DecompressedAnimations[0].Item2, array, array.Length);
 				DecompressedAnimations.RemoveAt(0);
 				this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(array);
+			}
+			while (DecompressedSounds.Count > 0) {
+				byte playerID = DecompressedSounds[0].Item1;
+				byte[] array = new byte[DecompressedSounds[0].Item2.Length];
+				Array.Copy(DecompressedSounds[0].Item2, array, array.Length);
+				DecompressedSounds.RemoveAt(0);
+				this.remoteControllers.Find(p => p.playerID == playerID).UnpackSounds(array);
 			}
 		}
 

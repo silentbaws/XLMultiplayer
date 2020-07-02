@@ -382,8 +382,6 @@ namespace XLMultiplayer {
 		}
 
 		public void UnpackSounds(byte[] soundBytes) {
-			Stopwatch animationTime = new Stopwatch();
-			animationTime.Restart();
 			int readBytes = 0;
 
 			List<List<AudioOneShotEvent>> newOneShots = new List<List<AudioOneShotEvent>>();
@@ -464,8 +462,6 @@ namespace XLMultiplayer {
 				}
 			}
 
-			double newEventsTime = animationTime.Elapsed.TotalMilliseconds;
-
 			MultiplayerSoundBufferObject newSoundBufferObject = new MultiplayerSoundBufferObject();
 			soundQueue.Add(newSoundBufferObject);
 			
@@ -483,8 +479,6 @@ namespace XLMultiplayer {
 				newSoundBufferObject.audioVolumeEvents[i] = newVolumeEvents[i];
 			}
 
-			double newBufferObjectTime = animationTime.Elapsed.TotalMilliseconds - newEventsTime;
-
 			try {
 				MultiplayerFrameBufferObject firstRealTime = this.replayAnimationFrames.First(f => f.realFrameTime != -1f);
 
@@ -498,10 +492,6 @@ namespace XLMultiplayer {
 					}
 				}
 			} catch (Exception) { }
-
-			animationTime.Stop();
-			double removeOldTime = animationTime.Elapsed.TotalMilliseconds - newBufferObjectTime;
-			this.debugWriter.WriteLine($"{newEventsTime}ms, {newBufferObjectTime}ms, {removeOldTime}ms");
 		}
 
 		// TODO: refactor all this shit, I'm sure there's a better way
