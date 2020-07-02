@@ -44,6 +44,7 @@ namespace XLMultiplayerServer {
 		public Action<Plugin, Player, byte[], bool> SendMessage { get; private set; }
 		public Action<Player> DisconnectPlayer { get; private set; }
 		public Action<string, int, string, Player> SendImportantMessageToPlayer { get; private set; }
+		public Action ReloadMapList { get; private set; }
 
 		public List<PluginPlayer> playerList = new List<PluginPlayer>();
 
@@ -60,7 +61,7 @@ namespace XLMultiplayerServer {
 
 		public Plugin(string PluginName, string PluginDLL, string PluginStartMethod, string Dependency, string version, string PluginPath, byte ID, 
 			LogMessage MessageCallback, Action<string, int, string> AnnouncementCallback, Action<string> MapChangeCallback, Action<Plugin, Player, byte[], bool> Send, 
-			Action<Player> disconnect, Action<string, int, string, Player> sendImportant) {
+			Action<Player> disconnect, Action<string, int, string, Player> sendImportant, Action mapListReload) {
 			name = PluginName;
 			dllName = PluginDLL;
 			startMethod = PluginStartMethod;
@@ -74,6 +75,7 @@ namespace XLMultiplayerServer {
 			DisconnectPlayer = disconnect;
 			dependencyFile = Dependency;
 			SendImportantMessageToPlayer = sendImportant;
+			ReloadMapList = mapListReload;
 			
 			if (dependencyFile != "" && PluginPath != null && File.Exists(Path.Combine(path, dependencyFile))) {
 				dependencyFile = Path.Combine(path, dependencyFile);

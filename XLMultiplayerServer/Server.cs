@@ -821,7 +821,8 @@ namespace XLMultiplayerServer {
 							if (newPlugin.serverVersion == VERSION_NUMBER) {
 								string pluginPath = dir + sep;
 								loadedPlugins.Add(new Plugin(newPlugin.name, newPlugin.dllName, newPlugin.startMethod, newPlugin.dependencyFile, newPlugin.serverVersion, pluginPath,
-									(byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap, SendMessageFromPluginToPlayer, DisconnectPlayer, SendImportantChatToPlayer));
+									(byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap, SendMessageFromPluginToPlayer, DisconnectPlayer, SendImportantChatToPlayer,
+									PluginReloadMapList));
 							} else {
 								LogMessageCallback($"Plugin {newPlugin.name} is for a different server version.  Current Version {VERSION_NUMBER}, Plugin version {newPlugin.serverVersion}", ConsoleColor.Red);
 							}
@@ -863,6 +864,10 @@ namespace XLMultiplayerServer {
 			if(sendBuffer != null && target != null) {
 				server.SendMessageToConnection(target.fileConnection, sendBuffer, SendFlags.Reliable);
 			}
+		}
+
+		private void PluginReloadMapList() {
+			LoadMapList();
 		}
 
 		private void SendMessageFromPluginToPlayer(Plugin source, Player destination, byte[] buffer, bool reliable) {
