@@ -20,6 +20,10 @@ namespace ExamplePlugin {
 			if (enabled) {
 				SayHi();
 				KickRandom();
+
+				foreach (var KVP in pluginInfo.mapList) {
+					pluginInfo.LogMessage(KVP.Value, ConsoleColor.Blue);
+				}
 			}
 		}
 
@@ -48,7 +52,7 @@ namespace ExamplePlugin {
 					pluginInfo.SendMessage(pluginInfo, p.GetPlayer(), b, true);
 					pluginInfo.SendImportantMessageToPlayer("Hello Friend", 10, "f00", p.GetPlayer());
 				}
-
+				
 				pluginInfo.LogMessage("Hello friend", ConsoleColor.Green);
 				await Task.Delay(5000);
 			}

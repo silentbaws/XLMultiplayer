@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using ReplayEditor;
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -94,13 +95,11 @@ namespace XLMultiplayer {
 		public bool isConnected { get; private set; } = false;
 		public bool isFileConnected { get; private set; } = false;
 
-		private List<Tuple<byte[], uint>> networkMessageQueue = new List<Tuple<byte[], uint>>();
-		private List<Tuple<byte, byte[]>> CompressedSounds = new List<Tuple<byte, byte[]>>();
-		private List<Tuple<byte, byte[]>> DecompressedSounds = new List<Tuple<byte, byte[]>>();
-		private List<Tuple<byte, byte[]>> CompressedAnimations = new List<Tuple<byte, byte[]>>();
-		private List<Tuple<byte, byte[]>> DecompressedAnimations = new List<Tuple<byte, byte[]>>();
-
-		private bool modifyingCompressionList = false;
+		private ConcurrentQueue<Tuple<byte[], uint>> networkMessageQueue = new ConcurrentQueue<Tuple<byte[], uint>>();
+		private ConcurrentQueue<Tuple<byte, byte[]>> CompressedSounds = new ConcurrentQueue<Tuple<byte, byte[]>>();
+		private ConcurrentQueue<Tuple<byte, byte[]>> DecompressedSounds = new ConcurrentQueue<Tuple<byte, byte[]>>();
+		private ConcurrentQueue<Tuple<byte, byte[]>> CompressedAnimations = new ConcurrentQueue<Tuple<byte, byte[]>>();
+		private ConcurrentQueue<Tuple<byte, byte[]>> DecompressedAnimations = new ConcurrentQueue<Tuple<byte, byte[]>>();
 
 		public StreamWriter debugWriter;
 
@@ -551,9 +550,7 @@ namespace XLMultiplayer {
 			}
 
 			NetworkDiagnosticTime = FrameWatch.Elapsed.TotalMilliseconds - StateManagementTime;
-
-			modifyingCompressionList = true;
-
+			
 			ProcessMessageQueue();
 
 			MessageQueueTime = FrameWatch.Elapsed.TotalMilliseconds - NetworkDiagnosticTime;
@@ -561,8 +558,6 @@ namespace XLMultiplayer {
 			ProcessSoundAnimationQueue();
 
 			double SoundAnimationTime = FrameWatch.Elapsed.TotalMilliseconds - MessageQueueTime;
-
-			modifyingCompressionList = false;
 
 			// Lerp frames using frame buffer
 			List<MultiplayerRemotePlayerController> controllerToRemove = new List<MultiplayerRemotePlayerController>();
@@ -630,12 +625,12 @@ namespace XLMultiplayer {
 				messagesProcessed++;
 				byte[] message = null;
 				uint inboundConnection = 0;
-				if (networkMessageQueue[0] != null) {
-					message = new byte[networkMessageQueue[0].Item1.Length];
-					networkMessageQueue[0].Item1.CopyTo(message, 0);
-					inboundConnection = networkMessageQueue[0].Item2;
+				Tuple<byte[], uint> currentMessage;
+				if (networkMessageQueue.TryDequeue(out currentMessage)) {
+					message = new byte[currentMessage.Item1.Length];
+					currentMessage.Item1.CopyTo(message, 0);
+					inboundConnection = currentMessage.Item2;
 				}
-				networkMessageQueue.RemoveAt(0);
 				if (message != null) {
 					ProcessMessage(message, inboundConnection);
 				}
@@ -647,7 +642,7 @@ namespace XLMultiplayer {
 			byte[] messageData = new byte[netMessage.length];
 			netMessage.CopyTo(messageData);
 
-			Instance.networkMessageQueue.Add(Tuple.Create(messageData, netMessage.connection));
+			Instance.networkMessageQueue.Enqueue(Tuple.Create(messageData, netMessage.connection));
 		}
 #endif
 
@@ -818,10 +813,10 @@ namespace XLMultiplayer {
 					}
 					break;
 				case OpCode.Animation:
-					CompressedAnimations.Add(Tuple.Create(playerID, newBuffer));
+					CompressedAnimations.Enqueue(Tuple.Create(playerID, newBuffer));
 					break;
 				case OpCode.Sound:
-					CompressedSounds.Add(Tuple.Create(playerID, newBuffer));
+					CompressedSounds.Enqueue(Tuple.Create(playerID, newBuffer));
 					break;
 				case OpCode.Chat:
 					MultiplayerRemotePlayerController remoteSender = this.remoteControllers.Find(p => p.playerID == playerID);
@@ -958,51 +953,48 @@ namespace XLMultiplayer {
 			client.SendMessageToConnection(connection, PluginEnabledMessage, SendFlags.Reliable);
 		}
 
-		private async void DecompressSoundAnimationQueue() {
+		private void DecompressSoundAnimationQueue() {
 			while (playerController != null) {
-				if (!modifyingCompressionList) {
-					if (CompressedSounds.Count > 0 && !modifyingCompressionList) {
-						if (CompressedSounds[0] != null) {
-							byte[] decompressed = Decompress(CompressedSounds[0].Item2);
-
-							while (modifyingCompressionList) { }
-							DecompressedSounds.Add(Tuple.Create(CompressedSounds[0].Item1, decompressed));
-						}
-						CompressedSounds.RemoveAt(0);
+				if (CompressedSounds.Count > 0) {
+					Tuple<byte, byte[]> CurrentSound;
+					if (CompressedSounds.TryDequeue(out CurrentSound)) {
+						byte[] decompressed = Decompress(CurrentSound.Item2);
+							
+						DecompressedSounds.Enqueue(Tuple.Create(CurrentSound.Item1, decompressed));
 					}
-					if (CompressedAnimations.Count > 0 && !modifyingCompressionList) {
-						if (CompressedAnimations[0] != null) {
-							byte[] packetData = new byte[CompressedAnimations[0].Item2.Length - 4];
-							Array.Copy(CompressedAnimations[0].Item2, 4, packetData, 0, packetData.Length);
+				}
+				if (CompressedAnimations.Count > 0) {
+					Tuple<byte, byte[]> CurrentAnimation;
+					if (CompressedAnimations.TryDequeue(out CurrentAnimation)) {
+						byte[] packetData = new byte[CurrentAnimation.Item2.Length - 4];
+						Array.Copy(CurrentAnimation.Item2, 4, packetData, 0, packetData.Length);
 
-							byte[] decompressedData = Decompress(packetData);
+						byte[] decompressedData = Decompress(packetData);
 
-							byte[] animationData = new byte[decompressedData.Length + 4];
-							Array.Copy(CompressedAnimations[0].Item2, 0, animationData, 0, 4);
-							Array.Copy(decompressedData, 0, animationData, 4, decompressedData.Length);
-
-							while (modifyingCompressionList) { }
-							DecompressedAnimations.Add(Tuple.Create(CompressedAnimations[0].Item1, animationData));
-						}
-						CompressedAnimations.RemoveAt(0);
+						byte[] animationData = new byte[decompressedData.Length + 4];
+						Array.Copy(CurrentAnimation.Item2, 0, animationData, 0, 4);
+						Array.Copy(decompressedData, 0, animationData, 4, decompressedData.Length);
+							
+						DecompressedAnimations.Enqueue(Tuple.Create(CurrentAnimation.Item1, animationData));
 					}
 				}
 			}
 		}
 
 		private void ProcessSoundAnimationQueue() {
-			while (DecompressedAnimations.Count > 0) {
-				byte playerID = DecompressedAnimations[0].Item1;
-				byte[] array = new byte[DecompressedAnimations[0].Item2.Length];
-				Array.Copy(DecompressedAnimations[0].Item2, array, array.Length);
-				DecompressedAnimations.RemoveAt(0);
+			Tuple<byte, byte[]> CurrentAnimation;
+			while (DecompressedAnimations.TryDequeue(out CurrentAnimation)) {
+				byte playerID = CurrentAnimation.Item1;
+				byte[] array = new byte[CurrentAnimation.Item2.Length];
+				Array.Copy(CurrentAnimation.Item2, array, array.Length);
 				this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(array);
 			}
-			while (DecompressedSounds.Count > 0) {
-				byte playerID = DecompressedSounds[0].Item1;
-				byte[] array = new byte[DecompressedSounds[0].Item2.Length];
-				Array.Copy(DecompressedSounds[0].Item2, array, array.Length);
-				DecompressedSounds.RemoveAt(0);
+			
+			Tuple<byte, byte[]> CurrentSound;
+			while (DecompressedSounds.TryDequeue(out CurrentSound)) {
+				byte playerID = CurrentSound.Item1;
+				byte[] array = new byte[CurrentSound.Item2.Length];
+				Array.Copy(CurrentSound.Item2, array, array.Length);
 				this.remoteControllers.Find(p => p.playerID == playerID).UnpackSounds(array);
 			}
 		}

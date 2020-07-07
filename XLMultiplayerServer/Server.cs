@@ -209,6 +209,10 @@ namespace XLMultiplayerServer {
 				LogMessageCallback("\nWARNING: FAILED TO FIND MAPS DIRECTORY \"{0}\" SO ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n", ConsoleColor.Yellow, mapsDir);
 			}
 
+			foreach (Plugin plugin in loadedPlugins) {
+				plugin.mapList = mapList;
+			}
+
 			byte[] mapListBytes = GetMapListBytes();
 			return mapListBytes;
 		}
@@ -821,8 +825,9 @@ namespace XLMultiplayerServer {
 							if (newPlugin.serverVersion == VERSION_NUMBER) {
 								string pluginPath = dir + sep;
 								loadedPlugins.Add(new Plugin(newPlugin.name, newPlugin.dllName, newPlugin.startMethod, newPlugin.dependencyFile, newPlugin.serverVersion, pluginPath,
-									(byte)loadedPlugins.Count, LogMessageCallback, SendAnnouncement, ChangeMap, SendMessageFromPluginToPlayer, DisconnectPlayer, SendImportantChatToPlayer,
+									(byte)loadedPlugins.Count, players.Length, LogMessageCallback, SendAnnouncement, ChangeMap, SendMessageFromPluginToPlayer, DisconnectPlayer, SendImportantChatToPlayer,
 									PluginReloadMapList));
+								loadedPlugins[loadedPlugins.Count - 1].mapList = mapList;
 							} else {
 								LogMessageCallback($"Plugin {newPlugin.name} is for a different server version.  Current Version {VERSION_NUMBER}, Plugin version {newPlugin.serverVersion}", ConsoleColor.Red);
 							}

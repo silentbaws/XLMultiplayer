@@ -59,7 +59,7 @@ namespace XLMultiplayerServer {
 		public Func<string, bool> OnConnect;
 		public Func<PluginPlayer, string, bool> OnChatMessage;
 
-		public Plugin(string PluginName, string PluginDLL, string PluginStartMethod, string Dependency, string version, string PluginPath, byte ID, 
+		public Plugin(string PluginName, string PluginDLL, string PluginStartMethod, string Dependency, string version, string PluginPath, byte ID, int capacity,
 			LogMessage MessageCallback, Action<string, int, string> AnnouncementCallback, Action<string> MapChangeCallback, Action<Plugin, Player, byte[], bool> Send, 
 			Action<Player> disconnect, Action<string, int, string, Player> sendImportant, Action mapListReload) {
 			name = PluginName;
@@ -68,6 +68,7 @@ namespace XLMultiplayerServer {
 			path = PluginPath;
 			serverVersion = version;
 			pluginID = ID;
+			maxPlayers = (byte)capacity;
 			LogMessage = MessageCallback;
 			SendServerAnnouncement = AnnouncementCallback;
 			ChangeMap = MapChangeCallback;
