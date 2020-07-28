@@ -1,12 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UnityEngine;
 using UnityModManagerNet;
 
 namespace XLMultiplayer {
 	public class MultiplayerLocalTexture : MultiplayerTexture {
-		public MultiplayerLocalTexture(bool custom, string path, MPTextureType texType, StreamWriter sw) : base(custom, path, texType, sw) { }
-		public MultiplayerLocalTexture(MPTextureType texType, StreamWriter sw) : base(texType, sw) { }
+		public MultiplayerLocalTexture(bool custom, string path, string texType, GearInfoType gearType, StreamWriter sw) : base(custom, path, texType, gearType, sw) { }
 
 		public void ConvertTexture(int maxSize = 1024) {
 			Texture2D texture2D = null;
@@ -47,14 +48,26 @@ namespace XLMultiplayer {
 		}
 		
 		public byte[] GetSendData() {
-			byte[] sendBuffer = new byte[this.bytes.Length + 3];
+			// TODO: Update this to the full spec in MultiplayerTexture.cs
 
-			Array.Copy(this.bytes, 0, sendBuffer, 3, this.bytes.Length);
-			sendBuffer[0] = (byte)OpCode.Texture;
-			sendBuffer[1] = (byte)this.textureType;
-			sendBuffer[2] = useFull ? (byte)1 : (byte)0;
+			List<byte> sendBuffer = new List<byte>();
 
-			return sendBuffer;
+			//sendBuffer[0] = isCustom ? (byte)1 : (byte)0;
+			sendBuffer.Add(1);
+			sendBuffer.Add((byte)infoType);
+
+			if (isCustom || true) {
+				byte[] typeString = Encoding.UTF8.GetBytes(this.textureType);
+				byte[] typeLen = BitConverter.GetBytes((ushort)typeString.Length);
+				byte[] dataLen = BitConverter.GetBytes(this.bytes.Length);
+
+				sendBuffer.AddRange(typeLen);
+				sendBuffer.AddRange(dataLen);
+				sendBuffer.AddRange(typeString);
+				sendBuffer.AddRange(this.bytes);
+			}
+
+			return sendBuffer.ToArray();
 		}
 	}
 }

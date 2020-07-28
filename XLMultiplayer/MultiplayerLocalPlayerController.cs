@@ -1,21 +1,15 @@
-﻿using ReplayEditor;
+﻿using HarmonyLib;
+using ReplayEditor;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UnityEngine;
+using Valve.Sockets;
 
 namespace XLMultiplayer {
 	public class MultiplayerLocalPlayerController : MultiplayerPlayerController {
-		public MultiplayerLocalTexture shirtMPTex;
-		public MultiplayerLocalTexture pantsMPTex;
-		public MultiplayerLocalTexture shoesMPTex;
-		public MultiplayerLocalTexture hatMPTex;
-		public MultiplayerLocalTexture deckMPTex;
-		public MultiplayerLocalTexture gripMPTex;
-		public MultiplayerLocalTexture wheelMPTex;
-		public MultiplayerLocalTexture truckMPTex;
-		public MultiplayerLocalTexture headMPTex;
-		public MultiplayerLocalTexture bodyMPTex;
+		public List<MultiplayerLocalTexture> multiplayerTextures = new List<MultiplayerLocalTexture>();
 
 		private bool startedEncoding = false;
 
@@ -41,35 +35,18 @@ namespace XLMultiplayer {
 				Main.utilityMenu.loadingStatus = 0;
 				yield return new WaitForEndOfFrame();
 
-				this.shirtMPTex.ConvertTexture();
-				IncrementLoading();
+				foreach (MultiplayerLocalTexture localTexture in multiplayerTextures) {
+					string texType = localTexture.textureType.ToLower();
+					if (texType.Contains("hat") || texType.Contains("truck") || texType.Contains("wheel")) {
+						localTexture.ConvertTexture(512);
+					} else if (texType.Contains("head") || texType.Contains("body")) {
+						localTexture.ConvertTexture(2048);
+					} else {
+						localTexture.ConvertTexture();
+					}
 
-				this.pantsMPTex.ConvertTexture();
-				IncrementLoading();
-
-				this.shoesMPTex.ConvertTexture();
-				IncrementLoading();
-
-				this.hatMPTex.ConvertTexture(512);
-				IncrementLoading();
-
-				this.deckMPTex.ConvertTexture();
-				IncrementLoading();
-
-				this.gripMPTex.ConvertTexture();
-				IncrementLoading();
-
-				this.truckMPTex.ConvertTexture(512);
-				IncrementLoading();
-
-				this.wheelMPTex.ConvertTexture(512);
-				IncrementLoading();
-
-				this.headMPTex.ConvertTexture(2048);
-				IncrementLoading();
-
-				this.bodyMPTex.ConvertTexture(2048);
-				IncrementLoading();
+					IncrementLoading();
+				}
 
 				IncrementLoading();
 				yield return new WaitForEndOfFrame();
@@ -85,18 +62,50 @@ namespace XLMultiplayer {
 			if (!Main.utilityMenu.isLoading && startedEncoding && !sentTextures && Main.multiplayerController.isFileConnected) {
 				sentTextures = true;
 
-				Main.multiplayerController.SendBytesRaw(this.shirtMPTex.GetSendData(), true, false, false, true);
-				Main.multiplayerController.SendBytesRaw(this.pantsMPTex.GetSendData(), true, false, false, true);
-				Main.multiplayerController.SendBytesRaw(this.shoesMPTex.GetSendData(), true, false, false, true);
-				Main.multiplayerController.SendBytesRaw(this.hatMPTex.GetSendData(), true, false, false, true);
+				List<byte> textureData = new List<byte>();
 
-				Main.multiplayerController.SendBytesRaw(this.deckMPTex.GetSendData(), true, false, false, true);
-				Main.multiplayerController.SendBytesRaw(this.gripMPTex.GetSendData(), true, false, false, true);
-				Main.multiplayerController.SendBytesRaw(this.truckMPTex.GetSendData(), true, false, false, true);
-				Main.multiplayerController.SendBytesRaw(this.wheelMPTex.GetSendData(), true, false, false, true);
+				string currentBodyString = currentBody.gearInfo.type;
 
-				Main.multiplayerController.SendBytesRaw(this.headMPTex.GetSendData(), true, false, false, true);
-				Main.multiplayerController.SendBytesRaw(this.bodyMPTex.GetSendData(), true, false, false, true);
+				byte[] bodyID = Encoding.UTF8.GetBytes(currentBodyString);
+				textureData.AddRange(BitConverter.GetBytes((ushort)bodyID.Length));
+				textureData.AddRange(bodyID);
+
+				foreach (MultiplayerLocalTexture localTexture in multiplayerTextures) {
+					textureData.AddRange(localTexture.GetSendData());
+				}
+
+				byte[] sendData = new byte[textureData.Count + 5];
+
+				if (sendData.Length > Library.maxMessageSize) {
+					ushort totalMessages = (ushort)Math.Ceiling((double)sendData.Length / Library.maxMessageSize);
+
+					UnityModManagerNet.UnityModManager.Logger.Log($"Total Texture data: {sendData.Length}, Max message size: {Library.maxMessageSize}, Total messages {totalMessages}");
+
+					byte[] textureDataArray = textureData.ToArray();
+
+					for (ushort currentMessage = 0; currentMessage < totalMessages; currentMessage++) {
+						int startIndex = currentMessage == 0 ? 0 : currentMessage * (Library.maxMessageSize - 5);
+						
+						byte[] messagePart = new byte[Math.Min(Library.maxMessageSize, textureDataArray.Length - ((Library.maxMessageSize - 5) * currentMessage) + 5)];
+
+						messagePart[0] = (byte)OpCode.Texture;
+						Array.Copy(BitConverter.GetBytes(currentMessage), 0, messagePart, 1, 2);
+						Array.Copy(BitConverter.GetBytes(totalMessages - 1), 0, messagePart, 3, 2);
+						Array.Copy(textureDataArray, startIndex, messagePart, 5, messagePart.Length - 5);
+						
+						if (currentMessage == 0)
+							UnityModManagerNet.UnityModManager.Logger.Log($"Current body: {currentBodyString}, decoded as {Encoding.UTF8.GetString(messagePart, 7, (ushort)bodyID.Length)}, length: {(ushort)bodyID.Length}, decodedLength {BitConverter.ToUInt16(messagePart, 5)}");
+						
+						Main.multiplayerController.SendBytesRaw(messagePart, true, false, false, true);
+					}
+				} else {
+					sendData[0] = (byte)OpCode.Texture;
+					Array.Copy(BitConverter.GetBytes((ushort)0), 0, sendData, 1, 2);
+					Array.Copy(BitConverter.GetBytes((ushort)0), 0, sendData, 3, 2);
+					Array.Copy(textureData.ToArray(), 0, sendData, 5, textureData.Count);
+
+					Main.multiplayerController.SendBytesRaw(sendData, true, false, false, true);
+				}
 			}
 		}
 
@@ -111,86 +120,14 @@ namespace XLMultiplayer {
 				this.debugWriter.WriteLine(pair.Key);
 			}
 
-			shirtMPTex = new MultiplayerLocalTexture(MPTextureType.Shirt, this.debugWriter);
-			pantsMPTex = new MultiplayerLocalTexture(MPTextureType.Pants, this.debugWriter);
-			shoesMPTex = new MultiplayerLocalTexture(MPTextureType.Shoes, this.debugWriter);
-			hatMPTex = new MultiplayerLocalTexture(MPTextureType.Hat, this.debugWriter);
-			deckMPTex = new MultiplayerLocalTexture(MPTextureType.Deck, this.debugWriter);
-			gripMPTex = new MultiplayerLocalTexture(MPTextureType.Grip, this.debugWriter);
-			wheelMPTex = new MultiplayerLocalTexture(MPTextureType.Wheels, this.debugWriter);
-			truckMPTex = new MultiplayerLocalTexture(MPTextureType.Trucks, this.debugWriter);
-			headMPTex = new MultiplayerLocalTexture(MPTextureType.Head, this.debugWriter);
-			bodyMPTex = new MultiplayerLocalTexture(MPTextureType.Body, this.debugWriter);
-
-			foreach (ClothingGearObjet clothingPiece in gearList) {
-				// Get the path of the gear piece
-				string path = "";
-				bool custom = clothingPiece.gearInfo.isCustom;
-				foreach(TextureChange change in clothingPiece.gearInfo.textureChanges) {
-					if (change.textureID.ToLower().Equals("albedo")) {
-						path = change.texturePath;
-					}
-				}
-
-				switch (clothingPiece.template.categoryName.ToLower()) {
-					case "shirt":
-						this.shirtMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Shirt, this.debugWriter) {
-							useFull = false
-						};
-						break;
-					case "hoodie":
-						this.shirtMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Shirt, this.debugWriter) {
-							useFull = true
-						};
-						break;
-					case "hat":
-						this.hatMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Hat, this.debugWriter);
-						break;
-					case "pants":
-						this.pantsMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Pants, this.debugWriter);
-						break;
-					case "shoes":
-						this.shoesMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Shoes, this.debugWriter);
-						break;
-				}
-			}
-
-			foreach(BoardGearObject boardGear in boardGearList) {
-				// Get the path of the gear piece
-				string path = "";
-				bool custom = boardGear.gearInfo.isCustom;
-				foreach (TextureChange change in boardGear.gearInfo.textureChanges) {
-					if (change.textureID.ToLower().Equals("albedo")) {
-						path = change.texturePath;
-					}
-				}
-				
-				string gearType = BoardGearObject.AdaptMaterialID(boardGear.gearInfo.type);
-				
-				switch (gearType) {
-					case "deck":
-						this.deckMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Deck, this.debugWriter);
-						break;
-					case "griptape":
-						this.gripMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Grip, this.debugWriter);
-						break;
-					case "truck":
-						this.truckMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Trucks, this.debugWriter);
-						break;
-					case "wheel":
-						this.wheelMPTex = new MultiplayerLocalTexture(custom, path, MPTextureType.Wheels, this.debugWriter);
-						break;
-				}
-			}
-			
 			/* Get the body textures */
-			{
+			if (currentBody.gearInfo.materialChanges != null && currentBody.gearInfo.materialChanges.Count > 0) {
 				string pathHead = "";
 				string pathBody = "";
 				bool isCustom = currentBody.gearInfo.isCustom;
 
 				this.debugWriter.WriteLine("Body changes\n{0}", currentBody.gearInfo.type);
-				if(currentBody.gearInfo.tags != null) {
+				if (currentBody.gearInfo.tags != null) {
 					this.debugWriter.WriteLine("Tags length {0}", currentBody.gearInfo.tags.Length);
 				}
 
@@ -208,8 +145,37 @@ namespace XLMultiplayer {
 					}
 				}
 
-				this.headMPTex = new MultiplayerLocalTexture(isCustom, pathHead, MPTextureType.Head, this.debugWriter);
-				this.bodyMPTex = new MultiplayerLocalTexture(isCustom, pathBody, MPTextureType.Body, this.debugWriter);
+				multiplayerTextures.Add(new MultiplayerLocalTexture(isCustom, pathHead, "head", GearInfoType.Body, this.debugWriter));
+				multiplayerTextures.Add(new MultiplayerLocalTexture(isCustom, pathBody, "body", GearInfoType.Body, this.debugWriter));
+			}
+
+			foreach (ClothingGearObjet clothingPiece in gearList) {
+				// Get the path of the gear piece
+				string path = "";
+				bool custom = clothingPiece.gearInfo.isCustom;
+				foreach(TextureChange change in clothingPiece.gearInfo.textureChanges) {
+					if (change.textureID.ToLower().Equals("albedo")) {
+						path = change.texturePath;
+					}
+				}
+
+				multiplayerTextures.Add(new MultiplayerLocalTexture(custom, path, clothingPiece.gearInfo.type, GearInfoType.Clothing, this.debugWriter));
+			}
+
+			foreach(BoardGearObject boardGear in boardGearList) {
+				// Get the path of the gear piece
+				string path = "";
+				bool custom = boardGear.gearInfo.isCustom;
+				foreach (TextureChange change in boardGear.gearInfo.textureChanges) {
+					if (change.textureID.ToLower().Equals("albedo")) {
+						path = change.texturePath;
+					}
+				}
+				
+				string gearType = BoardGearObject.AdaptMaterialID(boardGear.gearInfo.type);
+
+
+				multiplayerTextures.Add(new MultiplayerLocalTexture(custom, path, boardGear.gearInfo.type, GearInfoType.Board, this.debugWriter));
 			}
 			
 			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
@@ -405,19 +371,27 @@ namespace XLMultiplayer {
 					byte clipNameIndex = MultiplayerUtils.GetArrayByteFromClipName(newOneShotEvents[i][j].clipName);
 					float time = newOneShotEvents[i][j].time;
 					float volume = newOneShotEvents[i][j].volumeScale;
-					
-					newOneShotBytes[i].Add(clipNameIndex);
-					newOneShotBytes[i].AddRange(BitConverter.GetBytes(time));
-					newOneShotBytes[i].AddRange(BitConverter.GetBytes(volume));
+
+					if (clipNameIndex != 255) {
+						newOneShotBytes[i].Add(clipNameIndex);
+						newOneShotBytes[i].AddRange(BitConverter.GetBytes(time));
+						newOneShotBytes[i].AddRange(BitConverter.GetBytes(volume));
+					} else {
+						this.debugWriter.WriteLine($"Attempted encoding invalid one shot clip {newOneShotEvents[i][j].clipName}");
+					}
 				}
 				for (int j = 0; j < newClipEvents[i].Count; j++) {
 					byte clipNameIndex = MultiplayerUtils.GetArrayByteFromClipName(newClipEvents[i][j].clipName);
 					float time = newClipEvents[i][j].time;
 					byte playing = newClipEvents[i][j].isPlaying ? (byte)1 : (byte)0;
 
-					newClipBytes[i].Add(clipNameIndex);
-					newClipBytes[i].AddRange(BitConverter.GetBytes(time));
-					newClipBytes[i].Add(playing);
+					if (clipNameIndex != 255) {
+						newClipBytes[i].Add(clipNameIndex);
+						newClipBytes[i].AddRange(BitConverter.GetBytes(time));
+						newClipBytes[i].Add(playing);
+					} else {
+						this.debugWriter.WriteLine($"Attempted encoding invalid clip event clip {newClipEvents[i][j].clipName}");
+					}
 				}
 				for (int j = 0; j < newVolumeEvents[i].Count; j++) {
 					float time = newVolumeEvents[i][j].time;

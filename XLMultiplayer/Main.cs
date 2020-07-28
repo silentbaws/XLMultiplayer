@@ -207,6 +207,7 @@ namespace XLMultiplayer {
 			}
 
 			LoadPlugins();
+
 		}
 
 		static bool OnToggle(UnityModManager.ModEntry modEntry, bool value) {

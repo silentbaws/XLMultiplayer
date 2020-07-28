@@ -4,42 +4,34 @@ using UnityEngine;
 
 namespace XLMultiplayer {
 	public class MultiplayerRemoteTexture : MultiplayerTexture {
-		public MultiplayerRemoteTexture(bool custom, string path, MPTextureType texType, StreamWriter sw) : base(custom, path, texType, sw) { }
-		public MultiplayerRemoteTexture(MPTextureType texType, StreamWriter sw) : base(texType, sw) { }
+		public MultiplayerRemoteTexture(bool custom, string path, string texType, GearInfoType gearType, StreamWriter sw) : base(custom, path, texType, gearType, sw) { }
 
 		public bool useTexture { private set; get; } = true;
 		public bool loaded = false;
 
 		public string fileLocation { private set; get; }
-		
+
 		public void SaveTexture(int connectionId, byte[] buffer) {
 			this.debugWriter.WriteLine("Saving texture in queue");
-			this.useFull = buffer[1] == 1 ? true : false;
-			byte[] file = new byte[buffer.Length - 2];
-			Array.Copy(buffer, 2, file, 0, file.Length);
+			
+			if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing"))
+				Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing");
+			
+			this.fileLocation = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + MultiplayerUtils.CalculateMD5Bytes(buffer) + connectionId.ToString() + ".jpg";
 
-			if (file.Length == 1) {
-				this.useTexture = false;
-			} else {
-				if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing"))
-					Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing");
-
-				try {
-					File.WriteAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + MultiplayerUtils.CalculateMD5Bytes(file) + connectionId.ToString() + ".jpg", file);
-				} catch (Exception e) {
-					this.debugWriter.WriteLine(e.ToString());
-				}
-				
-				this.fileLocation = Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp\\Clothing\\" + textureType.ToString() + MultiplayerUtils.CalculateMD5Bytes(file) + connectionId.ToString() + ".jpg";
-				this.saved = true;
-				this.debugWriter.WriteLine("Saved texture in queue");
+			try {
+				File.WriteAllBytes(this.fileLocation, buffer);
+			} catch (Exception e) {
+				this.fileLocation = "";
+				this.debugWriter.WriteLine(e.ToString());
 			}
+			
+			this.saved = true;
+			this.debugWriter.WriteLine("Saved texture in queue");
 		}
 
 		public void LoadFromFileMainThread(MultiplayerRemotePlayerController controller) {
-			if (this.useTexture) {
-				controller.SetPlayerTexture(this.fileLocation, textureType, useFull);
-			}
+			controller.SetPlayerTexture(this.fileLocation, textureType, infoType, useFull);
 			loaded = true;
 		}
 	}

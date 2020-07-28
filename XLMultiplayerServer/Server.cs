@@ -40,25 +40,12 @@ namespace XLMultiplayerServer {
 		Disconnect = 255
 	}
 
-	public enum MPTextureType : byte {
-		Shirt = 0,
-		Pants = 1,
-		Shoes = 2,
-		Hat = 3,
-		Deck = 4,
-		Grip = 5,
-		Trucks = 6,
-		Wheels = 7,
-		Head = 8,
-		Body = 9
-	}
-
 	public delegate void LogMessage(string message, ConsoleColor textColor, params object[] objects);
 	public delegate void LogChatMessage(string message);
 	
 	public class Server {
 		// TODO: Update version number with versions
-		private string VERSION_NUMBER = "0.9.2";
+		private string VERSION_NUMBER = "0.10.0";
 
 		public LogMessage LogMessageCallback;
 		public LogChatMessage LogChatMessageCallback;
@@ -179,10 +166,15 @@ namespace XLMultiplayerServer {
 
 		private byte[] GenerateMapList() {
 			mapList.Clear();
-
+			
 			mapList.Add("0", "Courthouse");
 			mapList.Add("1", "California Skatepark");
-			mapList.Add("2", "Miniramp - test");
+			mapList.Add("2", "DTLA");
+			mapList.Add("3", "Thicc Ramp");
+			mapList.Add("4", "Easy Day High");
+			mapList.Add("5", "Hudland Official");
+			mapList.Add("6", "Streets Official");
+			mapList.Add("7", "Grant Skatepark Official");
 
 			if (mapsDir == "") {
 				mapsDir = Directory.GetCurrentDirectory() + sep + "Maps";
@@ -337,6 +329,11 @@ namespace XLMultiplayerServer {
 					} else {
 						LogMessageCallback("Command improperly formatted", ConsoleColor.Yellow);
 					}
+				} else if (input.ToLower().StartsWith("playerlist")) {
+					foreach (Player p in players) {
+						if (p != null)
+							LogMessageCallback(RemoveMarkup(p.username) + " (" + p.playerID.ToString() + ")", ConsoleColor.Yellow);
+					}
 				} else {
 					foreach (Plugin plugin in loadedPlugins) {
 						if (plugin.enabled) plugin.ServerCommand?.Invoke(input);
@@ -425,14 +422,10 @@ namespace XLMultiplayerServer {
 						LogMessageCallback("Received Texture from " + fromID, ConsoleColor.White);
 						Player player = players[fromID];
 						if (player != null && player.playerID == fromID) {
-							player.AddGear(buffer);
-							if (player.allGearUploaded) {
+							if (player.AddGear(buffer)) {
 								foreach (Player player2 in players) {
 									if (player2 != null && player2.playerID != fromID) {
-										foreach (KeyValuePair<string, byte[]> value in player.gear) {
-											fileServer.server.SendMessageToConnection(player2.fileConnection, value.Value, SendFlags.Reliable);
-										}
-										fileServer.server.FlushMessagesOnConnection(player2.fileConnection);
+										player.SendGear(player2.fileConnection, fileServer.server);
 									}
 								}
 							}
@@ -1072,7 +1065,7 @@ namespace XLMultiplayerServer {
 				// Handle map voting and map enforcement
 				if (ENFORCE_MAPS) {
 					if (total_players == 0) {
-						currentMapHash = "1";
+						currentMapHash = "2";
 					}
 
 					bool startNewTimer = false;

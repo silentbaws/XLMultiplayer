@@ -16,7 +16,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 using Valve.Sockets;
@@ -33,6 +32,7 @@ using Valve.Sockets;
 //			-> Send paths for non-custom gear
 //			-> Send hashes of full size textures for custom gear along with compressed texture
 //			-> Only send hashes/paths from server unless client requests texture data
+
 
 namespace XLMultiplayer {
 	public enum OpCode : byte {
@@ -457,6 +457,15 @@ namespace XLMultiplayer {
 
 		public void Update() {
 			FrameWatch.Restart();
+
+			if (networkMessageQueue != null) {
+				GC.KeepAlive(networkMessageQueue);
+				GC.KeepAlive(CompressedSounds);
+				GC.KeepAlive(DecompressedSounds);
+				GC.KeepAlive(CompressedAnimations);
+				GC.KeepAlive(DecompressedAnimations);
+			}
+
 			if (closedByPeer) {
 				//Client disconnected from server
 				this.debugWriter.WriteLine("Disconnected from server");
@@ -621,7 +630,7 @@ namespace XLMultiplayer {
 			proccessedMessages.Clear();
 			messagesProcessed = 0;
 
-			for (int i = networkMessageQueue.Count; i > 0; i--) {
+			while (!networkMessageQueue.IsEmpty) {
 				messagesProcessed++;
 				byte[] message = null;
 				uint inboundConnection = 0;
@@ -641,6 +650,10 @@ namespace XLMultiplayer {
 		private static void MessageCallbackHandler(in NetworkingMessage netMessage) {
 			byte[] messageData = new byte[netMessage.length];
 			netMessage.CopyTo(messageData);
+			
+			if (Instance.networkMessageQueue == null) {
+				Instance.networkMessageQueue = new ConcurrentQueue<Tuple<byte[], uint>>();
+			}
 
 			Instance.networkMessageQueue.Enqueue(Tuple.Create(messageData, netMessage.connection));
 		}
@@ -685,9 +698,7 @@ namespace XLMultiplayer {
 					if (netMessagesCount > 0) {
 						for (int i = 0; i < netMessagesCount; i++) {
 							ref NetworkingMessage netMessage = ref netMessages[i];
-
-							
-
+					
 							netMessage.Destroy();
 						}
 					}
@@ -708,7 +719,8 @@ namespace XLMultiplayer {
 				Array.Copy(buffer, 1, newBuffer, 0, newBuffer.Length);
 			}
 
-			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive && opCode != OpCode.Sound) this.debugWriter.WriteLine("Received message with opcode {0}, and length {1}", opCode, buffer.Length);
+			//if (opCode != OpCode.Animation && opCode != OpCode.StillAlive && opCode != OpCode.Sound)
+				this.debugWriter.WriteLine("Received message with opcode {0}, and length {1}", opCode, buffer.Length);
 
 			switch (opCode) {
 				case OpCode.Connect:
@@ -779,38 +791,7 @@ namespace XLMultiplayer {
 					if (remoteOwner == null) {
 						this.debugWriter.WriteLine("Texture owner not found");
 					}
-					switch ((MPTextureType)newBuffer[0]) {
-						case MPTextureType.Shirt:
-							remoteOwner.shirtMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Pants:
-							remoteOwner.pantsMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Shoes:
-							remoteOwner.shoesMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Hat:
-							remoteOwner.hatMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Deck:
-							remoteOwner.deckMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Grip:
-							remoteOwner.gripMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Trucks:
-							remoteOwner.truckMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Wheels:
-							remoteOwner.wheelMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Body:
-							remoteOwner.bodyMPTex.SaveTexture(playerID, newBuffer);
-							break;
-						case MPTextureType.Head:
-							remoteOwner.headMPTex.SaveTexture(playerID, newBuffer);
-							break;
-					}
+					remoteOwner.ParseTextureStream(newBuffer);
 					break;
 				case OpCode.Animation:
 					CompressedAnimations.Enqueue(Tuple.Create(playerID, newBuffer));
@@ -955,7 +936,7 @@ namespace XLMultiplayer {
 
 		private void DecompressSoundAnimationQueue() {
 			while (playerController != null) {
-				if (CompressedSounds.Count > 0) {
+				if (!CompressedSounds.IsEmpty) {
 					Tuple<byte, byte[]> CurrentSound;
 					if (CompressedSounds.TryDequeue(out CurrentSound)) {
 						byte[] decompressed = Decompress(CurrentSound.Item2);
@@ -963,7 +944,7 @@ namespace XLMultiplayer {
 						DecompressedSounds.Enqueue(Tuple.Create(CurrentSound.Item1, decompressed));
 					}
 				}
-				if (CompressedAnimations.Count > 0) {
+				if (!CompressedAnimations.IsEmpty) {
 					Tuple<byte, byte[]> CurrentAnimation;
 					if (CompressedAnimations.TryDequeue(out CurrentAnimation)) {
 						byte[] packetData = new byte[CurrentAnimation.Item2.Length - 4];
@@ -983,19 +964,29 @@ namespace XLMultiplayer {
 
 		private void ProcessSoundAnimationQueue() {
 			Tuple<byte, byte[]> CurrentAnimation;
-			while (DecompressedAnimations.TryDequeue(out CurrentAnimation)) {
+			while (!DecompressedAnimations.IsEmpty && DecompressedAnimations.TryDequeue(out CurrentAnimation)) {
 				byte playerID = CurrentAnimation.Item1;
-				byte[] array = new byte[CurrentAnimation.Item2.Length];
-				Array.Copy(CurrentAnimation.Item2, array, array.Length);
-				this.remoteControllers.Find(p => p.playerID == playerID).UnpackAnimations(array);
+
+				MultiplayerRemotePlayerController targetPlayer = this.remoteControllers.Find(p => p.playerID == playerID);
+
+				if(targetPlayer != null) {
+					byte[] array = new byte[CurrentAnimation.Item2.Length];
+					Array.Copy(CurrentAnimation.Item2, array, array.Length);
+					targetPlayer.UnpackAnimations(array);
+				}
 			}
 			
 			Tuple<byte, byte[]> CurrentSound;
-			while (DecompressedSounds.TryDequeue(out CurrentSound)) {
+			while (!DecompressedAnimations.IsEmpty && DecompressedSounds.TryDequeue(out CurrentSound)) {
 				byte playerID = CurrentSound.Item1;
-				byte[] array = new byte[CurrentSound.Item2.Length];
-				Array.Copy(CurrentSound.Item2, array, array.Length);
-				this.remoteControllers.Find(p => p.playerID == playerID).UnpackSounds(array);
+
+				MultiplayerRemotePlayerController targetPlayer = this.remoteControllers.Find(p => p.playerID == playerID);
+
+				if (targetPlayer != null) {
+					byte[] array = new byte[CurrentSound.Item2.Length];
+					Array.Copy(CurrentSound.Item2, array, array.Length);
+					targetPlayer.UnpackSounds(array);
+				}
 			}
 		}
 

@@ -182,13 +182,28 @@ namespace XLMultiplayer {
 				mapsDictionary.Add("1", "Assets/_Scenes/Encinitas_scene.unity");
 			}
 			if (!mapsDictionary.ContainsKey("2")) {
-				mapsDictionary.Add("2", "Assets/_Scenes/CopingTests.unity");
+				mapsDictionary.Add("2", "Assets/_Scenes/DowntownBlockout.unity");
 			}
-			
+			if (!mapsDictionary.ContainsKey("3")) {
+				mapsDictionary.Add("3", "Assets/_Scenes/CampEasyDay.unity");
+			}
+			if (!mapsDictionary.ContainsKey("4")) {
+				mapsDictionary.Add("4", "Assets/_Scenes/SchoolBlockOut.unity");
+			}
+			if (!mapsDictionary.ContainsKey("5")) {
+				mapsDictionary.Add("5", "Assets/_Scenes/HüdshitOfficial.unity");
+			}
+			if (!mapsDictionary.ContainsKey("6")) {
+				mapsDictionary.Add("6", "Assets/_Scenes/STREETS Day.unity");
+			}
+			if (!mapsDictionary.ContainsKey("7")) {
+				mapsDictionary.Add("7", "Assets/_Scenes/GrantSkateparkTest.unity");
+			}
+
 			List<string> files = null;
 			int i = 0;
 
-			files = LevelManager.Instance.CustomLevels.ConvertAll(levelInfo => levelInfo.path);
+			files = LevelManager.Instance.CustomLevels.ConvertAll(levelInfo => !levelInfo.isAssetBundle ? null : levelInfo.path);
 
 			hashedMaps = files.Count;
 			loadingMaps = true;
@@ -198,6 +213,8 @@ namespace XLMultiplayer {
 			}
 
 			while (loadingMaps && files != null && files.Count > 0) {
+				if (files[i] == null) continue;
+
 				string fileHash = CalculateMD5(files[i]);
 				try {
 					mapsDictionary.Add(fileHash, files[i]);
@@ -257,8 +274,14 @@ namespace XLMultiplayer {
 			clipNameToArrayByteDict.Clear();
 			foreach (var KVP in originalClipDict) {
 				try {
-					clipNameToArrayByteDict.Add(KVP.Key, ArrayByteFromClipName(KVP.Key));
-				} catch (Exception) { }
+					byte arrByte = ArrayByteFromClipName(KVP.Key);
+
+					UnityModManagerNet.UnityModManager.Logger.Log($"Added sound {KVP.Key} as {arrByte}");
+
+					clipNameToArrayByteDict.Add(KVP.Key, arrByte);
+				} catch (Exception e) {
+					UnityModManagerNet.UnityModManager.Logger.Log($"Exception adding clip {KVP.Key} {e.ToString()}");
+				}
 			}
 		}
 
@@ -325,7 +348,9 @@ namespace XLMultiplayer {
 
 		public static byte GetArrayByteFromClipName(string clipName) {
 			if (clipName == null) return 254;
-			else return clipNameToArrayByteDict[clipName];
+			byte retByte = 255;
+			clipNameToArrayByteDict.TryGetValue(clipName, out retByte);
+			return retByte;
 		}
 
 		public static string ClipNameFromArrayByte(byte arrayByte) {

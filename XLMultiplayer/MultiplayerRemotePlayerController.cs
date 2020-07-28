@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 
 namespace XLMultiplayer {
@@ -108,7 +109,8 @@ namespace XLMultiplayer {
 		private bool waitingForDelay = false;
 		private bool speedDelay = false;
 
-		private bool loadedAllTextures = false;
+		private List<byte> gearStream = new List<byte>();
+		private bool completedGearStream = false;
 
 		// TODO: Rename these to be easier to understand
 		public List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
@@ -117,18 +119,8 @@ namespace XLMultiplayer {
 
 		public List<MultiplayerSoundBufferObject> soundQueue = new List<MultiplayerSoundBufferObject>();
 
-		public MultiplayerRemoteTexture shirtMPTex;
-		public MultiplayerRemoteTexture pantsMPTex;
-		public MultiplayerRemoteTexture shoesMPTex;
-		public MultiplayerRemoteTexture hatMPTex;
-
-		public MultiplayerRemoteTexture deckMPTex;
-		public MultiplayerRemoteTexture gripMPTex;
-		public MultiplayerRemoteTexture wheelMPTex;
-		public MultiplayerRemoteTexture truckMPTex;
-		
-		public MultiplayerRemoteTexture headMPTex;
-		public MultiplayerRemoteTexture bodyMPTex;
+		public List<MultiplayerRemoteTexture> multiplayerTextures = new List<MultiplayerRemoteTexture>();
+		public string bodyType = "male";
 
 		public ReplayPlaybackController replayController;
 
@@ -171,7 +163,6 @@ namespace XLMultiplayer {
 			}
 
 			characterCustomizer.LoadLastPlayer();
-			characterCustomizer.SetShoesVisible(true);
 
 			this.usernameObject = new GameObject("Username Object");
 			this.usernameObject.transform.SetParent(this.player.transform, false);
@@ -184,106 +175,95 @@ namespace XLMultiplayer {
 			this.usernameText.font = Resources.FindObjectsOfTypeAll<Font>()[0];
 			this.usernameText.color = Color.black;
 			this.usernameText.alignment = TextAlignment.Center;
+		}
 
-			this.shirtMPTex = new MultiplayerRemoteTexture(MPTextureType.Shirt, this.debugWriter);
-			this.pantsMPTex = new MultiplayerRemoteTexture(MPTextureType.Pants, this.debugWriter);
-			this.hatMPTex = new MultiplayerRemoteTexture(MPTextureType.Hat, this.debugWriter);
-			this.shoesMPTex = new MultiplayerRemoteTexture(MPTextureType.Shoes, this.debugWriter);
+		public void ParseTextureStream(byte[] inTextureStream) {
+			ushort currentMessage = BitConverter.ToUInt16(inTextureStream, 0);
+			ushort totalMessages = BitConverter.ToUInt16(inTextureStream, 2);
 
-			this.deckMPTex = new MultiplayerRemoteTexture(MPTextureType.Deck, this.debugWriter);
-			this.gripMPTex = new MultiplayerRemoteTexture(MPTextureType.Grip, this.debugWriter);
-			this.wheelMPTex = new MultiplayerRemoteTexture(MPTextureType.Wheels, this.debugWriter);
-			this.truckMPTex = new MultiplayerRemoteTexture(MPTextureType.Trucks, this.debugWriter);
+			for (int i = 4; i < inTextureStream.Length; i++) {
+				gearStream.Add(inTextureStream[i]);
+			}
 
-			this.headMPTex = new MultiplayerRemoteTexture(MPTextureType.Head, this.debugWriter);
-			this.bodyMPTex = new MultiplayerRemoteTexture(MPTextureType.Body, this.debugWriter);
+			this.debugWriter.WriteLine($"Texture {currentMessage}/{totalMessages}");
+
+			if (currentMessage != totalMessages) {
+				return;
+			}
+			this.debugWriter.WriteLine($"Finished Texture loading");
+
+			completedGearStream = true;
+
+			byte[] textureStream = gearStream.ToArray();
+
+			ushort bodyTypeLen = BitConverter.ToUInt16(textureStream, 0);
+			this.bodyType = Encoding.UTF8.GetString(textureStream, 2, bodyTypeLen);
+
+			UnityModManagerNet.UnityModManager.Logger.Log($"Attempting to equip body with name length {bodyTypeLen} and name: {bodyType}!");
+
+			CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, false, null, new string[0]);
+
+			characterCustomizer.EquipGear(bodyInfo);
+
+			int readBytes = 2 + bodyTypeLen;
+			while (readBytes < textureStream.Length) {
+				bool customTex = textureStream[readBytes] == 1 ? true : false;
+				GearInfoType texInfotype = (GearInfoType)textureStream[readBytes + 1];
+
+				readBytes += 2;
+				if (customTex) {
+					ushort typeLen = BitConverter.ToUInt16(textureStream, readBytes);
+					int dataLen = BitConverter.ToInt32(textureStream, readBytes + 2);
+
+					string texType = Encoding.UTF8.GetString(textureStream, readBytes + 6, typeLen);
+					readBytes += 6 + typeLen;
+
+					byte[] texData = new byte[dataLen];
+					Array.Copy(textureStream, readBytes, texData, 0, dataLen);
+					readBytes += dataLen;
+
+					MultiplayerRemoteTexture newTexture = new MultiplayerRemoteTexture(customTex, "", texType, texInfotype, this.debugWriter);
+					multiplayerTextures.Add(newTexture);
+					newTexture.SaveTexture(this.playerID, texData);
+				}
+			}
 		}
 
 		public void ApplyTextures() {
-			if (!loadedAllTextures) {
-				if (shirtMPTex != null && shirtMPTex.saved && !shirtMPTex.loaded)
-					shirtMPTex.LoadFromFileMainThread(this);
-				if (pantsMPTex != null && pantsMPTex.saved && !pantsMPTex.loaded)
-					pantsMPTex.LoadFromFileMainThread(this);
-				if (hatMPTex != null && hatMPTex.saved && !hatMPTex.loaded)
-					hatMPTex.LoadFromFileMainThread(this);
-				if (shoesMPTex != null && shoesMPTex.saved && !shoesMPTex.loaded) {
-					shoesMPTex.LoadFromFileMainThread(this);
-					characterCustomizer.SetShoesVisible(true);
-				}
+			foreach (MultiplayerRemoteTexture mpTex in multiplayerTextures) {
+				if (mpTex.saved && !mpTex.loaded && !(mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase) || mpTex.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase))) {
+					mpTex.LoadFromFileMainThread(this);
+				} else if (mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase) && mpTex.saved && !mpTex.loaded) {
+					MultiplayerRemoteTexture bodyTex = multiplayerTextures.Find((t) => t.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase));
+					if (bodyTex != null) {
+						UnityModManagerNet.UnityModManager.Logger.Log($"Updating body textures for {this.bodyType} id: {this.playerID}");
 
-				if (deckMPTex != null && deckMPTex.saved && !deckMPTex.loaded)
-					deckMPTex.LoadFromFileMainThread(this);
-				if (gripMPTex != null && gripMPTex.saved && !gripMPTex.loaded)
-					gripMPTex.LoadFromFileMainThread(this);
-				if (wheelMPTex != null && wheelMPTex.saved && !wheelMPTex.loaded)
-					wheelMPTex.LoadFromFileMainThread(this);
-				if (truckMPTex != null && truckMPTex.saved && !truckMPTex.loaded)
-					truckMPTex.LoadFromFileMainThread(this);
-
-				if (headMPTex != null && headMPTex.saved && bodyMPTex != null && bodyMPTex.saved && !headMPTex.loaded && !bodyMPTex.loaded) {
-					headMPTex.loaded = true;
-					bodyMPTex.loaded = true;
-
-					if (headMPTex.useTexture && bodyMPTex.useTexture) {
-						TextureChange[] headChange = { new TextureChange("albedo", headMPTex.fileLocation) };
-						TextureChange[] bodyChange = { new TextureChange("albedo", bodyMPTex.fileLocation) };
+						bodyTex.loaded = true;
+						mpTex.loaded = true;
+						
+						TextureChange[] headChange = { new TextureChange("albedo", mpTex.fileLocation) };
+						TextureChange[] bodyChange = { new TextureChange("albedo", bodyTex.fileLocation) };
 
 						List<MaterialChange> materialChanges = new List<MaterialChange>();
 						materialChanges.Add(new MaterialChange("body", bodyChange));
 						materialChanges.Add(new MaterialChange("head", headChange));
 
-						CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", "male", true, materialChanges, new string[0]);
+						CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, true, materialChanges, new string[0]);
 
 						characterCustomizer.EquipGear(bodyInfo);
 					}
 				}
-
-				loadedAllTextures = shirtMPTex.loaded && pantsMPTex.loaded && hatMPTex.loaded && shoesMPTex.loaded && deckMPTex.loaded && gripMPTex.loaded && wheelMPTex.loaded && truckMPTex.loaded && headMPTex.loaded && bodyMPTex.loaded;
 			}
 		}
 
-		public string GetGearTypeFromTextureType(MPTextureType textureType, bool useFull) {
-			string gearType = "";
-
-			switch (textureType) {
-				case MPTextureType.Shirt:
-					gearType = useFull ? "mhoodie" : "mshirt";
-					break;
-				case MPTextureType.Pants:
-					gearType = "mpants";
-					break;
-				case MPTextureType.Shoes:
-					gearType = "mshoes";
-					break;
-				case MPTextureType.Hat:
-					gearType = "mhatdad";
-					break;
-				case MPTextureType.Deck:
-					gearType = "deck";
-					break;
-				case MPTextureType.Grip:
-					gearType = "griptape";
-					break;
-				case MPTextureType.Trucks:
-					gearType = "trucks";
-					break;
-				case MPTextureType.Wheels:
-					gearType = "wheels";
-					break;
-			}
-
-			return gearType;
-		}
-
-		public void SetPlayerTexture(string path, MPTextureType texType, bool useFull) {
+		public void SetPlayerTexture(string path, string texType, GearInfoType infoType, bool useFull) {
 			TextureChange texChange = new TextureChange("albedo", path);
 			GearInfo newInfo;
 			
-			if((byte)texType >= (byte)MPTextureType.Deck) {
-				newInfo = new BoardGearInfo("MP Temp " + texType.ToString(), GetGearTypeFromTextureType(texType, useFull), true, new TextureChange[] { texChange }, new string[0]);
+			if(infoType == GearInfoType.Board) {
+				newInfo = new BoardGearInfo("MP Temp " + texType.ToString(), texType, true, new TextureChange[] { texChange }, new string[0]);
 			} else {
-				newInfo = new CharacterGearInfo("MP Temp " + texType.ToString(), GetGearTypeFromTextureType(texType, useFull), true, new TextureChange[] { texChange }, new string[0]);
+				newInfo = new CharacterGearInfo("MP Temp " + texType.ToString(), texType, true, new TextureChange[] { texChange }, new string[0]);
 			}
 			
 			characterCustomizer.EquipGear(newInfo);

@@ -103,13 +103,10 @@ namespace XLMultiplayerServer {
 						server.CloseConnection(netMessage.connection);
 					} else {
 						foreach (Player player in mainServer.players) {
-							if (player != null) {
-								foreach (KeyValuePair<string, byte[]> value in player.gear) {
-									server.SendMessageToConnection(newPlayer.fileConnection, value.Value, SendFlags.Reliable);
-								}
+							if (player != null && player.playerID != newPlayer.playerID && player.completedGearStream) {
+								player.SendGear(newPlayer.fileConnection, server);
 							}
 						}
-						server.FlushMessagesOnConnection(newPlayer.fileConnection);
 					}
 				} else if ((OpCode)message[0] == OpCode.StillAlive) { 
 					server.SendMessageToConnection(netMessage.connection, message, SendFlags.Unreliable | SendFlags.NoNagle);
