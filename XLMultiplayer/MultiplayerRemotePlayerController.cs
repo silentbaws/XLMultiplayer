@@ -206,7 +206,8 @@ namespace XLMultiplayer {
 			characterCustomizer.EquipGear(bodyInfo);
 
 			int readBytes = 2 + bodyTypeLen;
-			while (readBytes < textureStream.Length) {
+			while (readBytes < textureStream.Length - 1) {
+				UnityModManagerNet.UnityModManager.Logger.Log($"Read {readBytes} bytes of {textureStream.Length}");
 				bool customTex = textureStream[readBytes] == 1 ? true : false;
 				GearInfoType texInfotype = (GearInfoType)textureStream[readBytes + 1];
 

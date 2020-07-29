@@ -14,6 +14,7 @@ using UnityEngine.UI;
 using UnityEngine.Networking;
 using Newtonsoft.Json.Linq;
 using System.Collections;
+using System.Diagnostics;
 
 namespace XLMultiplayer {
 	class Server {
@@ -238,7 +239,7 @@ namespace XLMultiplayer {
 				if (NewMultiplayerMenu.Instance == null) {
 					if (uiBundle == null) uiBundle = AssetBundle.LoadFromFile(modEntry.Path + "multiplayerui");
 
-					GameObject newMenuObject = GameObject.Instantiate(uiBundle.LoadAsset<GameObject>("Assets/Prefabs/Main Multiplayer Menu.prefab"));
+					GameObject newMenuObject = GameObject.Instantiate(uiBundle.LoadAsset<GameObject>("Assets/Prefabs/Multiplayer Menu Container.prefab"));
 					NewMultiplayerMenu.Instance.UpdateCallback = MenuUpdate;
 					NewMultiplayerMenu.Instance.OnClickConnectCallback = Main.OnClickConnect;
 					NewMultiplayerMenu.Instance.OnClickDisconnectCallback = Main.OnClickDisconnect;
@@ -457,11 +458,13 @@ namespace XLMultiplayer {
 			}
 		}
 
+		static Stopwatch serverClickWatch = new Stopwatch();
+
 		private static void ClickServerItem(ServerListItem target) {
-			if(Time.realtimeSinceStartup - lastConnect > 1f) {
+			if(!serverClickWatch.IsRunning || serverClickWatch.Elapsed.TotalMilliseconds > 1000f) {
 				UnityModManager.Logger.Log($"Attempting to connect to server {target.ServerName.text} with ip {target.ipAddress} port {target.port}");
 				JoinServer(target.ipAddress, target.port, NewMultiplayerMenu.Instance.usernameFields[0].text);
-				lastConnect = Time.realtimeSinceStartup;
+				serverClickWatch.Restart();
 			}
 		}
 
@@ -471,7 +474,7 @@ namespace XLMultiplayer {
 
 		private static void JoinServer(string ip, string port, string username) {
 			if (Main.multiplayerController == null) {
-				NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = false;
+				NewMultiplayerMenu.Instance.mainMenuObject.SetActive(false); ;
 				Cursor.visible = false;
 				multiplayerController = new GameObject().AddComponent<MultiplayerController>();
 				GameObject.DontDestroyOnLoad(multiplayerController.gameObject);
@@ -494,7 +497,7 @@ namespace XLMultiplayer {
 		public static void OnClickDisconnect() {
 			if (Main.multiplayerController != null) {
 				GameObject.Destroy(Main.multiplayerController);
-				NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = false;
+				NewMultiplayerMenu.Instance.mainMenuObject.SetActive(false);
 				Cursor.visible = false;
 			}
 		}
@@ -505,10 +508,10 @@ namespace XLMultiplayer {
 				if (Input.GetKeyDown(KeyCode.P)) {
 					NewMultiplayerMenu.Instance.serverBrowserMenu.SetActive(false);
 					NewMultiplayerMenu.Instance.connectMenu.SetActive(false);
+					
+					NewMultiplayerMenu.Instance.mainMenuObject.SetActive(!NewMultiplayerMenu.Instance.mainMenuObject.activeSelf);
 
-					NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled = !NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled;
-
-					if (NewMultiplayerMenu.Instance.GetComponent<Canvas>().enabled) {
+					if (NewMultiplayerMenu.Instance.mainMenuObject.activeSelf) {
 						if (MultiplayerUtils.hashedMaps != LevelManager.Instance.CustomLevels.Count)
 							MultiplayerUtils.StartMapLoading();
 						Cursor.visible = true;
@@ -972,14 +975,14 @@ namespace XLMultiplayer {
 	[HarmonyPatch(typeof(Input), "GetKeyDown", typeof(KeyCode))]
 	static class InputKeyDownPatch {
 		static void Postfix(ref bool __result) {
-			if (XLMultiplayerUI.NewMultiplayerMenu.Instance.IsFocusedInput()) __result = false;
+			if (NewMultiplayerMenu.Instance != null && NewMultiplayerMenu.Instance.IsFocusedInput()) __result = false;
 		}
 	}
 
 	[HarmonyPatch(typeof(Input), "GetKeyUp", typeof(KeyCode))]
 	static class InputKeyUpPatch {
 		static void Postfix(ref bool __result) {
-			if (XLMultiplayerUI.NewMultiplayerMenu.Instance.IsFocusedInput()) __result = false;
+			if (NewMultiplayerMenu.Instance != null && NewMultiplayerMenu.Instance.IsFocusedInput()) __result = false;
 		}
 	}
 }

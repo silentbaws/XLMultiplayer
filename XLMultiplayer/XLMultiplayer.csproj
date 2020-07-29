@@ -51,6 +51,10 @@
     <OutputPath>..\..\..\..\..\..\Program Files %28x86%29\Steam\steamapps\common\Skater XL\Mods\XLMultiplayer\</OutputPath>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>7.2</LangVersion>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>false</SignAssembly>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">

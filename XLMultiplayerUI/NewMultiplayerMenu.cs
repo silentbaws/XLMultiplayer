@@ -32,6 +32,8 @@ namespace XLMultiplayerUI {
 		public OnClickDisconnectDelegate OnClickDisconnectCallback;
 		public MenuUpdateDelegate UpdateCallback;
 
+		public GameObject mainMenuObject;
+
 		private static NewMultiplayerMenu _instance;
 
 		public static NewMultiplayerMenu Instance {
@@ -54,7 +56,7 @@ namespace XLMultiplayerUI {
 		public bool IsFocusedInput() {
 			bool result = false;
 			foreach (InputField f in textFields) {
-				result |= f.isFocused;
+				result |= (f != null && f.isFocused);
 			}
 			return result;
 		}

@@ -12,6 +12,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -154,6 +155,11 @@ namespace XLMultiplayer {
 		private List<Tuple<double, OpCode>> proccessedMessages = new List<Tuple<double, OpCode>>();
 
 		private int messagesProcessed = 0;
+
+		private float recentTimeSinceStartup = 0f;
+
+		private bool initiatingServerConnection = false;
+		private bool initiatingFileServerConnection = false;
 
 		// Open replay editor on start to prevent null references to replay editor instance
 		public void Start() {
@@ -353,17 +359,9 @@ namespace XLMultiplayer {
 					this.debugWriter.WriteLine("Got connected message");
 
 					if (info.connection == connection) {
-						ConnectionCallback();
-						this.StartCoroutine(this.playerController.EncodeTextures());
+						initiatingServerConnection = true;
 					} else if (info.connection == fileConnection) {
-						this.debugWriter.WriteLine("connected on file server");
-
-						byte[] connectMessage = new byte[5];
-						connectMessage[0] = (byte)OpCode.Connect;
-						Array.Copy(BitConverter.GetBytes(serverConnectionNumber), 0, connectMessage, 1, 4);
-
-						fileClient.SendMessageToConnection(fileConnection, connectMessage, SendFlags.Reliable | SendFlags.NoNagle);
-						isFileConnected = true;
+						initiatingFileServerConnection = true;
 					}
 
 					break;
@@ -458,12 +456,30 @@ namespace XLMultiplayer {
 		public void Update() {
 			FrameWatch.Restart();
 
+			recentTimeSinceStartup = Time.realtimeSinceStartup;
+
 			if (networkMessageQueue != null) {
 				GC.KeepAlive(networkMessageQueue);
 				GC.KeepAlive(CompressedSounds);
 				GC.KeepAlive(DecompressedSounds);
 				GC.KeepAlive(CompressedAnimations);
 				GC.KeepAlive(DecompressedAnimations);
+			}
+			
+			if (initiatingServerConnection) {
+				ConnectionCallback();
+				this.StartCoroutine(this.playerController.EncodeTextures());
+				initiatingServerConnection = false;
+			} else if (initiatingFileServerConnection) {
+				this.debugWriter.WriteLine("connected on file server");
+
+				byte[] connectMessage = new byte[5];
+				connectMessage[0] = (byte)OpCode.Connect;
+				Array.Copy(BitConverter.GetBytes(serverConnectionNumber), 0, connectMessage, 1, 4);
+
+				fileClient.SendMessageToConnection(fileConnection, connectMessage, SendFlags.Reliable | SendFlags.NoNagle);
+				isFileConnected = true;
+				initiatingFileServerConnection = false;
 			}
 
 			if (closedByPeer) {
@@ -520,6 +536,8 @@ namespace XLMultiplayer {
 				}
 			}
 
+			recentTimeSinceStartup = Time.realtimeSinceStartup;
+
 			// Don't allow use of map selection
 			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0 && isConnected) {
 				GameManagement.GameStateMachine.Instance.RequestPlayState();
@@ -536,7 +554,9 @@ namespace XLMultiplayer {
 					timeSinceLastUpdate = 0.0f;
 				}
 			}
-			
+
+			recentTimeSinceStartup = Time.realtimeSinceStartup;
+
 			// Calculate network statistics every 10 seconds
 			if (Time.time - statisticsResetTime > 10f && pingTimes.Count > 0 && sentAlive10Seconds > 0) {
 				float totalPing = 0;
@@ -568,6 +588,8 @@ namespace XLMultiplayer {
 
 			double SoundAnimationTime = FrameWatch.Elapsed.TotalMilliseconds - MessageQueueTime;
 
+			recentTimeSinceStartup = Time.realtimeSinceStartup;
+
 			// Lerp frames using frame buffer
 			List<MultiplayerRemotePlayerController> controllerToRemove = new List<MultiplayerRemotePlayerController>();
 
@@ -594,6 +616,7 @@ namespace XLMultiplayer {
 
 					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
 				}
+				recentTimeSinceStartup = Time.realtimeSinceStartup;
 			}
 			SoundAndAnimationTime = FrameWatch.Elapsed.TotalMilliseconds - MessageQueueTime;
 
@@ -624,6 +647,8 @@ namespace XLMultiplayer {
 					}
 				}
 			}
+
+			recentTimeSinceStartup = Time.realtimeSinceStartup;
 		}
 		
 		private void ProcessMessageQueue() {
@@ -643,6 +668,7 @@ namespace XLMultiplayer {
 				if (message != null) {
 					ProcessMessage(message, inboundConnection);
 				}
+				recentTimeSinceStartup = Time.realtimeSinceStartup;
 			}
 		}
 
@@ -660,8 +686,8 @@ namespace XLMultiplayer {
 #endif
 
 		private void UpdateClient() {
-			statisticsResetTime = Time.realtimeSinceStartup;
-			lastAliveTime = Time.realtimeSinceStartup;
+			statisticsResetTime = recentTimeSinceStartup;
+			lastAliveTime = recentTimeSinceStartup;
 			while (this.playerController != null) {
 				if(client != null) {
 					client.DispatchCallback(status);
@@ -675,8 +701,8 @@ namespace XLMultiplayer {
 					if (client != null)
 						GC.KeepAlive(client);
 
-					if (isConnected && Time.realtimeSinceStartup - lastAliveTime >= 0.2f) {
-						byte[] currentTime = BitConverter.GetBytes(Time.realtimeSinceStartup);
+					if (isConnected && recentTimeSinceStartup - lastAliveTime >= 0.2f) {
+						byte[] currentTime = BitConverter.GetBytes(recentTimeSinceStartup);
 						byte[] message = new byte[5];
 						message[0] = (byte)OpCode.StillAlive;
 						Array.Copy(currentTime, 0, message, 1, 4);
@@ -686,7 +712,7 @@ namespace XLMultiplayer {
 
 						alivePacketCount++;
 						sentAlive10Seconds++;
-						lastAliveTime = Time.realtimeSinceStartup;
+						lastAliveTime = recentTimeSinceStartup;
 					}
 
 #if VALVESOCKETS_SPAN
@@ -719,7 +745,7 @@ namespace XLMultiplayer {
 				Array.Copy(buffer, 1, newBuffer, 0, newBuffer.Length);
 			}
 
-			//if (opCode != OpCode.Animation && opCode != OpCode.StillAlive && opCode != OpCode.Sound)
+			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive && opCode != OpCode.Sound)
 				this.debugWriter.WriteLine("Received message with opcode {0}, and length {1}", opCode, buffer.Length);
 
 			switch (opCode) {
@@ -1075,31 +1101,28 @@ namespace XLMultiplayer {
 					}
 				}
 
+				var client = new HttpClient();
+
 				var values = new Dictionary<string, string> {
 				{ "session", session } };
 				
 				// Try to give a session key instead of tying encryption key to IP(Useful if client has multiple IPs or something)
+				
+				var sendContent = new FormUrlEncodedContent(values);
+				var response = client.PostAsync("http://davisellwood-site.herokuapp.com/api/gettempkey/", sendContent);
+				response.Wait();
 
+				while (!response.IsCompleted) ;
+				
 				string content = "";
-				UnityWebRequest www = UnityWebRequest.Post("http://davisellwood-site.herokuapp.com/api/gettempkey/", values);
 
-				www.SendWebRequest();
-
-				while (!www.isDone) ;
-
-				if (!www.isNetworkError && !www.isHttpError) {
-					content = www.downloadHandler.text;
-				} else {
-					session = "";
-
-					www = UnityWebRequest.Get("https://davisellwood-site.herokuapp.com/api/gettempkey/");
-					www.SendWebRequest();
-
-					while (!www.isDone) ;
-					
-					if (!www.isNetworkError && !www.isHttpError) {
-						content = www.downloadHandler.text;
-					}
+				if (response.Result.StatusCode == HttpStatusCode.OK) {
+					var stringResponse = response.Result.Content.ReadAsStringAsync();
+					stringResponse.Wait();
+					while (!stringResponse.IsCompleted) ;
+					content = stringResponse.Result;
+				}else {
+					problemDetectedLocally = true;
 				}
 
 				this.playerController.username = CustomUsername.username;
