@@ -211,42 +211,47 @@ namespace XLMultiplayer {
 
 			byte[] packed = new byte[useKey ? T.Length * 12 - (start * 12) : T.Length * 24 - (start * 24)];
 
+			// Create float array out side of loop so I can reuse memory and save GC hopefully
+			float[] transform = new float[6];
 			for (int i = 0; i < T.Length - start; i++) {
-				float x = useKey ? T[i + start].position.x : T[i + start].position.x - TPrevious[i + start].position.x;
-				float y = useKey ? T[i + start].position.y : T[i + start].position.y - TPrevious[i + start].position.y;
-				float z = useKey ? T[i + start].position.z : T[i + start].position.z - TPrevious[i + start].position.z;
-
-				Vector3 rotationVec = T[i + start].rotation.eulerAngles;
-				Vector3 prevRotVec = TPrevious[i + start].rotation.eulerAngles;
-				float rx = useKey ? rotationVec.x : rotationVec.x - prevRotVec.x;
-				float ry = useKey ? rotationVec.y : rotationVec.y - prevRotVec.y;
-				float rz = useKey ? rotationVec.z : rotationVec.z - prevRotVec.z;
-
+				// If you're in a replay and it's not a keyframe then all of your offsets will be 0 since you don't move, this should save time over accessing transformInfos
 				if (!useKey && GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
-					x = 0f;
-					y = 0f;
-					z = 0f;
-					rx = 0f;
-					ry = 0f;
-					rz = 0f;
+					transform[0] = 0f;
+					transform[1] = 0f;
+					transform[2] = 0f;
+					transform[3] = 0f;
+					transform[4] = 0f;
+					transform[5] = 0f;
+				} else {
+					// TransformInfo is a Serializable Vector3 so calling position or rotation internally constructs a new Vector3 it seems(this will reduce the amount of times this happens)
+					Vector3 rotationVec = T[i + start].rotation.eulerAngles;
+					Vector3 prevRotVec = TPrevious[i + start].rotation.eulerAngles;
+					Vector3 position = T[i + start].position;
+					Vector3 prevPosition = TPrevious[i + start].position;
+					
+					// Use a float array so I can block copy bytes to packed array
+					// position
+					transform[0] = useKey ? position.x : position.x - prevPosition.x;
+					transform[1] = useKey ? position.y : position.y - prevPosition.y;
+					transform[2] = useKey ? position.z : position.z - prevPosition.z;
+
+					// rotation
+					transform[3] = useKey ? rotationVec.x : rotationVec.x - prevRotVec.x;
+					transform[4] = useKey ? rotationVec.y : rotationVec.y - prevRotVec.y;
+					transform[5] = useKey ? rotationVec.z : rotationVec.z - prevRotVec.z;
 				}
 
 				if (!useKey) {
-					Array.Copy(BitConverter.GetBytes(x), 0, packed, i * 24, 4);
-					Array.Copy(BitConverter.GetBytes(y), 0, packed, i * 24 + 4, 4);
-					Array.Copy(BitConverter.GetBytes(z), 0, packed, i * 24 + 8, 4);
-
-					Array.Copy(BitConverter.GetBytes(rx), 0, packed, i * 24 + 12, 4);
-					Array.Copy(BitConverter.GetBytes(ry), 0, packed, i * 24 + 16, 4);
-					Array.Copy(BitConverter.GetBytes(rz), 0, packed, i * 24 + 20, 4);
+					// Block Copy is so much faster than converting each elements bytes individually and copying it so let's do that(potentially better to create a large float array and block copy all at once but this should suffice)
+					Buffer.BlockCopy(transform, 0, packed, i * 24, 24);
 				} else {
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(x)), 0, packed, i * 12, 2);
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(y)), 0, packed, i * 12 + 2, 2);
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(z)), 0, packed, i * 12 + 4, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(transform[0])), 0, packed, i * 12, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(transform[1])), 0, packed, i * 12 + 2, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(transform[2])), 0, packed, i * 12 + 4, 2);
 
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(rx)), 0, packed, i * 12 + 6, 2);
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(ry)), 0, packed, i * 12 + 8, 2);
-					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(rz)), 0, packed, i * 12 + 10, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(transform[3])), 0, packed, i * 12 + 6, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(transform[4])), 0, packed, i * 12 + 8, 2);
+					Array.Copy(SystemHalf.Half.GetBytes(SystemHalf.HalfHelper.SingleToHalf(transform[5])), 0, packed, i * 12 + 10, 2);
 				}
 			}
 

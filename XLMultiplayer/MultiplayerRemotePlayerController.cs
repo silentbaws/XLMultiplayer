@@ -233,9 +233,9 @@ namespace XLMultiplayer {
 
 		public void ApplyTextures() {
 			foreach (MultiplayerRemoteTexture mpTex in multiplayerTextures) {
-				if (mpTex.saved && !mpTex.loaded && !(mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase) || mpTex.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase))) {
+				if (mpTex.saved && !mpTex.loaded && !(mpTex.infoType == GearInfoType.Body)) {
 					mpTex.LoadFromFileMainThread(this);
-				} else if (mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase) && mpTex.saved && !mpTex.loaded) {
+				} else if (mpTex.saved && !mpTex.loaded && mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase)) {
 					MultiplayerRemoteTexture bodyTex = multiplayerTextures.Find((t) => t.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase));
 					if (bodyTex != null) {
 						UnityModManagerNet.UnityModManager.Logger.Log($"Updating body textures for {this.bodyType} id: {this.playerID}");
@@ -273,13 +273,11 @@ namespace XLMultiplayer {
 
 		public void UnpackAnimations(byte[] recBuffer) {
 			int receivedPacketSequence = BitConverter.ToInt32(recBuffer, 0);
-
-			byte[] buffer = new byte[recBuffer.Length - 5];
+			
 			bool ordered = true;
 			if (receivedPacketSequence < currentAnimationPacket - 5) {
 				ordered = false;
 			} else {
-				Array.Copy(recBuffer, 5, buffer, 0, recBuffer.Length - 5);
 				currentAnimationPacket = Math.Max(currentAnimationPacket, receivedPacketSequence);
 			}
 
@@ -288,14 +286,14 @@ namespace XLMultiplayer {
 			currentBufferObject.key = recBuffer[4] == (byte)1 ? true : false;
 			currentBufferObject.animFrame = receivedPacketSequence;
 
-			currentBufferObject.frameTime = BitConverter.ToSingle(buffer, buffer.Length - 4);
+			currentBufferObject.frameTime = BitConverter.ToSingle(recBuffer, recBuffer.Length - 4);
 
 			if (this.firstFrameTime != -1f && currentBufferObject.frameTime < this.firstFrameTime) {
 				return;
 			}
 
-			List<Vector3> vectors = new List<Vector3>();
-			List<Quaternion> quaternions = new List<Quaternion>();
+			Vector3[] vectors = new Vector3[77];
+			Quaternion[] quaternions = new Quaternion[77];
 
 			float[] floatValues = null;
 			ushort[] halfValues = null;
@@ -305,7 +303,7 @@ namespace XLMultiplayer {
 				halfValues = new ushort[77 * 6];
 				halfArray = new SystemHalf.Half[77 * 6];
 
-				Buffer.BlockCopy(buffer, 0, halfValues, 0, 77 * 6 * sizeof(ushort));
+				Buffer.BlockCopy(recBuffer, 5, halfValues, 0, 77 * 6 * sizeof(ushort));
 
 				for(int i = 0; i < halfValues.Length; i++) {
 					halfArray[i] = new SystemHalf.Half();
@@ -314,9 +312,9 @@ namespace XLMultiplayer {
 			} else {
 				floatValues = new float[77 * 6];
 
-				Buffer.BlockCopy(buffer, 0, floatValues, 0, 77 * 6 * sizeof(float));
+				Buffer.BlockCopy(recBuffer, 5, floatValues, 0, 77 * 6 * sizeof(float));
 			}
-
+			
 			for (int i = 0; i < 77; i++) {
 				if (currentBufferObject.key) {
 					Vector3 readVector = new Vector3(SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6]),
@@ -328,21 +326,21 @@ namespace XLMultiplayer {
 																 SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 4]),
 																 SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 5]));
 
-					vectors.Add(readVector);
-					quaternions.Add(readQuaternion);
+					vectors[i] = readVector;
+					quaternions[i] = readQuaternion;
 				} else {
 					Vector3 readVector = new Vector3(floatValues[i * 6], floatValues[i * 6 + 1], floatValues[i * 6 + 2]);
 
 					Quaternion readQuaternion = new Quaternion();
 					readQuaternion.eulerAngles = new Vector3(floatValues[i * 6 + 3], floatValues[i * 6 + 4], floatValues[i * 6 + 5]);
 
-					vectors.Add(readVector);
-					quaternions.Add(readQuaternion);
+					vectors[i] = readVector;
+					quaternions[i] = readQuaternion;
 				}
 			}
 
-			currentBufferObject.vectors = vectors.ToArray();
-			currentBufferObject.quaternions = quaternions.ToArray();
+			currentBufferObject.vectors = vectors;
+			currentBufferObject.quaternions = quaternions;
 
 			if (ordered) {
 				this.animationFrames.Add(currentBufferObject);

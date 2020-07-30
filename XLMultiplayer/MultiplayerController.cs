@@ -734,12 +734,6 @@ namespace XLMultiplayer {
 			messageTime.Restart();
 			OpCode opCode = (OpCode)buffer[0];
 			byte playerID = buffer[buffer.Length - 1];
-			
-			byte[] newBuffer = new byte[buffer.Length - 2];
-
-			if (newBuffer.Length != 0) {
-				Array.Copy(buffer, 1, newBuffer, 0, newBuffer.Length);
-			}
 
 			if (opCode != OpCode.Animation && opCode != OpCode.StillAlive && opCode != OpCode.Sound)
 				this.debugWriter.WriteLine("Received message with opcode {0}, and length {1}", opCode, buffer.Length);
@@ -793,7 +787,7 @@ namespace XLMultiplayer {
 				case OpCode.Settings:
 					MultiplayerRemotePlayerController remotePlayer = remoteControllers.Find((p) => { return p.playerID == playerID; });
 					if (remotePlayer != null) {
-						remotePlayer.username = ASCIIEncoding.ASCII.GetString(newBuffer);
+						remotePlayer.username = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 2);
 						if (!ContainsMarkup(remotePlayer.username)) {
 							chatMessages.Add("Player <color=\"yellow\">" + remotePlayer.username + "{" + remotePlayer.playerID + "}</color> <b><color=\"green\">CONNECTED</color></b>");
 						} else {
@@ -813,17 +807,24 @@ namespace XLMultiplayer {
 					if (remoteOwner == null) {
 						this.debugWriter.WriteLine("Texture owner not found");
 					}
+
+					byte[] newBuffer = new byte[buffer.Length - 2];
+
+					if (newBuffer.Length != 0) {
+						Array.Copy(buffer, 1, newBuffer, 0, newBuffer.Length);
+					}
+
 					remoteOwner.ParseTextureStream(newBuffer);
 					break;
 				case OpCode.Animation:
-					CompressedAnimations.Enqueue(Tuple.Create(playerID, newBuffer));
+					CompressedAnimations.Enqueue(Tuple.Create(playerID, buffer));
 					break;
 				case OpCode.Sound:
-					CompressedSounds.Enqueue(Tuple.Create(playerID, newBuffer));
+					CompressedSounds.Enqueue(Tuple.Create(playerID, buffer));
 					break;
 				case OpCode.Chat:
 					MultiplayerRemotePlayerController remoteSender = this.remoteControllers.Find(p => p.playerID == playerID);
-					string cleanedMessage = RemoveMarkup(ASCIIEncoding.ASCII.GetString(newBuffer));
+					string cleanedMessage = RemoveMarkup(ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 2));
 
 					if (remoteSender != null) {
 						cleanedMessage = "<b>" + remoteSender.username + "</b>{" + playerID + "}: " + cleanedMessage;
@@ -961,23 +962,16 @@ namespace XLMultiplayer {
 				if (!CompressedSounds.IsEmpty) {
 					Tuple<byte, byte[]> CurrentSound;
 					if (CompressedSounds.TryDequeue(out CurrentSound)) {
-						byte[] decompressed = Decompress(CurrentSound.Item2);
-							
-						DecompressedSounds.Enqueue(Tuple.Create(CurrentSound.Item1, decompressed));
+						byte[] soundData = Decompress(CurrentSound.Item2, 1, CurrentSound.Item2.Length - 2);
+
+						DecompressedSounds.Enqueue(Tuple.Create(CurrentSound.Item1, soundData));
 					}
 				}
 				if (!CompressedAnimations.IsEmpty) {
 					Tuple<byte, byte[]> CurrentAnimation;
 					if (CompressedAnimations.TryDequeue(out CurrentAnimation)) {
-						byte[] packetData = new byte[CurrentAnimation.Item2.Length - 4];
-						Array.Copy(CurrentAnimation.Item2, 4, packetData, 0, packetData.Length);
-
-						byte[] decompressedData = Decompress(packetData);
-
-						byte[] animationData = new byte[decompressedData.Length + 4];
-						Array.Copy(CurrentAnimation.Item2, 0, animationData, 0, 4);
-						Array.Copy(decompressedData, 0, animationData, 4, decompressedData.Length);
-							
+						byte[] animationData = Decompress(CurrentAnimation.Item2, 5, CurrentAnimation.Item2.Length - 6, CurrentAnimation.Item2, 1, 4);
+						
 						DecompressedAnimations.Enqueue(Tuple.Create(CurrentAnimation.Item1, animationData));
 					}
 				}
@@ -992,9 +986,7 @@ namespace XLMultiplayer {
 				MultiplayerRemotePlayerController targetPlayer = this.remoteControllers.Find(p => p.playerID == playerID);
 
 				if(targetPlayer != null) {
-					byte[] array = new byte[CurrentAnimation.Item2.Length];
-					Array.Copy(CurrentAnimation.Item2, array, array.Length);
-					targetPlayer.UnpackAnimations(array);
+					targetPlayer.UnpackAnimations(CurrentAnimation.Item2);
 				}
 			}
 			
@@ -1005,9 +997,7 @@ namespace XLMultiplayer {
 				MultiplayerRemotePlayerController targetPlayer = this.remoteControllers.Find(p => p.playerID == playerID);
 
 				if (targetPlayer != null) {
-					byte[] array = new byte[CurrentSound.Item2.Length];
-					Array.Copy(CurrentSound.Item2, array, array.Length);
-					targetPlayer.UnpackSounds(array);
+					targetPlayer.UnpackSounds(CurrentSound.Item2);
 				}
 			}
 		}
@@ -1196,11 +1186,18 @@ namespace XLMultiplayer {
 			return output.ToArray();
 		}
 
-		public static byte[] Decompress(byte[] data) {
-			MemoryStream compressedStream = new MemoryStream(data);
+		public static byte[] Decompress(byte[] data, int startIndex = 0, int decompressLength = -1, byte[] header = null, int headerStart = 0, int headerLength = 0) {
+			if (decompressLength == -1) {
+				decompressLength = data.Length;
+			}
 			MemoryStream output = new MemoryStream();
-			using (DeflateStream dstream = new DeflateStream(compressedStream, CompressionMode.Decompress)) {
-				dstream.CopyTo(output);
+			if (header != null) {
+				output.Write(header, headerStart, headerLength);
+			}
+			using (MemoryStream compressedStream = new MemoryStream(data, startIndex, decompressLength)) {
+				using (DeflateStream dstream = new DeflateStream(compressedStream, CompressionMode.Decompress)) {
+					dstream.CopyTo(output);
+				}
 			}
 			return output.ToArray();
 		}
