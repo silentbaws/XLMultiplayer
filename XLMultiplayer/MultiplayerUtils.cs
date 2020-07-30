@@ -199,11 +199,9 @@ namespace XLMultiplayer {
 			if (!mapsDictionary.ContainsKey("7")) {
 				mapsDictionary.Add("7", "Assets/_Scenes/GrantSkateparkTest.unity");
 			}
-
-			List<string> files = null;
+			
+			List<string> files = LevelManager.Instance.CustomLevels.ConvertAll(levelInfo => (levelInfo.isAssetBundle ? levelInfo.path : null));
 			int i = 0;
-
-			files = LevelManager.Instance.CustomLevels.ConvertAll(levelInfo => !levelInfo.isAssetBundle ? null : levelInfo.path);
 
 			hashedMaps = files.Count;
 			loadingMaps = true;
@@ -213,7 +211,10 @@ namespace XLMultiplayer {
 			}
 
 			while (loadingMaps && files != null && files.Count > 0) {
-				if (files[i] == null) continue;
+				if (files[i] == null) {
+					i++;
+					continue;
+				}
 
 				string fileHash = CalculateMD5(files[i]);
 				try {

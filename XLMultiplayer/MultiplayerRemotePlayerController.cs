@@ -61,10 +61,25 @@ namespace XLMultiplayer {
 			setRealTime = true;
 		}
 
+		Dictionary<string, ReplayAudioEventPlayer> replayEventPlayerForName = null;
+
+		// TODO: Don't use fucking .name it ruins garbage collection
 		public void AddSoundsToPlayers(ReplayPlaybackController replayController) {
+			if (replayEventPlayerForName == null) {
+				replayEventPlayerForName = new Dictionary<string, ReplayAudioEventPlayer>();
+				for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
+					foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
+						if (audioPlayer.name.Equals(MultiplayerUtils.audioPlayerNames[i])) {
+							replayEventPlayerForName.Add(MultiplayerUtils.audioPlayerNames[i], audioPlayer);
+						}
+					}
+				}
+			}
+
 			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
-				foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
-					if (audioPlayer.name.Equals(MultiplayerUtils.audioPlayerNames[i])) {
+				ReplayAudioEventPlayer audioPlayer = null;
+				if (replayEventPlayerForName.TryGetValue(MultiplayerUtils.audioPlayerNames[i], out audioPlayer)) {
+					if(audioPlayer != null) {
 						if (audioOneShots[i] != null && audioOneShots[i].Count > 0 && replayController.AudioEventPlayers[i].oneShotEvents == null) {
 							replayController.AudioEventPlayers[i].LoadOneShotEvents(audioOneShots[i]);
 						} else if (audioOneShots[i] != null && audioOneShots[i].Count > 0) replayController.AudioEventPlayers[i].oneShotEvents.AddRange(audioOneShots[i]);
