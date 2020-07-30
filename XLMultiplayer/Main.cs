@@ -45,6 +45,7 @@ namespace XLMultiplayer {
 		private List<CustomUI> customs = new List<CustomUI>();
 
 		public GUIStyle columnLeftStyle;
+		GUIStyle windowStyle;
 
 		private static readonly int window_margin_sides = 10;
 
@@ -81,23 +82,18 @@ namespace XLMultiplayer {
 
 			if (renderWindow) Cursor.visible = true;
 
-			if (!Main.patched && Time.realtimeSinceStartup - lastPatchTime > 10f && AccessTools.TypeByName("ModMenu") != null) {
-				Main.ModMenuGUIMethod = AccessTools.Method(AccessTools.TypeByName("ModMenu"), "OnGUI");
-				Main.ModMenuGUIPrefix = typeof(ModMenuGUIPatch).GetMethod("Prefix");
-
-				Main.harmonyInstance.Patch(Main.ModMenuGUIMethod, new HarmonyMethod(Main.ModMenuGUIPrefix));
-				Main.patched = true;
-			}
 			if (Time.realtimeSinceStartup - lastPatchTime > 10f) {
 				lastPatchTime = Time.realtimeSinceStartup;
 			}
 		}
 
 		private void OnGUI() {
-			GUIStyle windowStyle = new GUIStyle(GUI.skin.window) {
-				padding = new RectOffset(10, 10, 25, 10),
-				contentOffset = new Vector2(0, -23.0f)
-			};
+			if (windowStyle == null) {
+				windowStyle = new GUIStyle(GUI.skin.window) {
+					padding = new RectOffset(10, 10, 25, 10),
+					contentOffset = new Vector2(0, -23.0f)
+				};
+			}
 
 			if (renderWindow) windowRect = GUILayout.Window(GUIUtility.GetControlID(FocusType.Passive), windowRect, RenderWindow, "XLMultiplayer Menu", windowStyle, GUILayout.Width(600));
 		}

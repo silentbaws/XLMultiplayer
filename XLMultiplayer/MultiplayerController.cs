@@ -13,6 +13,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -657,18 +658,13 @@ namespace XLMultiplayer {
 
 			while (!networkMessageQueue.IsEmpty) {
 				messagesProcessed++;
-				byte[] message = null;
-				uint inboundConnection = 0;
 				Tuple<byte[], uint> currentMessage;
 				if (networkMessageQueue.TryDequeue(out currentMessage)) {
-					message = new byte[currentMessage.Item1.Length];
-					currentMessage.Item1.CopyTo(message, 0);
-					inboundConnection = currentMessage.Item2;
+					ProcessMessage(currentMessage.Item1, currentMessage.Item2);
 				}
-				if (message != null) {
-					ProcessMessage(message, inboundConnection);
-				}
+
 				recentTimeSinceStartup = Time.realtimeSinceStartup;
+				currentMessage = null;
 			}
 		}
 
@@ -738,7 +734,7 @@ namespace XLMultiplayer {
 			messageTime.Restart();
 			OpCode opCode = (OpCode)buffer[0];
 			byte playerID = buffer[buffer.Length - 1];
-
+			
 			byte[] newBuffer = new byte[buffer.Length - 2];
 
 			if (newBuffer.Length != 0) {

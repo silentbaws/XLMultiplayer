@@ -110,7 +110,8 @@ namespace XLMultiplayer {
 		private bool speedDelay = false;
 
 		private List<byte> gearStream = new List<byte>();
-		private bool completedGearStream = false;
+
+		private Transform mainCameraTransform;
 
 		// TODO: Rename these to be easier to understand
 		public List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
@@ -175,6 +176,8 @@ namespace XLMultiplayer {
 			this.usernameText.font = Resources.FindObjectsOfTypeAll<Font>()[0];
 			this.usernameText.color = Color.black;
 			this.usernameText.alignment = TextAlignment.Center;
+
+			mainCameraTransform = Camera.main.transform;
 		}
 
 		public void ParseTextureStream(byte[] inTextureStream) {
@@ -191,8 +194,6 @@ namespace XLMultiplayer {
 				return;
 			}
 			this.debugWriter.WriteLine($"Finished Texture loading");
-
-			completedGearStream = true;
 
 			byte[] textureStream = gearStream.ToArray();
 
@@ -296,30 +297,44 @@ namespace XLMultiplayer {
 			List<Vector3> vectors = new List<Vector3>();
 			List<Quaternion> quaternions = new List<Quaternion>();
 
+			float[] floatValues = null;
+			ushort[] halfValues = null;
+			SystemHalf.Half[] halfArray = null;
+
+			if (currentBufferObject.key) {
+				halfValues = new ushort[77 * 6];
+				halfArray = new SystemHalf.Half[77 * 6];
+
+				Buffer.BlockCopy(buffer, 0, halfValues, 0, 77 * 6 * sizeof(ushort));
+
+				for(int i = 0; i < halfValues.Length; i++) {
+					halfArray[i] = new SystemHalf.Half();
+					halfArray[i].Value = halfValues[i];
+				}
+			} else {
+				floatValues = new float[77 * 6];
+
+				Buffer.BlockCopy(buffer, 0, floatValues, 0, 77 * 6 * sizeof(float));
+			}
+
 			for (int i = 0; i < 77; i++) {
 				if (currentBufferObject.key) {
-					Vector3 readVector = new Vector3();
-					readVector.x = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12));
-					readVector.y = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 2));
-					readVector.z = SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 4));
+					Vector3 readVector = new Vector3(SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6]),
+														 SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 1]),
+														 SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 2]));
 
 					Quaternion readQuaternion = new Quaternion();
-					readQuaternion.eulerAngles = new Vector3(SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 6)),
-													SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 8)),
-													SystemHalf.HalfHelper.HalfToSingle(SystemHalf.Half.ToHalf(buffer, i * 12 + 10)));
+					readQuaternion.eulerAngles = new Vector3(SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 3]),
+																 SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 4]),
+																 SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 5]));
 
 					vectors.Add(readVector);
 					quaternions.Add(readQuaternion);
 				} else {
-					Vector3 readVector = new Vector3();
-					readVector.x = BitConverter.ToSingle(buffer, i * 24);
-					readVector.y = BitConverter.ToSingle(buffer, i * 24 + 4);
-					readVector.z = BitConverter.ToSingle(buffer, i * 24 + 8);
+					Vector3 readVector = new Vector3(floatValues[i * 6], floatValues[i * 6 + 1], floatValues[i * 6 + 2]);
 
 					Quaternion readQuaternion = new Quaternion();
-					readQuaternion.eulerAngles = new Vector3(BitConverter.ToSingle(buffer, i * 24 + 12),
-													BitConverter.ToSingle(buffer, i * 24 + 16),
-													BitConverter.ToSingle(buffer, i * 24 + 20));
+					readQuaternion.eulerAngles = new Vector3(floatValues[i * 6 + 3], floatValues[i * 6 + 4], floatValues[i * 6 + 5]);
 
 					vectors.Add(readVector);
 					quaternions.Add(readQuaternion);
@@ -329,13 +344,14 @@ namespace XLMultiplayer {
 			currentBufferObject.vectors = vectors.ToArray();
 			currentBufferObject.quaternions = quaternions.ToArray();
 
-			if (ordered && this.animationFrames.Find(f => f.animFrame == currentBufferObject.animFrame) == null) {
+			if (ordered) {
 				this.animationFrames.Add(currentBufferObject);
-				this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
+
+				this.animationFrames.Sort((f, f2) => f.animFrame.CompareTo(f2.animFrame));
+				//this.animationFrames = this.animationFrames.OrderBy(f => f.animFrame).ToList();
 			}
 
 			if ((this.replayAnimationFrames.Count > 0 && this.replayAnimationFrames[0] != null && this.replayAnimationFrames[0].animFrame > currentBufferObject.animFrame) ||
-				(this.replayAnimationFrames.Count > 0 && this.replayAnimationFrames.Find(f => f.animFrame == currentBufferObject.animFrame) != null) ||
 				(!currentBufferObject.key && this.replayAnimationFrames.Count < 1)) {
 				return;
 			}
@@ -482,6 +498,7 @@ namespace XLMultiplayer {
 				if (this.animationFrames[0].vectors == null || !this.animationFrames[0].key) {
 					this.animationFrames.RemoveAt(0);
 					LerpNextFrame(inReplay);
+					return;
 				}
 
 				if (this.animationFrames.Count > 6)
@@ -526,6 +543,7 @@ namespace XLMultiplayer {
 				this.animationFrames.RemoveAt(0);
 
 				LerpNextFrame(inReplay);
+				return;
 			}
 
 			if (this.animationFrames[0].deltaTime == 0) {
@@ -569,7 +587,7 @@ namespace XLMultiplayer {
 
 			this.usernameText.text = this.username;
 			this.usernameObject.transform.position = this.skater.transform.position + this.skater.transform.up;
-			this.usernameObject.transform.LookAt(Camera.main.transform);
+			this.usernameObject.transform.LookAt(mainCameraTransform);
 
 			if (this.animationFrames[0].timeSinceStart >= this.animationFrames[0].deltaTime) {
 				// 30FPS 120Seconds
@@ -611,7 +629,7 @@ namespace XLMultiplayer {
 				if (!this.animationFrames[1].key) {
 					for (int i = 0; i < 77; i++) {
 						this.animationFrames[1].vectors[i] = this.animationFrames[0].vectors[i] + this.animationFrames[1].vectors[i];
-						this.animationFrames[1].quaternions[i].eulerAngles = this.animationFrames[0].quaternions[i].eulerAngles + this.animationFrames[1].quaternions[i].eulerAngles;
+						this.animationFrames[1].quaternions[i] = this.animationFrames[0].quaternions[i] * this.animationFrames[1].quaternions[i];
 					}
 				}
 
@@ -620,8 +638,9 @@ namespace XLMultiplayer {
 
 				this.previousFrameTime = this.animationFrames[0].frameTime;
 				this.animationFrames.RemoveAt(0);
-				if (recursionLevel < 4) {
+				if (recursionLevel < 2) {
 					this.LerpNextFrame(inReplay, true, oldTime - oldDelta, recursionLevel + 1);
+					return;
 				}
 			}
 		}
@@ -647,7 +666,11 @@ namespace XLMultiplayer {
 
 			this.replayAnimationFrames = this.replayAnimationFrames.OrderBy(f => f.animFrame).ToList();
 
+			if (replayAnimationFrames == null || replayAnimationFrames.Count == 0) return;
+
 			int firstKey = this.replayAnimationFrames.FindIndex(f => f.key);
+
+			if (firstKey < 0) return;
 			
 			this.replayAnimationFrames.RemoveRange(0, firstKey);
 
