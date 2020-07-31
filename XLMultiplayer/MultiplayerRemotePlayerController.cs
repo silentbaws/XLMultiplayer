@@ -60,22 +60,8 @@ namespace XLMultiplayer {
 
 			setRealTime = true;
 		}
-
-		Dictionary<string, ReplayAudioEventPlayer> replayEventPlayerForName = null;
-
-		// TODO: Don't use fucking .name it ruins garbage collection
-		public void AddSoundsToPlayers(ReplayPlaybackController replayController) {
-			if (replayEventPlayerForName == null) {
-				replayEventPlayerForName = new Dictionary<string, ReplayAudioEventPlayer>();
-				for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
-					foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
-						if (audioPlayer.name.Equals(MultiplayerUtils.audioPlayerNames[i])) {
-							replayEventPlayerForName.Add(MultiplayerUtils.audioPlayerNames[i], audioPlayer);
-						}
-					}
-				}
-			}
-
+		
+		public void AddSoundsToPlayers(ReplayPlaybackController replayController, Dictionary<string, ReplayAudioEventPlayer> replayEventPlayerForName) {
 			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
 				ReplayAudioEventPlayer audioPlayer = null;
 				if (replayEventPlayerForName.TryGetValue(MultiplayerUtils.audioPlayerNames[i], out audioPlayer)) {
@@ -144,6 +130,8 @@ namespace XLMultiplayer {
 
 		public MultiplayerRemotePlayerController(StreamWriter writer) : base(writer) {  }
 
+		Dictionary<string, ReplayAudioEventPlayer> replayEventPlayerForName = null;
+
 		override public void ConstructPlayer() {
 			//Create a new root object for the player
 			this.player = GameObject.Instantiate<GameObject>(ReplayEditorController.Instance.playbackController.gameObject);
@@ -193,6 +181,18 @@ namespace XLMultiplayer {
 			this.usernameText.alignment = TextAlignment.Center;
 
 			mainCameraTransform = Camera.main.transform;
+			
+			if (replayEventPlayerForName == null) {
+				replayEventPlayerForName = new Dictionary<string, ReplayAudioEventPlayer>();
+				for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
+					foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
+						if (audioPlayer.name.Equals(MultiplayerUtils.audioPlayerNames[i])) {
+							replayEventPlayerForName.Add(MultiplayerUtils.audioPlayerNames[i], audioPlayer);
+							break;
+						}
+					}
+				}
+			}
 		}
 
 		public void ParseTextureStream(byte[] inTextureStream) {
@@ -382,11 +382,9 @@ namespace XLMultiplayer {
 				key = currentBufferObject.key,
 				frameTime = currentBufferObject.frameTime,
 				animFrame = currentBufferObject.animFrame,
-				vectors = new Vector3[currentBufferObject.vectors.Length],
-				quaternions = new Quaternion[currentBufferObject.quaternions.Length]
+				vectors = vectors,
+				quaternions = quaternions
 			};
-			currentBufferObject.vectors.CopyTo(replayFrameObject.vectors, 0);
-			currentBufferObject.quaternions.CopyTo(replayFrameObject.quaternions, 0);
 
 			this.replayAnimationFrames.Add(replayFrameObject);
 		}
@@ -620,7 +618,7 @@ namespace XLMultiplayer {
 						break;
 					} else {
 						soundQueue[0].AdjustRealTimeToAnimation(currentPlayingFrame);
-						soundQueue[0].AddSoundsToPlayers(this.replayController);
+						soundQueue[0].AddSoundsToPlayers(this.replayController, this.replayEventPlayerForName);
 						soundQueue.RemoveAt(0);
 					}
 				}

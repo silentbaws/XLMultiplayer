@@ -937,37 +937,6 @@ namespace XLMultiplayer {
 		}
 	}
 
-	[HarmonyPatch(typeof(ReplayPlaybackController), "SetPlaybackTime")]
-	static class ReplaySetPlaybackTimePatch {
-
-		/* REPLACE ldc.r4 0 with
-			ldarg.0 NULL
-			call System.Collections.Generic.List`1[ReplayEditor.ReplayRecordedFrame] get_ClipFrames()
-			ldc.i4.0 NULL
-			callvirt ReplayEditor.ReplayRecordedFrame get_Item(Int32)
-			ldfld System.Single time
-		 */
-
-		static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions) {
-			foreach (CodeInstruction instruction in instructions) {
-				if (instruction.opcode == OpCodes.Ldc_R4) {
-					//BIG SHOUTOUT BLENDERMF
-					yield return new CodeInstruction(OpCodes.Ldarg_0);
-
-					yield return new CodeInstruction(OpCodes.Call, AccessTools.Property(typeof(ReplayPlaybackController), "ClipFrames").GetMethod);
-
-					yield return new CodeInstruction(OpCodes.Ldc_I4_0);
-
-					yield return new CodeInstruction(OpCodes.Callvirt, AccessTools.Property(typeof(List<ReplayRecordedFrame>), "Item").GetMethod);
-
-					yield return new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(ReplayRecordedFrame), "time"));
-				} else {
-					yield return instruction;
-				}
-			}
-		}
-	}
-
 	[HarmonyPatch(typeof(Input), "GetKeyDown", typeof(KeyCode))]
 	static class InputKeyDownPatch {
 		static void Postfix(ref bool __result) {
