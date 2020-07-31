@@ -211,20 +211,22 @@ namespace XLMultiplayer {
 			}
 
 			while (loadingMaps && files != null && files.Count > 0) {
-				if (files[i] == null) {
-					i++;
-					continue;
-				}
+				if (i < files.Count) {
+					if (files[i] == null) {
+						i++;
+						continue;
+					}
 
-				string fileHash = CalculateMD5(files[i]);
-				try {
-					mapsDictionary.Add(fileHash, files[i]);
-				} catch (ArgumentException) {
-					mapsDictionary[fileHash] = files[i];
-					duplicates++;
+					string fileHash = CalculateMD5(files[i]);
+					try {
+						mapsDictionary.Add(fileHash, files[i]);
+					} catch (ArgumentException) {
+						mapsDictionary[fileHash] = files[i];
+						duplicates++;
+					}
+					i++;
 				}
-				i++;
-				if (i == files.Count) {
+				if (i >= files.Count) {
 					loadedMaps = true;
 					loadingMaps = false;
 					hashingWatch.Stop();

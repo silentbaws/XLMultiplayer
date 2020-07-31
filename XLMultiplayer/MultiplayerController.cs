@@ -611,7 +611,7 @@ namespace XLMultiplayer {
 						}
 					} 
 
-					if (controller.playerID == 255 && controller.replayAnimationFrames.Last(obj => obj.realFrameTime != -1f).realFrameTime < ReplayRecorder.Instance.RecordedFrames.First().time) {
+					if (controller.playerID == 255 && (ReplayRecorder.Instance.RecordedFrames.Count < 1 || controller.replayAnimationFrames.LastOrDefault(obj => obj.realFrameTime != -1f) == null || (controller.replayAnimationFrames.Last(obj => obj.realFrameTime != -1f).realFrameTime < ReplayRecorder.Instance.RecordedFrames.First().time))) {
 						controllerToRemove.Add(controller);
 					}
 
@@ -991,7 +991,7 @@ namespace XLMultiplayer {
 			}
 			
 			Tuple<byte, byte[]> CurrentSound;
-			while (!DecompressedAnimations.IsEmpty && DecompressedSounds.TryDequeue(out CurrentSound)) {
+			while (!DecompressedSounds.IsEmpty && DecompressedSounds.TryDequeue(out CurrentSound)) {
 				byte playerID = CurrentSound.Item1;
 
 				MultiplayerRemotePlayerController targetPlayer = this.remoteControllers.Find(p => p.playerID == playerID);

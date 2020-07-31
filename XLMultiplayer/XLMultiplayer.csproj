@@ -517,7 +517,7 @@
     <ProjectReference Include="..\XLMultiplayerUI\XLMultiplayerUI.csproj">
       <Project>{e13deedc-57ac-4d7f-a656-321a553ad1cf}</Project>
       <Name>XLMultiplayerUI</Name>
-      <Private>False</Private>
+      <Private>True</Private>
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </ProjectReference>
   </ItemGroup>

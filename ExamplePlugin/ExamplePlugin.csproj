@@ -40,9 +40,6 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
-    <Reference Include="XLMultiplayerServer">
-      <HintPath>..\..\XLMultiplayer\XLMultiplayerServer\bin\x64\Debug\XLMultiplayerServer.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Main.cs" />
@@ -52,6 +49,12 @@
     <None Include="Info.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\XLMultiplayerServer\XLMultiplayerServer.csproj">
+      <Project>{06a13d65-cf19-44f3-94d3-28b94727b64f}</Project>
+      <Name>XLMultiplayerServer</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
