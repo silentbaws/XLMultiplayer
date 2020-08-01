@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Valve.Sockets;
 
 // TODO: Use Callback for writeline stuff
@@ -19,44 +20,59 @@ namespace XLMultiplayerServer {
 		}
 
 		public void StatusCallbackFunction(ref StatusInfo info, IntPtr context) {
-				switch (info.connectionInfo.state) {
-					case ConnectionState.None:
-						break;
-
-					case ConnectionState.Connecting: {
-						if (info.connectionInfo.listenSocket != listenSocket) {
-							mainServer.StatusCallbackFunction(ref info, context);
-							break;
-						}
-
-						//Console.WriteLine("connecting on file server");
-
-						if (mainServer.bannedIPs.Contains(info.connectionInfo.address.GetIP())) {
-							//Console.WriteLine("Ban player attempted to connect to the server, IP: {0}", info.connectionInfo.address.GetIP());
-							server.CloseConnection(info.connection);
-						} else {
-							server.AcceptConnection(info.connection);
-							server.SetConnectionPollGroup(pollGroup, info.connection);
-						}
-					} break;
-
-					case ConnectionState.Connected: {
-						if (info.connectionInfo.listenSocket != listenSocket) {
-							mainServer.StatusCallbackFunction(ref info, context);
-							break;
-						}
-
-						if (mainServer.motdBytes != null) server.SendMessageToConnection(info.connection, mainServer.motdBytes);
-
-						//Console.WriteLine("connected on file server");
-					} break;
-
-					case ConnectionState.ClosedByPeer:
-					case ConnectionState.ProblemDetectedLocally:
-					mainServer.RemovePlayer(info.connection);
+			switch (info.connectionInfo.state) {
+				case ConnectionState.None:
 					break;
-				}
+
+				case ConnectionState.Connecting: {
+					if (info.connectionInfo.listenSocket != listenSocket) {
+						mainServer.StatusCallbackFunction(ref info, context);
+						break;
+					}
+
+					//Console.WriteLine("connecting on file server");
+
+					if (mainServer.bannedIPs.Contains(info.connectionInfo.address.GetIP())) {
+						//Console.WriteLine("Ban player attempted to connect to the server, IP: {0}", info.connectionInfo.address.GetIP());
+						server.CloseConnection(info.connection);
+					} else {
+						server.AcceptConnection(info.connection);
+						server.SetConnectionPollGroup(pollGroup, info.connection);
+					}
+				} break;
+
+				case ConnectionState.Connected: {
+					if (info.connectionInfo.listenSocket != listenSocket) {
+						mainServer.StatusCallbackFunction(ref info, context);
+						break;
+					}
+
+					if (mainServer.motdBytes != null) server.SendMessageToConnection(info.connection, mainServer.motdBytes);
+
+					foreach (Player player in mainServer.players) {
+						foreach (Plugin plugin in mainServer.loadedPlugins) {
+							if (plugin.hash != "") {
+								byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(plugin.hash);
+								byte[] hashMessage = new byte[hashBytes.Length + 2];
+
+								hashMessage[0] = (byte)OpCode.PluginHash;
+								hashMessage[1] = plugin.pluginID;
+								Array.Copy(hashBytes, 0, hashMessage, 2, hashBytes.Length);
+
+								server.SendMessageToConnection(player.connection, hashMessage, SendFlags.Reliable);
+							}
+						}
+					}
+
+				//Console.WriteLine("connected on file server");
+				} break;
+
+				case ConnectionState.ClosedByPeer:
+				case ConnectionState.ProblemDetectedLocally:
+				mainServer.RemovePlayer(info.connection);
+				break;
 			}
+		}
 
 		public void ServerLoop() {
 			Library.Initialize();

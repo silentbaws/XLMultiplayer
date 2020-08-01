@@ -13,6 +13,8 @@ namespace XLMultiplayer {
 		public Vector3[] vectors = null;
 		public Quaternion[] quaternions = null;
 
+		public MultiplayerFrameBufferObject replayFrameBufferObject;
+
 		public int animFrame = 0;
 
 		public bool key = false;
@@ -26,18 +28,28 @@ namespace XLMultiplayer {
 			animFrame = 0;
 			deltaTime = 0;
 			timeSinceStart = 0;
+
+			replayFrameBufferObject = this;
 		}
 	}
 
 	public class MultiplayerSoundBufferObject {
-		public List<List<AudioOneShotEvent>> audioOneShots = new List<List<AudioOneShotEvent>>();
-		public List<List<AudioClipEvent>> audioClipEvents = new List<List<AudioClipEvent>>();
-		public List<List<AudioVolumeEvent>> audioVolumeEvents = new List<List<AudioVolumeEvent>>();
-		public List<List<AudioPitchEvent>> audioPitchEvents = new List<List<AudioPitchEvent>>();
-		public List<List<AudioCutoffEvent>> audioCutoffEvents = new List<List<AudioCutoffEvent>>();
+		public List<AudioOneShotEvent>[] audioOneShots;
+		public List<AudioClipEvent>[] audioClipEvents;
+		public List<AudioVolumeEvent>[] audioVolumeEvents;
+		public List<AudioPitchEvent>[] audioPitchEvents;
+		public List<AudioCutoffEvent>[] audioCutoffEvents;
 
 		public float playTime = 0f;
 		public bool setRealTime = false;
+
+		public MultiplayerSoundBufferObject(int arraySize) {
+			audioOneShots = new List<AudioOneShotEvent>[arraySize];
+			audioClipEvents = new List<AudioClipEvent>[arraySize];
+			audioVolumeEvents = new List<AudioVolumeEvent>[arraySize];
+			audioPitchEvents = new List<AudioPitchEvent>[arraySize];
+			audioCutoffEvents = new List<AudioCutoffEvent>[arraySize];
+		}
 
 		public void AdjustRealTimeToAnimation(MultiplayerFrameBufferObject animationFrame) {
 			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
@@ -66,25 +78,31 @@ namespace XLMultiplayer {
 				ReplayAudioEventPlayer audioPlayer = null;
 				if (replayEventPlayerForName.TryGetValue(MultiplayerUtils.audioPlayerNames[i], out audioPlayer)) {
 					if(audioPlayer != null) {
-						if (audioOneShots[i] != null && audioOneShots[i].Count > 0 && replayController.AudioEventPlayers[i].oneShotEvents == null) {
-							replayController.AudioEventPlayers[i].LoadOneShotEvents(audioOneShots[i]);
-						} else if (audioOneShots[i] != null && audioOneShots[i].Count > 0) replayController.AudioEventPlayers[i].oneShotEvents.AddRange(audioOneShots[i]);
+						List<AudioOneShotEvent> currentOneShotEventList = audioOneShots[i];
+						List<AudioClipEvent> currentClipEventList = audioClipEvents[i];
+						List<AudioVolumeEvent> currentVolumeEventList = audioVolumeEvents[i];
+						List<AudioPitchEvent> currentPitchEventList = audioPitchEvents[i];
+						List<AudioCutoffEvent> currentCutoffEventList = audioCutoffEvents[i];
 
-						if (audioClipEvents[i] != null && audioClipEvents[i].Count > 0 && replayController.AudioEventPlayers[i].clipEvents == null) {
-							replayController.AudioEventPlayers[i].LoadClipEvents(audioClipEvents[i]);
-						} else if (audioClipEvents[i] != null && audioClipEvents[i].Count > 0) replayController.AudioEventPlayers[i].clipEvents.AddRange(audioClipEvents[i]);
+						if (currentOneShotEventList != null && currentOneShotEventList.Count > 0 && replayController.AudioEventPlayers[i].oneShotEvents == null) {
+							replayController.AudioEventPlayers[i].LoadOneShotEvents(currentOneShotEventList);
+						} else if (currentOneShotEventList != null && currentOneShotEventList.Count > 0) replayController.AudioEventPlayers[i].oneShotEvents.AddRange(currentOneShotEventList);
 
-						if (audioVolumeEvents[i] != null && audioVolumeEvents[i].Count > 0 && replayController.AudioEventPlayers[i].volumeEvents == null) {
-							replayController.AudioEventPlayers[i].LoadVolumeEvents(audioVolumeEvents[i]);
-						} else if (audioVolumeEvents[i] != null && audioVolumeEvents[i].Count > 0) replayController.AudioEventPlayers[i].volumeEvents.AddRange(audioVolumeEvents[i]);
+						if (currentClipEventList != null && currentClipEventList.Count > 0 && replayController.AudioEventPlayers[i].clipEvents == null) {
+							replayController.AudioEventPlayers[i].LoadClipEvents(currentClipEventList);
+						} else if (currentClipEventList != null && currentClipEventList.Count > 0) replayController.AudioEventPlayers[i].clipEvents.AddRange(currentClipEventList);
 
-						if (audioPitchEvents[i] != null && audioPitchEvents[i].Count > 0 && replayController.AudioEventPlayers[i].pitchEvents == null) {
-							replayController.AudioEventPlayers[i].LoadPitchEvents(audioPitchEvents[i]);
-						} else if (audioPitchEvents[i] != null && audioPitchEvents[i].Count > 0) replayController.AudioEventPlayers[i].pitchEvents.AddRange(audioPitchEvents[i]);
+						if (currentVolumeEventList != null && currentVolumeEventList.Count > 0 && replayController.AudioEventPlayers[i].volumeEvents == null) {
+							replayController.AudioEventPlayers[i].LoadVolumeEvents(currentVolumeEventList);
+						} else if (currentVolumeEventList != null && currentVolumeEventList.Count > 0) replayController.AudioEventPlayers[i].volumeEvents.AddRange(currentVolumeEventList);
 
-						if (audioCutoffEvents[i] != null && audioCutoffEvents[i].Count > 0 && replayController.AudioEventPlayers[i].cutoffEvents == null) {
-							replayController.AudioEventPlayers[i].LoadCutoffEvents(audioCutoffEvents[i]);
-						} else if (audioCutoffEvents[i] != null && audioCutoffEvents[i].Count > 0) replayController.AudioEventPlayers[i].cutoffEvents.AddRange(audioCutoffEvents[i]);
+						if (currentPitchEventList != null && currentPitchEventList.Count > 0 && replayController.AudioEventPlayers[i].pitchEvents == null) {
+							replayController.AudioEventPlayers[i].LoadPitchEvents(currentPitchEventList);
+						} else if (currentPitchEventList != null && currentPitchEventList.Count > 0) replayController.AudioEventPlayers[i].pitchEvents.AddRange(currentPitchEventList);
+
+						if (currentCutoffEventList != null && currentCutoffEventList.Count > 0 && replayController.AudioEventPlayers[i].cutoffEvents == null) {
+							replayController.AudioEventPlayers[i].LoadCutoffEvents(currentCutoffEventList);
+						} else if (currentCutoffEventList != null && currentCutoffEventList.Count > 0) replayController.AudioEventPlayers[i].cutoffEvents.AddRange(currentCutoffEventList);
 					}
 				}
 			}
@@ -307,6 +325,8 @@ namespace XLMultiplayer {
 				return;
 			}
 
+			UnityModManagerNet.UnityModManager.Logger.Log(bones.Length.ToString());
+
 			Vector3[] vectors = new Vector3[77];
 			Quaternion[] quaternions = new Quaternion[77];
 
@@ -344,13 +364,11 @@ namespace XLMultiplayer {
 					vectors[i] = readVector;
 					quaternions[i] = readQuaternion;
 				} else {
-					Vector3 readVector = new Vector3(floatValues[i * 6], floatValues[i * 6 + 1], floatValues[i * 6 + 2]);
+					vectors[i].x = floatValues[i * 6];
+					vectors[i].y = floatValues[i * 6 + 1];
+					vectors[i].z = floatValues[i * 6 + 2];
 
-					Quaternion readQuaternion = new Quaternion();
-					readQuaternion.eulerAngles = new Vector3(floatValues[i * 6 + 3], floatValues[i * 6 + 4], floatValues[i * 6 + 5]);
-
-					vectors[i] = readVector;
-					quaternions[i] = readQuaternion;
+					quaternions[i].eulerAngles = new Vector3(floatValues[i * 6 + 3], floatValues[i * 6 + 4], floatValues[i * 6 + 5]);
 				}
 			}
 
@@ -386,26 +404,29 @@ namespace XLMultiplayer {
 				quaternions = quaternions
 			};
 
+			currentBufferObject.replayFrameBufferObject = replayFrameObject;
+
 			this.replayAnimationFrames.Add(replayFrameObject);
 		}
 
 		public void UnpackSounds(byte[] soundBytes) {
 			int readBytes = 0;
+			int numberOfAudioPlayers = MultiplayerUtils.audioPlayerNames.Count;
 
-			List<List<AudioOneShotEvent>> newOneShots = new List<List<AudioOneShotEvent>>();
-			List<List<AudioClipEvent>> newClipEvents = new List<List<AudioClipEvent>>();
-			List<List<AudioVolumeEvent>> newVolumeEvents = new List<List<AudioVolumeEvent>>();
-			List<List<AudioPitchEvent>> newPitchEvents = new List<List<AudioPitchEvent>>();
-			List<List<AudioCutoffEvent>> newCutoffEvents = new List<List<AudioCutoffEvent>>();
+			List<AudioOneShotEvent>[] newOneShots = new List<AudioOneShotEvent>[numberOfAudioPlayers];
+			List<AudioClipEvent>[] newClipEvents = new List<AudioClipEvent>[numberOfAudioPlayers]; ;
+			List<AudioVolumeEvent>[] newVolumeEvents = new List<AudioVolumeEvent>[numberOfAudioPlayers]; ;
+			List<AudioPitchEvent>[] newPitchEvents = new List<AudioPitchEvent>[numberOfAudioPlayers]; ;
+			List<AudioCutoffEvent>[] newCutoffEvents = new List<AudioCutoffEvent>[numberOfAudioPlayers]; ;
 
 			float earliestSoundTime = float.MaxValue;
 			
-			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
-				newOneShots.Add(new List<AudioOneShotEvent>());
-				newClipEvents.Add(new List<AudioClipEvent>());
-				newVolumeEvents.Add(new List<AudioVolumeEvent>());
-				newPitchEvents.Add(new List<AudioPitchEvent>());
-				newCutoffEvents.Add(new List<AudioCutoffEvent>());
+			for (int i = 0; i < numberOfAudioPlayers; i++) {
+				newOneShots[i] = new List<AudioOneShotEvent>();
+				newClipEvents[i] = new List<AudioClipEvent>();
+				newVolumeEvents[i] = new List<AudioVolumeEvent>();
+				newPitchEvents[i] = new List<AudioPitchEvent>();
+				newCutoffEvents[i] = new List<AudioCutoffEvent>();
 				
 				int oneShots = BitConverter.ToInt32(soundBytes, readBytes);
 				readBytes += 4;
@@ -470,16 +491,10 @@ namespace XLMultiplayer {
 				}
 			}
 
-			MultiplayerSoundBufferObject newSoundBufferObject = new MultiplayerSoundBufferObject();
+			MultiplayerSoundBufferObject newSoundBufferObject = new MultiplayerSoundBufferObject(numberOfAudioPlayers);
 			soundQueue.Add(newSoundBufferObject);
 			
 			for (int i = 0; i < MultiplayerUtils.audioPlayerNames.Count; i++) {
-				newSoundBufferObject.audioClipEvents.Add(new List<AudioClipEvent>());
-				newSoundBufferObject.audioOneShots.Add(new List<AudioOneShotEvent>());
-				newSoundBufferObject.audioCutoffEvents.Add(new List<AudioCutoffEvent>());
-				newSoundBufferObject.audioPitchEvents.Add(new List<AudioPitchEvent>());
-				newSoundBufferObject.audioVolumeEvents.Add(new List<AudioVolumeEvent>());
-				
 				newSoundBufferObject.audioClipEvents[i] = newClipEvents[i];
 				newSoundBufferObject.audioOneShots[i] = newOneShots[i];
 				newSoundBufferObject.audioCutoffEvents[i] = newCutoffEvents[i];
@@ -492,38 +507,40 @@ namespace XLMultiplayer {
 
 				foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
 					if (audioPlayer != null) {
-						if (audioPlayer.clipEvents != null) audioPlayer.clipEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
-						if (audioPlayer.cutoffEvents != null) audioPlayer.cutoffEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
-						if (audioPlayer.oneShotEvents != null) audioPlayer.oneShotEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
-						if (audioPlayer.pitchEvents != null) audioPlayer.pitchEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
-						if (audioPlayer.volumeEvents != null) audioPlayer.volumeEvents.RemoveEventsOlderThanExcept(firstRealTime.realFrameTime, 0);
+						if (audioPlayer.clipEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.clipEvents, firstRealTime.realFrameTime, 0);
+						if (audioPlayer.cutoffEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.cutoffEvents, firstRealTime.realFrameTime, 0);
+						if (audioPlayer.oneShotEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.oneShotEvents, firstRealTime.realFrameTime, 0);
+						if (audioPlayer.pitchEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.pitchEvents, firstRealTime.realFrameTime, 0);
+						if (audioPlayer.volumeEvents != null)MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.volumeEvents, firstRealTime.realFrameTime, 0);
 					}
 				}
 			} catch (Exception) { }
 		}
 
+		MultiplayerFrameBufferObject previousFinishedFrame = null;
+
 		// TODO: refactor all this shit, I'm sure there's a better way
 		public void LerpNextFrame(bool inReplay, bool recursive = false, float offset = 0, int recursionLevel = 0) {
 			if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) return;
+			int animationFramesCount = this.animationFrames.Count;
+			MultiplayerFrameBufferObject currentAnimationFrame = this.animationFrames[0];
 			if (!startedAnimating && animationFrames.Count > 5) {
-				if (this.animationFrames[0].vectors == null || !this.animationFrames[0].key) {
+				if (currentAnimationFrame.vectors == null || !currentAnimationFrame.key) {
 					this.animationFrames.RemoveAt(0);
 					LerpNextFrame(inReplay);
 					return;
 				}
 
-				if (this.animationFrames.Count > 6)
-					this.animationFrames.RemoveRange(0, (this.animationFrames.Count - 6));
-
 				startedAnimating = true;
 
 				for (int i = 0; i < 77; i++) {
-					bones[i].localPosition = this.animationFrames[0].vectors[i];
-					bones[i].localRotation = this.animationFrames[0].quaternions[i];
+					bones[i].localPosition = currentAnimationFrame.vectors[i];
+					bones[i].localRotation = currentAnimationFrame.quaternions[i];
 				}
 
-				this.previousFrameTime = this.animationFrames[0].frameTime;
-				//this.firstFrameTime = this.animationFrames[0].frameTime;
+				this.previousFrameTime = currentAnimationFrame.frameTime;
+				this.previousFinishedFrame = currentAnimationFrame;
+				//this.firstFrameTime = currentAnimationFrame.frameTime;
 				//this.startAnimTime = Time.time;
 
 				this.animationFrames.RemoveAt(0);
@@ -550,39 +567,39 @@ namespace XLMultiplayer {
 				frameDelay = this.animationFrames.Count - 6;
 			}
 
-			if (this.animationFrames[0].vectors == null) {
+			if (currentAnimationFrame.vectors == null) {
 				this.animationFrames.RemoveAt(0);
 
 				LerpNextFrame(inReplay);
 				return;
 			}
 
-			if (this.animationFrames[0].deltaTime == 0) {
-				this.animationFrames[0].deltaTime = this.animationFrames[0].frameTime - this.previousFrameTime;
+			if (currentAnimationFrame.deltaTime == 0) {
+				currentAnimationFrame.deltaTime = currentAnimationFrame.frameTime - this.previousFrameTime;
 
-				if (this.animationFrames[0].deltaTime == 0.0f) {
-					this.animationFrames[0].deltaTime = 1f / 30f;
+				if (currentAnimationFrame.deltaTime == 0.0f) {
+					currentAnimationFrame.deltaTime = 1f / 30f;
 				}
 
 				if (frameDelay != 0) {
-					debugWriter.Write("Adjusting current animation frame time from: " + this.animationFrames[0].deltaTime);
-					this.animationFrames[0].deltaTime = frameDelay < 0 ? this.animationFrames[0].deltaTime * Mathf.Max(Mathf.Abs(frameDelay), 2) : this.animationFrames[0].deltaTime / Mathf.Min(Mathf.Max(frameDelay, 2), 6);
-					debugWriter.WriteLine("  To: " + this.animationFrames[0].deltaTime);
+					debugWriter.Write("Adjusting current animation frame time from: " + currentAnimationFrame.deltaTime);
+					currentAnimationFrame.deltaTime = frameDelay < 0 ? currentAnimationFrame.deltaTime * Mathf.Max(Mathf.Abs(frameDelay), 2) : currentAnimationFrame.deltaTime / Mathf.Min(Mathf.Max(frameDelay, 2), 6);
+					debugWriter.WriteLine("  To: " + currentAnimationFrame.deltaTime);
 
-					if (this.animationFrames[0].deltaTime > 0.14f) {
+					if (currentAnimationFrame.deltaTime > 0.14f) {
 						debugWriter.WriteLine("Capping current frame to 140ms");
-						this.animationFrames[0].deltaTime = 0.14f;
+						currentAnimationFrame.deltaTime = 0.14f;
 					}
 				}
 			}
 
-			if (!recursive) this.animationFrames[0].timeSinceStart += Time.unscaledDeltaTime;
-			else this.animationFrames[0].timeSinceStart = offset;
+			if (!recursive) currentAnimationFrame.timeSinceStart += Time.unscaledDeltaTime;
+			else currentAnimationFrame.timeSinceStart = offset;
 
 			if (!inReplay) {
 				for (int i = 0; i < 77; i++) {
-					bones[i].localPosition = Vector3.Lerp(bones[i].localPosition, this.animationFrames[0].vectors[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
-					bones[i].localRotation = Quaternion.Slerp(bones[i].localRotation, this.animationFrames[0].quaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / this.animationFrames[0].deltaTime);
+					bones[i].localPosition = Vector3.Lerp(bones[i].localPosition, currentAnimationFrame.vectors[i], (recursive ? offset : Time.unscaledDeltaTime) / currentAnimationFrame.deltaTime);
+					bones[i].localRotation = Quaternion.Slerp(previousFinishedFrame.quaternions[i], currentAnimationFrame.quaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / currentAnimationFrame.deltaTime);
 				}
 
 				replayController.ClipEndTime = PlayTime.time + 0.5f;
@@ -600,24 +617,27 @@ namespace XLMultiplayer {
 			this.usernameObject.transform.position = this.skater.transform.position + this.skater.transform.up;
 			this.usernameObject.transform.LookAt(mainCameraTransform);
 
-			if (this.animationFrames[0].timeSinceStart >= this.animationFrames[0].deltaTime) {
+			if (currentAnimationFrame.timeSinceStart >= currentAnimationFrame.deltaTime) {
 				// 30FPS 120Seconds
-				//if (!this.animationFrames[0].key) {
+				//if (!currentAnimationFrame.key) {
 				//	if (this.recordedFrames.Count > 30 * 120) {
 				//		this.recordedFrames.RemoveAt(0);
-				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), this.startAnimTime + this.animationFrames[0].frameTime - this.firstFrameTime));
+				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(currentAnimationFrame), this.startAnimTime + currentAnimationFrame.frameTime - this.firstFrameTime));
 				//	} else {
-				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(this.animationFrames[0]), this.startAnimTime + this.animationFrames[0].frameTime - this.firstFrameTime));
+				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(currentAnimationFrame), this.startAnimTime + currentAnimationFrame.frameTime - this.firstFrameTime));
 				//	}
 				//}
-				MultiplayerFrameBufferObject currentPlayingFrame = this.replayAnimationFrames.Find(f => f.animFrame == this.animationFrames[0].animFrame);
-				currentPlayingFrame.realFrameTime = PlayTime.time;
+				previousFinishedFrame = currentAnimationFrame.replayFrameBufferObject;
+				if (currentAnimationFrame == null) {
+					this.replayAnimationFrames.Find(f => f.animFrame == currentAnimationFrame.animFrame);
+				}
+				previousFinishedFrame.realFrameTime = PlayTime.time;
 
 				while (soundQueue.Count > 0) {
-					if (currentPlayingFrame.frameTime + 1/15f < soundQueue[0].playTime) {
+					if (previousFinishedFrame.frameTime + 1/15f < soundQueue[0].playTime) {
 						break;
 					} else {
-						soundQueue[0].AdjustRealTimeToAnimation(currentPlayingFrame);
+						soundQueue[0].AdjustRealTimeToAnimation(previousFinishedFrame);
 						soundQueue[0].AddSoundsToPlayers(this.replayController, this.replayEventPlayerForName);
 						soundQueue.RemoveAt(0);
 					}
@@ -625,8 +645,8 @@ namespace XLMultiplayer {
 
 				if (!inReplay) {
 					for (int i = 0; i < 77; i++) {
-						bones[i].localPosition = this.animationFrames[0].vectors[i];
-						bones[i].localRotation = this.animationFrames[0].quaternions[i];
+						bones[i].localPosition = currentAnimationFrame.vectors[i];
+						bones[i].localRotation = currentAnimationFrame.quaternions[i];
 					}
 
 					replayController.ClipEndTime = PlayTime.time + 0.5f;
@@ -639,15 +659,15 @@ namespace XLMultiplayer {
 
 				if (!this.animationFrames[1].key) {
 					for (int i = 0; i < 77; i++) {
-						this.animationFrames[1].vectors[i] = this.animationFrames[0].vectors[i] + this.animationFrames[1].vectors[i];
-						this.animationFrames[1].quaternions[i] = this.animationFrames[0].quaternions[i] * this.animationFrames[1].quaternions[i];
+						this.animationFrames[1].vectors[i] = currentAnimationFrame.vectors[i] + this.animationFrames[1].vectors[i];
+						this.animationFrames[1].quaternions[i] = currentAnimationFrame.quaternions[i] * this.animationFrames[1].quaternions[i];
 					}
 				}
 
-				float oldTime = this.animationFrames[0].timeSinceStart;
-				float oldDelta = this.animationFrames[0].deltaTime;
+				float oldTime = currentAnimationFrame.timeSinceStart;
+				float oldDelta = currentAnimationFrame.deltaTime;
 
-				this.previousFrameTime = this.animationFrames[0].frameTime;
+				this.previousFrameTime = currentAnimationFrame.frameTime;
 				this.animationFrames.RemoveAt(0);
 				if (recursionLevel < 2) {
 					this.LerpNextFrame(inReplay, true, oldTime - oldDelta, recursionLevel + 1);

@@ -109,7 +109,7 @@ namespace XLMultiplayerServer {
 		public byte[] motdBytes = null;
 		public string motdString = "";
 
-		private List<Plugin> loadedPlugins = new List<Plugin>();
+		public List<Plugin> loadedPlugins { private set; get; } = new List<Plugin>();
 
 		public void DefaultMessageCallback(string message, ConsoleColor textColor, params object[] objects) {
 			Console.ForegroundColor = textColor;
@@ -685,19 +685,6 @@ namespace XLMultiplayerServer {
 										if (player.usernameMessage != null) {
 											server.SendMessageToConnection(players[i].connection, player.usernameMessage, SendFlags.Reliable);
 										}
-									}
-								}
-								
-								foreach (Plugin plugin in loadedPlugins) {
-									if (plugin.hash != "") {
-										byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(plugin.hash);
-										byte[] hashMessage = new byte[hashBytes.Length + 2];
-
-										hashMessage[0] = (byte)OpCode.PluginHash;
-										hashMessage[1] = plugin.pluginID;
-										Array.Copy(hashBytes, 0, hashMessage, 2, hashBytes.Length);
-
-										server.SendMessageToConnection(players[i].connection, hashMessage, SendFlags.Reliable);
 									}
 								}
 

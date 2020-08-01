@@ -484,5 +484,16 @@ namespace XLMultiplayer {
 			}
 			return false;
 		}
+
+		public static void RemoveAudioEventsOlderThanExcept<T>(List<T> events, float time, int amountToKeep) where T : ReplayEditor.AudioEvent {
+			int amountToRemove = 0;
+			while (events.Count - amountToRemove > amountToKeep && events[amountToKeep + amountToRemove].time < time) {
+				amountToRemove++;
+			}
+
+			if (amountToRemove > 0) {
+				events.RemoveRange(0, amountToRemove);
+			}
+		}
 	}
 }
