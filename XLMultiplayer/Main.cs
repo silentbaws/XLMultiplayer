@@ -442,7 +442,9 @@ namespace XLMultiplayer {
 											}
 										}
 									}
-									NewMultiplayerMenu.Instance.AddServerItem(newServer.ip, newServer.port, newServer.name, newServer.mapName, newServer.version, $"{newServer.playerCurrent} / {newServer.playerMax}", ClickServerItem);
+									if (newServer.version == Main.modEntry.Version.ToString()){
+									        NewMultiplayerMenu.Instance.AddServerItem(newServer.ip, newServer.port, newServer.name, newServer.mapName, newServer.version, $"{newServer.playerCurrent} / {newServer.playerMax}", ClickServerItem);
+								        }
 								}
 							}
 						}
