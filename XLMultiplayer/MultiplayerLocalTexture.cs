@@ -9,7 +9,7 @@ namespace XLMultiplayer {
 	public class MultiplayerLocalTexture : MultiplayerTexture {
 		public MultiplayerLocalTexture(bool custom, string path, string texType, GearInfoType gearType, StreamWriter sw) : base(custom, path, texType, gearType, sw) { }
 
-		public void ConvertTexture(int maxSize = 1024) {
+		public void ConvertTexture(int maxSize = 1024, bool convertToPNG = false) {
 			Texture2D texture2D = null;
 
 			if (this.isCustom && File.Exists(path)) {
@@ -44,7 +44,12 @@ namespace XLMultiplayer {
 				}
 			}
 
-			this.bytes = texture2D == null ? new byte[1] { 0 } : texture2D.EncodeToJPG(80);
+			if (texture2D == null) {
+				this.bytes = new byte[] { 0 };
+			} else {
+				this.bytes = convertToPNG ? texture2D.EncodeToPNG() : texture2D.EncodeToJPG(80);
+			}
+			
 		}
 		
 		public byte[] GetSendData() {

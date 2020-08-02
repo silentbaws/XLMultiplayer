@@ -37,8 +37,8 @@ namespace XLMultiplayer {
 
 				foreach (MultiplayerLocalTexture localTexture in multiplayerTextures) {
 					string texType = localTexture.textureType.ToLower();
-					if (texType.Contains("hat") || texType.Contains("truck") || texType.Contains("wheel")) {
-						localTexture.ConvertTexture(512);
+					if (texType.Contains("hat") || texType.Contains("truck") || texType.Contains("wheel") || texType.Contains("hair")) {
+						localTexture.ConvertTexture(512, texType.Contains("hair"));
 					} else if (texType.Contains("head") || texType.Contains("body")) {
 						localTexture.ConvertTexture(2048);
 					} else {
@@ -212,22 +212,22 @@ namespace XLMultiplayer {
 			byte[] packed = new byte[useKey ? T.Length * 12 - (start * 12) : T.Length * 24 - (start * 24)];
 
 			// Create float array out side of loop so I can reuse memory and save GC hopefully
-			float[] transform = new float[6];
+			float[] transform = new float[6 * T.Length];
 			ushort[] halfTransform = null;
 
 			if (useKey) {
-				halfTransform = new ushort[6];
+				halfTransform = new ushort[6 * T.Length];
 			}
 
 			for (int i = 0; i < T.Length - start; i++) {
 				// If you're in a replay and it's not a keyframe then all of your offsets will be 0 since you don't move, this should save time over accessing transformInfos
 				if (!useKey && (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState))) {
-					transform[0] = 0f;
-					transform[1] = 0f;
-					transform[2] = 0f;
-					transform[3] = 0f;
-					transform[4] = 0f;
-					transform[5] = 0f;
+					transform[i * 6] = 0f;
+					transform[i * 6 + 1] = 0f;
+					transform[i * 6 + 2] = 0f;
+					transform[i * 6 + 3] = 0f;
+					transform[i * 6 + 4] = 0f;
+					transform[i * 6 + 5] = 0f;
 				} else {
 					// TransformInfo is a Serializable Vector3 so calling position or rotation internally constructs a new Vector3 it seems(this will reduce the amount of times this happens)
 					Vector3 rotationVec = T[i + start].rotation.eulerAngles;
@@ -238,29 +238,31 @@ namespace XLMultiplayer {
 					
 					// Use a float array so I can block copy bytes to packed array
 					// position
-					transform[0] = useKey ? position.x : position.x - prevPosition.x;
-					transform[1] = useKey ? position.y : position.y - prevPosition.y;
-					transform[2] = useKey ? position.z : position.z - prevPosition.z;
+					transform[i * 6] = useKey ? position.x : position.x - prevPosition.x;
+					transform[i * 6 + 1] = useKey ? position.y : position.y - prevPosition.y;
+					transform[i * 6 + 2] = useKey ? position.z : position.z - prevPosition.z;
 
 					// rotation
-					transform[3] = useKey ? rotationVec.x : rotationVec.x - prevRotVec.x;
-					transform[4] = useKey ? rotationVec.y : rotationVec.y - prevRotVec.y;
-					transform[5] = useKey ? rotationVec.z : rotationVec.z - prevRotVec.z;
+					transform[i * 6 + 3] = useKey ? rotationVec.x : rotationVec.x - prevRotVec.x;
+					transform[i * 6 + 4] = useKey ? rotationVec.y : rotationVec.y - prevRotVec.y;
+					transform[i * 6 + 5] = useKey ? rotationVec.z : rotationVec.z - prevRotVec.z;
 				}
 
 				// Block Copy is so much faster than converting each elements bytes individually and copying it so let's do that(potentially better to create a large float array and block copy all at once but this should suffice)
-				if (!useKey) {
-					Buffer.BlockCopy(transform, 0, packed, i * 24, 24);
-				} else {
-					halfTransform[0] = SystemHalf.HalfHelper.SingleToHalf(transform[0]).Value;
-					halfTransform[1] = SystemHalf.HalfHelper.SingleToHalf(transform[1]).Value;
-					halfTransform[2] = SystemHalf.HalfHelper.SingleToHalf(transform[2]).Value;
-					halfTransform[3] = SystemHalf.HalfHelper.SingleToHalf(transform[3]).Value;
-					halfTransform[4] = SystemHalf.HalfHelper.SingleToHalf(transform[4]).Value;
-					halfTransform[5] = SystemHalf.HalfHelper.SingleToHalf(transform[5]).Value;
-
-					Buffer.BlockCopy(halfTransform, 0, packed, i * 12, 12);
+				if (useKey) {
+					halfTransform[i * 6] = SystemHalf.HalfHelper.SingleToHalf(transform[i * 6]).Value;
+					halfTransform[i * 6 + 1] = SystemHalf.HalfHelper.SingleToHalf(transform[i * 6 + 1]).Value;
+					halfTransform[i * 6 + 2] = SystemHalf.HalfHelper.SingleToHalf(transform[i * 6 + 2]).Value;
+					halfTransform[i * 6 + 3] = SystemHalf.HalfHelper.SingleToHalf(transform[i * 6 + 3]).Value;
+					halfTransform[i * 6 + 4] = SystemHalf.HalfHelper.SingleToHalf(transform[i * 6 + 4]).Value;
+					halfTransform[i * 6 + 5] = SystemHalf.HalfHelper.SingleToHalf(transform[i * 6 + 5]).Value;
 				}
+			}
+
+			if (!useKey) {
+				Buffer.BlockCopy(transform, 0, packed, 0, packed.Length);
+			} else {
+				Buffer.BlockCopy(halfTransform, 0, packed, 0, packed.Length);
 			}
 
 			return packed;

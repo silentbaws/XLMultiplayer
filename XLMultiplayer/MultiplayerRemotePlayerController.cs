@@ -325,8 +325,6 @@ namespace XLMultiplayer {
 				return;
 			}
 
-			UnityModManagerNet.UnityModManager.Logger.Log(bones.Length.ToString());
-
 			Vector3[] vectors = new Vector3[77];
 			Quaternion[] quaternions = new Quaternion[77];
 
@@ -598,8 +596,8 @@ namespace XLMultiplayer {
 
 			if (!inReplay) {
 				for (int i = 0; i < 77; i++) {
-					bones[i].localPosition = Vector3.Lerp(bones[i].localPosition, currentAnimationFrame.vectors[i], (recursive ? offset : Time.unscaledDeltaTime) / currentAnimationFrame.deltaTime);
-					bones[i].localRotation = Quaternion.Slerp(previousFinishedFrame.quaternions[i], currentAnimationFrame.quaternions[i], (recursive ? offset : Time.unscaledDeltaTime) / currentAnimationFrame.deltaTime);
+					bones[i].localPosition = Vector3.Lerp(previousFinishedFrame.vectors[i], currentAnimationFrame.vectors[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
+					bones[i].localRotation = Quaternion.Slerp(previousFinishedFrame.quaternions[i], currentAnimationFrame.quaternions[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
 				}
 
 				replayController.ClipEndTime = PlayTime.time + 0.5f;
@@ -627,17 +625,17 @@ namespace XLMultiplayer {
 				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(currentAnimationFrame), this.startAnimTime + currentAnimationFrame.frameTime - this.firstFrameTime));
 				//	}
 				//}
-				previousFinishedFrame = currentAnimationFrame.replayFrameBufferObject;
-				if (currentAnimationFrame == null) {
-					this.replayAnimationFrames.Find(f => f.animFrame == currentAnimationFrame.animFrame);
+				previousFinishedFrame = currentAnimationFrame;
+				if (currentAnimationFrame.replayFrameBufferObject == null) {
+					previousFinishedFrame.replayFrameBufferObject = this.replayAnimationFrames.Find(f => f.animFrame == currentAnimationFrame.animFrame);
 				}
-				previousFinishedFrame.realFrameTime = PlayTime.time;
+				previousFinishedFrame.replayFrameBufferObject.realFrameTime = PlayTime.time;
 
 				while (soundQueue.Count > 0) {
-					if (previousFinishedFrame.frameTime + 1/15f < soundQueue[0].playTime) {
+					if (previousFinishedFrame.replayFrameBufferObject.frameTime + 1/15f < soundQueue[0].playTime) {
 						break;
 					} else {
-						soundQueue[0].AdjustRealTimeToAnimation(previousFinishedFrame);
+						soundQueue[0].AdjustRealTimeToAnimation(previousFinishedFrame.replayFrameBufferObject);
 						soundQueue[0].AddSoundsToPlayers(this.replayController, this.replayEventPlayerForName);
 						soundQueue.RemoveAt(0);
 					}
@@ -650,17 +648,12 @@ namespace XLMultiplayer {
 					}
 
 					replayController.ClipEndTime = PlayTime.time + 0.5f;
-
-					foreach (ReplayAudioEventPlayer replayAudioEventPlayer in replayController.AudioEventPlayers) {
-						if (replayAudioEventPlayer != null && !replayAudioEventPlayer.enabled) replayAudioEventPlayer.enabled = true;
-						if (replayAudioEventPlayer != null) replayAudioEventPlayer.SetPlaybackTime(PlayTime.time, 1.0f);
-					}
 				}
-
+				
 				if (!this.animationFrames[1].key) {
 					for (int i = 0; i < 77; i++) {
 						this.animationFrames[1].vectors[i] = currentAnimationFrame.vectors[i] + this.animationFrames[1].vectors[i];
-						this.animationFrames[1].quaternions[i] = currentAnimationFrame.quaternions[i] * this.animationFrames[1].quaternions[i];
+						this.animationFrames[1].quaternions[i].eulerAngles += currentAnimationFrame.quaternions[i].eulerAngles;
 					}
 				}
 
