@@ -180,7 +180,6 @@ namespace XLMultiplayer {
 		public static float lastConnect = 0f;
 
 		static void Load(UnityModManager.ModEntry modEntry) {
-			settings = MultiplayerSettings.Load<MultiplayerSettings>(modEntry);
 			Main.modEntry = modEntry;
 			Main.modId = modEntry.Info.Id;
 
@@ -204,7 +203,6 @@ namespace XLMultiplayer {
 			}
 
 			LoadPlugins();
-
 		}
 
 		static bool OnToggle(UnityModManager.ModEntry modEntry, bool value) {
@@ -246,6 +244,7 @@ namespace XLMultiplayer {
 				}
 
 				MultiplayerUtils.StartMapLoading();
+				settings = MultiplayerSettings.Load<MultiplayerSettings>(modEntry);
 			} else {
 				//Unpatch the replay editor
 				harmonyInstance.UnpatchAll(harmonyInstance.Id);
@@ -629,6 +628,13 @@ namespace XLMultiplayer {
 				controller.Destroy();
 			}
 			Main.remoteReplayControllers.Clear();
+		}
+	}
+
+	[HarmonyPatch(typeof(ReplayPlaybackController), "Update")]
+	static class MultiplayerPlaybackUpdatePatch {
+		static bool Prefix(ReplayPlaybackController __instance) {
+			return __instance == ReplayEditorController.Instance.playbackController;
 		}
 	}
 

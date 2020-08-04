@@ -62,10 +62,6 @@
       <HintPath>..\References\Unity.Polybrush.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Unity.Postprocessing.Runtime">
-      <HintPath>..\References\Unity.Postprocessing.Runtime.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="Unity.RenderPipelines.Core.Runtime">
       <HintPath>..\References\Unity.RenderPipelines.Core.Runtime.dll</HintPath>
       <Private>False</Private>
@@ -114,10 +110,6 @@
       <HintPath>..\References\UnityEngine.AudioModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.BaselibModule">
-      <HintPath>..\References\UnityEngine.BaselibModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="UnityEngine.ClothModule">
       <HintPath>..\References\UnityEngine.ClothModule.dll</HintPath>
       <Private>False</Private>
@@ -140,10 +132,6 @@
     </Reference>
     <Reference Include="UnityEngine.DirectorModule">
       <HintPath>..\References\UnityEngine.DirectorModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine.FileSystemHttpModule">
-      <HintPath>..\References\UnityEngine.FileSystemHttpModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.GameCenterModule">
@@ -176,10 +164,6 @@
     </Reference>
     <Reference Include="UnityEngine.LocalizationModule">
       <HintPath>..\References\UnityEngine.LocalizationModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine.Networking">
-      <HintPath>..\References\UnityEngine.Networking.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.ParticleSystemModule">
@@ -226,10 +210,6 @@
       <HintPath>..\References\UnityEngine.StreamingModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEngine.StyleSheetsModule">
-      <HintPath>..\References\UnityEngine.StyleSheetsModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="UnityEngine.SubstanceModule">
       <HintPath>..\References\UnityEngine.SubstanceModule.dll</HintPath>
       <Private>False</Private>
@@ -252,14 +232,6 @@
     </Reference>
     <Reference Include="UnityEngine.TilemapModule">
       <HintPath>..\References\UnityEngine.TilemapModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine.Timeline">
-      <HintPath>..\References\UnityEngine.Timeline.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine.TimelineModule">
-      <HintPath>..\References\UnityEngine.TimelineModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.TLSModule">

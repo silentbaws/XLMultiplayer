@@ -71,7 +71,10 @@ namespace XLMultiplayer {
 				textureData.AddRange(bodyID);
 
 				foreach (MultiplayerLocalTexture localTexture in multiplayerTextures) {
-					textureData.AddRange(localTexture.GetSendData());
+					byte[] newData = localTexture.GetSendData();
+					if (newData != null) {
+						textureData.AddRange(newData);
+					}
 				}
 
 				byte[] sendData = new byte[textureData.Count + 5];
@@ -221,7 +224,7 @@ namespace XLMultiplayer {
 
 			for (int i = 0; i < T.Length - start; i++) {
 				// If you're in a replay and it's not a keyframe then all of your offsets will be 0 since you don't move, this should save time over accessing transformInfos
-				if (!useKey && (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState))) {
+				if (!useKey && !GameManagement.GameStateMachine.Instance.CurrentState.ShouldRecordReplay()) {
 					transform[i * 6] = 0f;
 					transform[i * 6 + 1] = 0f;
 					transform[i * 6 + 2] = 0f;

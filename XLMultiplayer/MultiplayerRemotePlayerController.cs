@@ -120,6 +120,8 @@ namespace XLMultiplayer {
 		private Transform[] bones;
 
 		private bool startedAnimating = false;
+		private bool loadedTextures = false;
+		private bool receivedTextures = false;
 		private float previousFrameTime = 0;
 		private float firstFrameTime = -1f;
 		private float startAnimTime = -1f;
@@ -132,7 +134,6 @@ namespace XLMultiplayer {
 
 		private Transform mainCameraTransform;
 
-		// TODO: Rename these to be easier to understand
 		public List<MultiplayerFrameBufferObject> animationFrames = new List<MultiplayerFrameBufferObject>();
 		public List<MultiplayerFrameBufferObject> replayAnimationFrames = new List<MultiplayerFrameBufferObject>();
 		public List<ReplayRecordedFrame> recordedFrames = new List<ReplayRecordedFrame>();
@@ -179,10 +180,6 @@ namespace XLMultiplayer {
 
 			Traverse.Create(characterCustomizer).Field("_bonesDict").SetValue(bones.ToDictionary((Transform t) => t.name));
 			characterCustomizer.enabled = true;
-
-			foreach (GearPrefabController gearPrefabController in this.player.GetComponentsInChildren<GearPrefabController>()) {
-				GameObject.Destroy(gearPrefabController.gameObject);
-			}
 
 			characterCustomizer.LoadLastPlayer();
 
@@ -235,10 +232,6 @@ namespace XLMultiplayer {
 
 			UnityModManagerNet.UnityModManager.Logger.Log($"Attempting to equip body with name length {bodyTypeLen} and name: {bodyType}!");
 
-			CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, false, null, new string[0]);
-
-			characterCustomizer.EquipGear(bodyInfo);
-
 			int readBytes = 2 + bodyTypeLen;
 			while (readBytes < textureStream.Length - 1) {
 				UnityModManagerNet.UnityModManager.Logger.Log($"Read {readBytes} bytes of {textureStream.Length}");
@@ -262,32 +255,66 @@ namespace XLMultiplayer {
 					newTexture.SaveTexture(this.playerID, texData);
 				}
 			}
+
+			receivedTextures = true;
 		}
 
 		public void ApplyTextures() {
-			foreach (MultiplayerRemoteTexture mpTex in multiplayerTextures) {
-				if (mpTex.saved && !mpTex.loaded && !(mpTex.infoType == GearInfoType.Body)) {
-					mpTex.LoadFromFileMainThread(this);
-				} else if (mpTex.saved && !mpTex.loaded && mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase)) {
-					MultiplayerRemoteTexture bodyTex = multiplayerTextures.Find((t) => t.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase));
-					if (bodyTex != null) {
-						UnityModManagerNet.UnityModManager.Logger.Log($"Updating body textures for {this.bodyType} id: {this.playerID}");
+			if (this.receivedTextures && !this.loadedTextures && GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
+				characterCustomizer.RemoveAllGear();
+				characterCustomizer.RemoveAllGear(true);
 
-						bodyTex.loaded = true;
-						mpTex.loaded = true;
-						
-						TextureChange[] headChange = { new TextureChange("albedo", mpTex.fileLocation) };
-						TextureChange[] bodyChange = { new TextureChange("albedo", bodyTex.fileLocation) };
-
-						List<MaterialChange> materialChanges = new List<MaterialChange>();
-						materialChanges.Add(new MaterialChange("body", bodyChange));
-						materialChanges.Add(new MaterialChange("head", headChange));
-
-						CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, true, materialChanges, new string[0]);
-
-						characterCustomizer.EquipGear(bodyInfo);
+				Transform[] ignoredObjects = characterCustomizer.WheelParents.Union(characterCustomizer.TruckHangerParents).Union(characterCustomizer.TruckBaseParents).Append(characterCustomizer.DeckParent).Append(characterCustomizer.ClothingParent).ToArray();
+				foreach (Transform t in ignoredObjects) {
+					Transform[] childrenTransforms = t.GetComponentsInChildren<Transform>();
+					if (childrenTransforms == null || childrenTransforms.Length == 0) {
+						continue;
+					}
+					foreach (Transform t2 in childrenTransforms) {
+						if (t2 == null || t2.gameObject == null) continue;
+						if (t2.gameObject.layer == LayerMask.NameToLayer("Character") || t2.gameObject.layer == LayerMask.NameToLayer("Skateboard")) {
+							if (!ignoredObjects.Contains(t2)) {
+								GameObject.Destroy(t2.gameObject);
+							}
+						}
 					}
 				}
+
+				bool loadedBodyInfo = false;
+
+				foreach (MultiplayerRemoteTexture mpTex in multiplayerTextures) {
+					if (mpTex.saved && !mpTex.loaded && !(mpTex.infoType == GearInfoType.Body)) {
+						mpTex.LoadFromFileMainThread(this);
+					} else if (mpTex.saved && !mpTex.loaded && mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase)) {
+						MultiplayerRemoteTexture bodyTex = multiplayerTextures.Find((t) => t.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase));
+						if (bodyTex != null) {
+							UnityModManagerNet.UnityModManager.Logger.Log($"Updating body textures for {this.bodyType} id: {this.playerID}");
+
+							bodyTex.loaded = true;
+							mpTex.loaded = true;
+
+							TextureChange[] headChange = { new TextureChange("albedo", mpTex.fileLocation) };
+							TextureChange[] bodyChange = { new TextureChange("albedo", bodyTex.fileLocation) };
+
+							List<MaterialChange> materialChanges = new List<MaterialChange>();
+							materialChanges.Add(new MaterialChange("body", bodyChange));
+							materialChanges.Add(new MaterialChange("head", headChange));
+
+							CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, true, materialChanges, new string[0]);
+
+							characterCustomizer.EquipGear(bodyInfo);
+
+							loadedBodyInfo = true;
+						}
+					}
+				}
+
+				if (!loadedBodyInfo) {
+					CharacterBodyInfo baseBodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, false, null, new string[0]);
+					characterCustomizer.EquipGear(baseBodyInfo);
+				}
+
+				loadedTextures = true;
 			}
 		}
 
@@ -394,12 +421,17 @@ namespace XLMultiplayer {
 				this.replayAnimationFrames.RemoveAt(0);
 			}
 
+			Vector3[] replayVectors = new Vector3[vectors.Length];
+			Quaternion[] replayQuaternions = new Quaternion[quaternions.Length];
+			vectors.CopyTo(replayVectors, 0);
+			quaternions.CopyTo(replayQuaternions, 0);
+
 			MultiplayerFrameBufferObject replayFrameObject = new MultiplayerFrameBufferObject {
 				key = currentBufferObject.key,
 				frameTime = currentBufferObject.frameTime,
 				animFrame = currentBufferObject.animFrame,
-				vectors = vectors,
-				quaternions = quaternions
+				vectors = replayVectors,
+				quaternions = replayQuaternions
 			};
 
 			currentBufferObject.replayFrameBufferObject = replayFrameObject;
@@ -501,15 +533,17 @@ namespace XLMultiplayer {
 			}
 
 			try {
-				MultiplayerFrameBufferObject firstRealTime = this.replayAnimationFrames.First(f => f.realFrameTime != -1f);
+				MultiplayerFrameBufferObject firstRealTime = this.replayAnimationFrames.FirstOrDefault(f => f.realFrameTime != -1f);
 
-				foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
-					if (audioPlayer != null) {
-						if (audioPlayer.clipEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.clipEvents, firstRealTime.realFrameTime, 0);
-						if (audioPlayer.cutoffEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.cutoffEvents, firstRealTime.realFrameTime, 0);
-						if (audioPlayer.oneShotEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.oneShotEvents, firstRealTime.realFrameTime, 0);
-						if (audioPlayer.pitchEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.pitchEvents, firstRealTime.realFrameTime, 0);
-						if (audioPlayer.volumeEvents != null)MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.volumeEvents, firstRealTime.realFrameTime, 0);
+				if (firstRealTime != null) {
+					foreach (ReplayAudioEventPlayer audioPlayer in replayController.AudioEventPlayers) {
+						if (audioPlayer != null) {
+							if (audioPlayer.clipEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.clipEvents, firstRealTime.realFrameTime, 0);
+							if (audioPlayer.cutoffEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.cutoffEvents, firstRealTime.realFrameTime, 0);
+							if (audioPlayer.oneShotEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.oneShotEvents, firstRealTime.realFrameTime, 0);
+							if (audioPlayer.pitchEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.pitchEvents, firstRealTime.realFrameTime, 0);
+							if (audioPlayer.volumeEvents != null) MultiplayerUtils.RemoveAudioEventsOlderThanExcept(audioPlayer.volumeEvents, firstRealTime.realFrameTime, 0);
+						}
 					}
 				}
 			} catch (Exception) { }
@@ -626,7 +660,7 @@ namespace XLMultiplayer {
 				//	}
 				//}
 				previousFinishedFrame = currentAnimationFrame;
-				if (currentAnimationFrame.replayFrameBufferObject == null) {
+				if (currentAnimationFrame.replayFrameBufferObject == currentAnimationFrame) {
 					previousFinishedFrame.replayFrameBufferObject = this.replayAnimationFrames.Find(f => f.animFrame == currentAnimationFrame.animFrame);
 				}
 				previousFinishedFrame.replayFrameBufferObject.realFrameTime = PlayTime.time;
@@ -744,7 +778,9 @@ namespace XLMultiplayer {
 				}
 			}
 
-			FinalizeReplay();
+			Traverse.Create(replayController).Property("gameplayEvents").SetValue(new List<GPEvent>());
+
+			FinalizeReplay(true);
 		}
 
 		public void FinalizeReplay(bool subtractStartTime = true) {

@@ -25,7 +25,7 @@ namespace XLMultiplayer {
 				}
 			} else if (!this.isCustom && !this.path.Equals("")) {
 				Texture texture = Resources.Load<Texture>(this.path);
-				if (texture != null && texture.width <= 4096 && texture.height <= 4096) {
+				if (texture != null) {
 					texture2D = new Texture2D(texture.width, texture.height, TextureFormat.RGB24, false);
 
 					RenderTexture currentRT = RenderTexture.active;
@@ -45,7 +45,7 @@ namespace XLMultiplayer {
 			}
 
 			if (texture2D == null) {
-				this.bytes = new byte[] { 0 };
+				this.bytes = null;
 			} else {
 				this.bytes = convertToPNG ? texture2D.EncodeToPNG() : texture2D.EncodeToJPG(80);
 			}
@@ -53,6 +53,8 @@ namespace XLMultiplayer {
 		}
 		
 		public byte[] GetSendData() {
+			if (this.bytes == null) return null;
+
 			// TODO: Update this to the full spec in MultiplayerTexture.cs
 
 			List<byte> sendBuffer = new List<byte>();

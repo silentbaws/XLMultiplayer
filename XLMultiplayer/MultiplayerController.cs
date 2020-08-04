@@ -32,8 +32,6 @@ using Valve.Sockets;
 
 // TODO: Redo the multiplayer texture system
 //			-> Send paths for non-custom gear
-//			-> Send hashes of full size textures for custom gear along with compressed texture
-//			-> Only send hashes/paths from server unless client requests texture data
 
 
 namespace XLMultiplayer {
@@ -598,10 +596,10 @@ namespace XLMultiplayer {
 				if (controller != null) {
 					controller.ApplyTextures();
 					
-					if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
+					if (replayStarted && GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)) {
 						controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;
 						controller.replayController.SetPlaybackTime(ReplayEditorController.Instance.playbackController.CurrentTime);
-						
+
 						if (controller.playerID == 255 && ((controller.replayController.ClipFrames.Last().time < ReplayEditorController.Instance.playbackController.CurrentTime && controller.skater.activeSelf) || (controller.replayController.ClipFrames.Count == 0 && controller.skater.activeSelf))) {
 							controller.skater.SetActive(false);
 							controller.board.SetActive(false);
