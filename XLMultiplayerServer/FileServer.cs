@@ -49,21 +49,6 @@ namespace XLMultiplayerServer {
 
 					if (mainServer.motdBytes != null) server.SendMessageToConnection(info.connection, mainServer.motdBytes);
 
-					foreach (Player player in mainServer.players) {
-						foreach (Plugin plugin in mainServer.loadedPlugins) {
-							if (plugin.hash != "") {
-								byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(plugin.hash);
-								byte[] hashMessage = new byte[hashBytes.Length + 2];
-
-								hashMessage[0] = (byte)OpCode.PluginHash;
-								hashMessage[1] = plugin.pluginID;
-								Array.Copy(hashBytes, 0, hashMessage, 2, hashBytes.Length);
-
-								server.SendMessageToConnection(player.connection, hashMessage, SendFlags.Reliable);
-							}
-						}
-					}
-
 				//Console.WriteLine("connected on file server");
 				} break;
 
@@ -121,6 +106,19 @@ namespace XLMultiplayerServer {
 						foreach (Player player in mainServer.players) {
 							if (player != null && player.playerID != newPlayer.playerID && player.completedGearStream) {
 								player.SendGear(newPlayer.fileConnection, server);
+							}
+						}
+	
+						foreach (Plugin plugin in mainServer.loadedPlugins) {
+							if (plugin.hash != "" && plugin.dependencyFile != "") {
+								byte[] hashBytes = ASCIIEncoding.ASCII.GetBytes(plugin.hash);
+								byte[] hashMessage = new byte[hashBytes.Length + 2];
+
+								hashMessage[0] = (byte)OpCode.PluginHash;
+								hashMessage[1] = plugin.pluginID;
+								Array.Copy(hashBytes, 0, hashMessage, 2, hashBytes.Length);
+
+								server.SendMessageToConnection(newPlayer.fileConnection, hashMessage, SendFlags.Reliable);
 							}
 						}
 					}
