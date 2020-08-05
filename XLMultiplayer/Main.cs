@@ -943,6 +943,13 @@ namespace XLMultiplayer {
 		}
 	}
 
+	[HarmonyPatch(typeof(LevelSelectionController), "Update")]
+	static class LevelSelectionControllerUpdatePatch {
+		static bool Prefix() {
+			return Main.multiplayerController == null || !Main.multiplayerController.isConnected;
+		}
+	}
+
 	[HarmonyPatch(typeof(Input), "GetKeyDown", typeof(KeyCode))]
 	static class InputKeyDownPatch {
 		static void Postfix(ref bool __result) {

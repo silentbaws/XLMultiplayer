@@ -1052,7 +1052,9 @@ namespace XLMultiplayerServer {
 				// Handle map voting and map enforcement
 				if (ENFORCE_MAPS) {
 					if (total_players == 0) {
-						currentMapHash = "2";
+						Random newRandom = new Random();
+
+						currentMapHash = newRandom.Next(0, 8).ToString();
 					}
 
 					bool startNewTimer = false;

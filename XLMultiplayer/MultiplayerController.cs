@@ -1,5 +1,6 @@
 ﻿#define VALVESOCKETS_SPAN
 
+using GameManagement;
 using HarmonyLib;
 using Newtonsoft.Json;
 using ReplayEditor;
@@ -19,6 +20,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Networking;
 using Valve.Sockets;
 
@@ -432,23 +434,41 @@ namespace XLMultiplayer {
 			while (!sendingUpdates) {
 				yield return new WaitForEndOfFrame();
 			}
-			//Load map with path
-			LevelSelectionController levelSelectionController = GameManagement.GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
-			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(true);
+
 			LevelInfo target = LevelManager.Instance.Levels.Find(level => level.path.Equals(path));
 			if (target == null) {
 				target = LevelManager.Instance.CustomLevels.Find(level => level.path.Equals(path));
 			}
-			LevelManager.Instance.LoadLevel(target);
-			StartCoroutine(CloseAfterLoad());
-			yield break;
-		}
 
-		private IEnumerator CloseAfterLoad() {
-			while (GameManagement.GameStateMachine.Instance.IsLoading) {
-				yield return new WaitForEndOfFrame();
+			yield return new WaitWhile(() => GameManagement.GameStateMachine.Instance.IsLoading);
+			if (!target.Equals(LevelManager.Instance.currentLevel)) {
+				//Load map with path
+				LevelSelectionController levelSelectionController = GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
+
+				GameStateMachine.Instance.RequestTransitionTo(typeof(PauseState));
+				GameStateMachine.Instance.RequestTransitionTo(typeof(LevelSelectionState));
+
+				IndexPath targetIndex = Traverse.Create(levelSelectionController).Method("GetIndexForLevel", target).GetValue<IndexPath>();
+				Traverse.Create(levelSelectionController).Method("OnLevelHighlighted", targetIndex).GetValue();
+
+				string texturePath = Path.ChangeExtension(target.path, "png");
+				if (!File.Exists(texturePath)) {
+					texturePath = Path.ChangeExtension(target.path, "jpg");
+				}
+				if (!File.Exists(texturePath)) {
+					texturePath = Path.ChangeExtension(target.path, "jpeg");
+				}
+
+				if (File.Exists(texturePath)) {
+					yield return new WaitWhile(() => target.previewImage == null);
+				}
+
+				levelSelectionController.OnItemSelected(targetIndex);
+
+				yield return new WaitWhile(() => GameStateMachine.Instance.IsLoading);
+
+				PlayerController.Instance.respawn.ForceRespawn();
 			}
-			GameManagement.GameStateMachine.Instance.LevelSelectionObject.SetActive(false);
 			yield break;
 		}
 
