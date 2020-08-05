@@ -457,9 +457,13 @@ namespace XLMultiplayer {
 
 		private static void ClickServerItem(ServerListItem target) {
 			if(!serverClickWatch.IsRunning || serverClickWatch.Elapsed.TotalMilliseconds > 1000f) {
-				UnityModManager.Logger.Log($"Attempting to connect to server {target.ServerName.text} with ip {target.ipAddress} port {target.port}");
-				JoinServer(target.ipAddress, target.port, NewMultiplayerMenu.Instance.usernameFields[0].text);
-				serverClickWatch.Restart();
+				if (target.ServerVersion.text.Trim().ToLower().Equals(modEntry.Version.ToString())) {
+					UnityModManager.Logger.Log($"Attempting to connect to server {target.ServerName.text} with ip {target.ipAddress} port {target.port}");
+					JoinServer(target.ipAddress, target.port, NewMultiplayerMenu.Instance.usernameFields[0].text);
+					serverClickWatch.Restart();
+				} else {
+					utilityMenu.SendImportantChat($"<color=#f22><b>Unable to connect to server because it's version {target.ServerVersion.text} does not match client version {modEntry.Version.ToString()}</b></color>", 15000);
+				}
 			}
 		}
 
@@ -609,7 +613,7 @@ namespace XLMultiplayer {
 	}
 
 	[HarmonyPatch(typeof(ReplayEditorController), "OnDisable")]
-	static class MultiplayReplayDisablePatch {
+	static class Multiplay34ReplayDisablePatch {
 		static void Prefix() {
 			if (Main.multiplayerController != null) {
 				foreach (MultiplayerRemotePlayerController controller in Main.multiplayerController.remoteControllers) {
@@ -639,7 +643,7 @@ namespace XLMultiplayer {
 	}
 
 	[HarmonyPatch(typeof(ReplayEditorController), "Update")]
-	static class MultiplayReplayUpdatePatch {
+	static class MultiplayerReplayUpdatePatch {
 		static void Postfix(ReplayEditorController __instance) {
 			foreach (MultiplayerRemotePlayerController controller in Main.remoteReplayControllers) {
 				controller.replayController.TimeScale = ReplayEditorController.Instance.playbackController.TimeScale;

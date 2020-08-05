@@ -165,16 +165,18 @@ namespace XLMultiplayer {
 			}
 
 			chatStyle2.wordWrap = true;
-			if (Main.multiplayerController.chatMessages != null && Main.multiplayerController.chatMessages.Count > 0) {
-				int difference = Main.multiplayerController.chatMessages.Count - previousMessageCount;
-				float scrollDifference = 0f;
-				for (int i = Main.multiplayerController.chatMessages.Count - difference; i < Main.multiplayerController.chatMessages.Count; i++) {
-					chat += Main.multiplayerController.chatMessages[i] + "\n";
-					scrollDifference += chatStyle2.CalcHeight(new GUIContent(Main.multiplayerController.chatMessages[i]), chatWindowRect.width - 26) / chatStyle2.CalcHeight(new GUIContent("a"), chatWindowRect.width - 26) * chatStyle2.lineHeight;
+			if (Main.multiplayerController != null) {
+				if (Main.multiplayerController.chatMessages != null && Main.multiplayerController.chatMessages.Count > 0) {
+					int difference = Main.multiplayerController.chatMessages.Count - previousMessageCount;
+					float scrollDifference = 0f;
+					for (int i = Main.multiplayerController.chatMessages.Count - difference; i < Main.multiplayerController.chatMessages.Count; i++) {
+						chat += Main.multiplayerController.chatMessages[i] + "\n";
+						scrollDifference += chatStyle2.CalcHeight(new GUIContent(Main.multiplayerController.chatMessages[i]), chatWindowRect.width - 26) / chatStyle2.CalcHeight(new GUIContent("a"), chatWindowRect.width - 26) * chatStyle2.lineHeight;
+					}
+					previousMessageCount = Main.multiplayerController.chatMessages.Count;
+					if (chatStyle2.CalcHeight(new GUIContent(chat), chatWindowRect.width - 26) > chatWindowRect.height - 43)
+						chatScrollPosition.y += scrollDifference;
 				}
-				previousMessageCount = Main.multiplayerController.chatMessages.Count;
-				if (chatStyle2.CalcHeight(new GUIContent(chat), chatWindowRect.width - 26) > chatWindowRect.height - 43)
-					chatScrollPosition.y += scrollDifference;
 			}
 
 			// Create the chat window
