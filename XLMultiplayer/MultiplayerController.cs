@@ -463,6 +463,10 @@ namespace XLMultiplayer {
 					yield return new WaitWhile(() => target.previewImage == null);
 				}
 
+				//levelSelectionController.listView.UpdateList(targetIndex.Up());
+
+				//yield return new WaitForSeconds(0.5f);
+
 				levelSelectionController.OnItemSelected(targetIndex);
 
 				yield return new WaitWhile(() => GameStateMachine.Instance.IsLoading);
@@ -704,6 +708,7 @@ namespace XLMultiplayer {
 			lastAliveTime = recentTimeSinceStartup;
 			while (this.playerController != null) {
 				if(client != null) {
+					SpinWait.SpinUntil(() => !isConnected, 6);
 					client.DispatchCallback(status);
 
 					if (debugCallbackDelegate != null)
@@ -977,21 +982,22 @@ namespace XLMultiplayer {
 
 		private void DecompressSoundAnimationQueue() {
 			while (playerController != null) {
-				if (!CompressedSounds.IsEmpty) {
-					Tuple<byte, byte[]> CurrentSound;
-					if (CompressedSounds.TryDequeue(out CurrentSound)) {
-						byte[] soundData = Decompress(CurrentSound.Item2, 1, CurrentSound.Item2.Length - 2);
+				SpinWait.SpinUntil(() => !CompressedSounds.IsEmpty || !CompressedAnimations.IsEmpty || playerController == null);
 
-						DecompressedSounds.Enqueue(Tuple.Create(CurrentSound.Item1, soundData));
-					}
+				if (playerController == null) break;
+
+				Tuple<byte, byte[]> CurrentSound;
+				if (CompressedSounds.TryDequeue(out CurrentSound)) {
+					byte[] soundData = Decompress(CurrentSound.Item2, 1, CurrentSound.Item2.Length - 2);
+
+					DecompressedSounds.Enqueue(Tuple.Create(CurrentSound.Item1, soundData));
 				}
-				if (!CompressedAnimations.IsEmpty) {
-					Tuple<byte, byte[]> CurrentAnimation;
-					if (CompressedAnimations.TryDequeue(out CurrentAnimation)) {
-						byte[] animationData = Decompress(CurrentAnimation.Item2, 5, CurrentAnimation.Item2.Length - 6, CurrentAnimation.Item2, 1, 4);
+
+				Tuple<byte, byte[]> CurrentAnimation;
+				if (CompressedAnimations.TryDequeue(out CurrentAnimation)) {
+					byte[] animationData = Decompress(CurrentAnimation.Item2, 5, CurrentAnimation.Item2.Length - 6, CurrentAnimation.Item2, 1, 4);
 						
-						DecompressedAnimations.Enqueue(Tuple.Create(CurrentAnimation.Item1, animationData));
-					}
+					DecompressedAnimations.Enqueue(Tuple.Create(CurrentAnimation.Item1, animationData));
 				}
 			}
 		}

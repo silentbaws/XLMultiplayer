@@ -993,7 +993,9 @@ namespace XLMultiplayerServer {
 
 			NetworkingMessage[] netMessages = new NetworkingMessage[maxMessages];
 #endif
+			Stopwatch serverLoopTime = new Stopwatch();
 			while (RUNNING) {
+				serverLoopTime.Restart();
 				GC.KeepAlive(status);
 				GC.KeepAlive(messageCallback);
 
@@ -1102,6 +1104,8 @@ namespace XLMultiplayerServer {
 				foreach (Plugin plugin in loadedPlugins) {
 					plugin.currentMap = currentMapHash;
 				}
+
+				SpinWait.SpinUntil(() => serverLoopTime.Elapsed.TotalMilliseconds > 1f / 30f * 1000, 33);
 			}
 
 			Library.Deinitialize();
