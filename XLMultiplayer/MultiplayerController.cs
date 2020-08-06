@@ -435,18 +435,15 @@ namespace XLMultiplayer {
 				yield return new WaitForEndOfFrame();
 			}
 
-			LevelInfo target = LevelManager.Instance.Levels.Find(level => level.path.Equals(path));
+			LevelInfo target = LevelManager.Instance.Levels.Find(level => level.path.Trim().Equals(path.Trim(), StringComparison.CurrentCultureIgnoreCase));
 			if (target == null) {
-				target = LevelManager.Instance.CustomLevels.Find(level => level.path.Equals(path));
+				target = LevelManager.Instance.CustomLevels.Find(level => level.path.Trim().Equals(path.Trim(), StringComparison.CurrentCultureIgnoreCase));;
 			}
 
-			yield return new WaitWhile(() => GameManagement.GameStateMachine.Instance.IsLoading);
+			yield return new WaitWhile(() => GameStateMachine.Instance.IsLoading);
 			if (!target.Equals(LevelManager.Instance.currentLevel)) {
 				//Load map with path
 				LevelSelectionController levelSelectionController = GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
-
-				GameStateMachine.Instance.RequestTransitionTo(typeof(PauseState));
-				GameStateMachine.Instance.RequestTransitionTo(typeof(LevelSelectionState));
 
 				IndexPath targetIndex = Traverse.Create(levelSelectionController).Method("GetIndexForLevel", target).GetValue<IndexPath>();
 				Traverse.Create(levelSelectionController).Method("OnLevelHighlighted", targetIndex).GetValue();
@@ -462,10 +459,6 @@ namespace XLMultiplayer {
 				if (File.Exists(texturePath)) {
 					yield return new WaitWhile(() => target.previewImage == null);
 				}
-
-				//levelSelectionController.listView.UpdateList(targetIndex.Up());
-
-				//yield return new WaitForSeconds(0.5f);
 
 				levelSelectionController.OnItemSelected(targetIndex);
 
@@ -487,6 +480,12 @@ namespace XLMultiplayer {
 				GC.KeepAlive(DecompressedSounds);
 				GC.KeepAlive(CompressedAnimations);
 				GC.KeepAlive(DecompressedAnimations);
+			}
+
+			if (GameStateMachine.Instance.CurrentState.GetType().Equals(typeof(PauseState))) {
+				if (GameStateMachine.Instance.CurrentState.CanDoTransitionTo(typeof(ChallengeSelectionState))) {
+					Traverse.Create(GameStateMachine.Instance.CurrentState).Field("availableTransitions").SetValue(new Type[] { typeof(PlayState), typeof(ReplayMenuState), typeof(SettingsState) });
+				}
 			}
 			
 			if (initiatingServerConnection) {
@@ -829,6 +828,7 @@ namespace XLMultiplayer {
 					MultiplayerRemotePlayerController remoteOwner = remoteControllers.Find((p) => { return p.playerID == playerID; });
 					if (remoteOwner == null) {
 						this.debugWriter.WriteLine("Texture owner not found");
+						break;
 					}
 
 					byte[] newBuffer = new byte[buffer.Length - 2];
@@ -1258,6 +1258,10 @@ namespace XLMultiplayer {
 				plugin.TogglePlugin(false);
 			}
 
+			if (usernameThread != null && usernameThread.IsAlive) usernameThread.Join();
+			if (networkMessageThread != null && networkMessageThread.IsAlive) networkMessageThread.Join();
+			if (decompressionThread != null && decompressionThread.IsAlive) decompressionThread.Join();
+
 			if (client != null) client.CloseConnection(connection);
 			if (fileClient != null) fileClient.CloseConnection(fileConnection);
 
@@ -1277,10 +1281,6 @@ namespace XLMultiplayer {
 				}
 				Directory.Delete(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\Temp");
 			}
-			
-			if (usernameThread != null && usernameThread.IsAlive) usernameThread.Abort();
-			if (networkMessageThread != null && networkMessageThread.IsAlive) networkMessageThread.Abort();
-			if (decompressionThread != null && decompressionThread.IsAlive) decompressionThread.Abort();
 
 			this.debugWriter.Close();
 			this.debugWriter.Dispose();

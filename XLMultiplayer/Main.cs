@@ -613,7 +613,7 @@ namespace XLMultiplayer {
 	}
 
 	[HarmonyPatch(typeof(ReplayEditorController), "OnDisable")]
-	static class Multiplay34ReplayDisablePatch {
+	static class MultiplayerReplayDisablePatch {
 		static void Prefix() {
 			if (Main.multiplayerController != null) {
 				foreach (MultiplayerRemotePlayerController controller in Main.multiplayerController.remoteControllers) {
@@ -638,7 +638,7 @@ namespace XLMultiplayer {
 	[HarmonyPatch(typeof(ReplayPlaybackController), "Update")]
 	static class MultiplayerPlaybackUpdatePatch {
 		static bool Prefix(ReplayPlaybackController __instance) {
-			return __instance == ReplayEditorController.Instance.playbackController;
+			return __instance == ReplayEditorController.Instance.playbackController || !GameManagement.GameStateMachine.Instance.CurrentState.GetType().Equals(typeof(GameManagement.ReplayState));
 		}
 	}
 
@@ -944,6 +944,13 @@ namespace XLMultiplayer {
 			Traverse.Create(__instance).Property("audioSource").GetValue<AudioSource>().volume = audioVolumeEvent.volume * Main.settings.volumeMultiplier;
 
 			return false;
+		}
+	}
+
+	[HarmonyPatch(typeof(ReplayListViewController), "OnItemSelected")]
+	static class ReplayLoadFromFilePatch {
+		static bool Prefix() {
+			return Main.multiplayerController == null;
 		}
 	}
 
