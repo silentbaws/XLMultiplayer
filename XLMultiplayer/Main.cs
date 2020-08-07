@@ -916,11 +916,17 @@ namespace XLMultiplayer {
 
 	[HarmonyPatch(typeof(AudioSource), "PlayOneShot", new Type[] { typeof(AudioClip), typeof(float) })]
 	static class PlayOneShotPatch {
+		private static List<AudioSource> localAudioSources = new List<AudioSource>();
 		private static bool Prefix(AudioSource __instance, float volumeScale) {
 			bool isLocal = false;
 
-			foreach (ReplayAudioEventPlayer player in ReplayEditorController.Instance.playbackController.AudioEventPlayers) {
-				if (__instance == Traverse.Create(player).Property("audioSource").GetValue() as ReplayAudioEventPlayer) {
+			if (localAudioSources.Count < 1) {
+				foreach (ReplayAudioEventPlayer player in ReplayEditorController.Instance.playbackController.AudioEventPlayers) {
+					localAudioSources.Add(Traverse.Create(player).Property("audioSource").GetValue<AudioSource>());
+				}
+			}
+			foreach(AudioSource audioSource in localAudioSources) {
+				if (__instance == audioSource) {
 					isLocal = true;
 					break;
 				}
@@ -934,14 +940,14 @@ namespace XLMultiplayer {
 
 	[HarmonyPatch(typeof(ReplayAudioEventPlayer), "DoVolumeEventAt")]
 	static class VolumeEventPatch {
-		private static bool Prefix(ReplayAudioEventPlayer __instance, int index) {
+		private static bool Prefix(ReplayAudioEventPlayer __instance, int index, ref int ___lastVolumeEventIndex, ref AudioSource ___m_AudioSource) {
 			if (ReplayEditorController.Instance.playbackController.AudioEventPlayers.Contains(__instance)) {
 				return true;
 			}
 
-			Traverse.Create(__instance).Field("lastVolumeEventIndex").SetValue(index);
+			___lastVolumeEventIndex = index;
 			AudioVolumeEvent audioVolumeEvent = __instance.volumeEvents[index];
-			Traverse.Create(__instance).Property("audioSource").GetValue<AudioSource>().volume = audioVolumeEvent.volume * Main.settings.volumeMultiplier;
+			___m_AudioSource.volume = audioVolumeEvent.volume * Main.settings.volumeMultiplier;
 
 			return false;
 		}

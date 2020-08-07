@@ -141,7 +141,7 @@ namespace XLMultiplayerServer {
 				server.DispatchCallback(status);
 
 				server.ReceiveMessagesOnPollGroup(pollGroup, messageCallback, 256);
-				SpinWait.SpinUntil(() => fileServerLoopTime.Elapsed.TotalMilliseconds > 1f / 30f * 1000, 33);
+				SpinWait.SpinUntil(() => fileServerLoopTime.Elapsed.TotalMilliseconds >= 1, 1);
 			}
 		}
 	}

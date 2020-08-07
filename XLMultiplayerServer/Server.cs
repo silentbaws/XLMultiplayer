@@ -1105,7 +1105,7 @@ namespace XLMultiplayerServer {
 					plugin.currentMap = currentMapHash;
 				}
 
-				SpinWait.SpinUntil(() => serverLoopTime.Elapsed.TotalMilliseconds > 1f / 30f * 1000, 33);
+				SpinWait.SpinUntil(() => serverLoopTime.Elapsed.TotalMilliseconds >= 1, 1);
 			}
 
 			Library.Deinitialize();

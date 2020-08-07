@@ -503,7 +503,17 @@ namespace XLMultiplayer {
 
 			if (GameStateMachine.Instance.CurrentState.GetType().Equals(typeof(PauseState))) {
 				if (GameStateMachine.Instance.CurrentState.CanDoTransitionTo(typeof(ChallengeSelectionState))) {
-					Traverse.Create(GameStateMachine.Instance.CurrentState).Field("availableTransitions").SetValue(new Type[] { typeof(PlayState), typeof(ReplayMenuState), typeof(SettingsState) });
+					Type[] allowedTransitions = null;
+					if (MultiplayerUtils.serverMapDictionary.Count == 0) {
+						allowedTransitions = new Type[4];
+						allowedTransitions[3] = typeof(LevelSelectionState);
+					} else {
+						allowedTransitions = new Type[3];
+					}
+					allowedTransitions[0] = typeof(PlayState);
+					allowedTransitions[1] = typeof(ReplayMenuState);
+					allowedTransitions[2] = typeof(SettingsState);
+					Traverse.Create(GameStateMachine.Instance.CurrentState).Field("availableTransitions").SetValue( allowedTransitions );
 				}
 			}
 			
@@ -578,11 +588,6 @@ namespace XLMultiplayer {
 			}
 
 			recentTimeSinceStartup = Time.realtimeSinceStartup;
-
-			// Don't allow use of map selection
-			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.LevelSelectionState) && MultiplayerUtils.serverMapDictionary.Count > 0 && isConnected) {
-				GameManagement.GameStateMachine.Instance.RequestPlayState();
-			}
 
 			StateManagementTime = FrameWatch.Elapsed.TotalMilliseconds;
 			
