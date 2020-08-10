@@ -14,14 +14,11 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.Networking;
 using Valve.Sockets;
 
 // TODO: game of skate.... maybe?
@@ -113,8 +110,6 @@ namespace XLMultiplayer {
 		private bool sendingUpdates = false;
 		private float timeSinceLastUpdate = 0.0f;
 		
-		private int alivePacketCount = 0;
-		private int receivedAlivePackets = 0;
 		private float lastAliveTime = 0;
 
 		private float statisticsResetTime = 0.0f;
@@ -554,7 +549,7 @@ namespace XLMultiplayer {
 				usernameMessage = null;
 			}
 
-			if (GameManagement.GameStateMachine.Instance.CurrentState.GetType() != typeof(GameManagement.ReplayState)) {
+			if (GameStateMachine.Instance.CurrentState.GetType() != typeof(ReplayState)) {
 				if (replayStarted) {
 					foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
 						if (controller.playerID == 255) {
@@ -730,8 +725,8 @@ namespace XLMultiplayer {
 			statisticsResetTime = recentTimeSinceStartup;
 			lastAliveTime = recentTimeSinceStartup;
 			while (this.playerController != null) {
-				if(client != null) {
-					SpinWait.SpinUntil(() => !isConnected, 6);
+				SpinWait.SpinUntil(() => !isConnected, 6);
+				if (client != null) {
 					client.DispatchCallback(status);
 
 					if (debugCallbackDelegate != null)
@@ -752,7 +747,6 @@ namespace XLMultiplayer {
 						SendBytesRaw(message, false, true);
 						SendBytesRaw(message, false, true, false, true);
 
-						alivePacketCount++;
 						sentAlive10Seconds++;
 						lastAliveTime = recentTimeSinceStartup;
 					}
@@ -903,7 +897,6 @@ namespace XLMultiplayer {
 					if (inboundConnection == connection) {
 						float sentTime = BitConverter.ToSingle(buffer, 1);
 						pingTimes.Add(Time.realtimeSinceStartup - sentTime);
-						receivedAlivePackets++;
 						receivedAlive10Seconds++;
 					}
 					break;

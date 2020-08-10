@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Remoting.Messaging;
 using System.Text;
 using UnityEngine;
 
@@ -744,7 +745,7 @@ namespace XLMultiplayer {
 		public void PrepareReplay() {
 			this.recordedFrames.Clear();
 
-			this.replayAnimationFrames = this.replayAnimationFrames.OrderBy(f => f.animFrame).ToList();
+			this.replayAnimationFrames = this.replayAnimationFrames.OrderBy(f => f.animFrame).ToList().ToList();
 
 			if (replayAnimationFrames == null || replayAnimationFrames.Count == 0) return;
 
@@ -776,24 +777,46 @@ namespace XLMultiplayer {
 
 				TransformInfo[] transforms = null;
 
-				if (previousFrame != null && !frame.key) {
+				if (previousFrame != null && !frame.key && this.replayAnimationFrames[f - 1].animFrame != frame.animFrame) {
+					if (this.replayAnimationFrames[f - 1].animFrame != frame.animFrame - 1) {
+						MultiplayerFrameBufferObject nextKeyFrame = this.replayAnimationFrames.FirstOrDefault(nK => nK.animFrame > frame.animFrame);
+						int framesToInterpolate = frame.animFrame - this.replayAnimationFrames[f - 1].animFrame;
+						if (nextKeyFrame != null && nextKeyFrame.realFrameTime != -1f) {
+							int frameDiff = frame.animFrame - nextKeyFrame.animFrame;
+							for (int i = 1; i < framesToInterpolate; i++) {
+								Vector3[] interpolatedVectors = new Vector3[frame.vectors.Length];
+								Quaternion[] interpolatedQuaternions = new Quaternion[frame.vectors.Length];
+								for (int c = 0; c < frame.vectors.Length; c++) {
+									interpolatedVectors[c] = Vector3.Lerp(this.replayAnimationFrames[f - 1].vectors[c], nextKeyFrame.vectors[c], c / frameDiff);
+									interpolatedQuaternions[c] = Quaternion.Slerp(this.replayAnimationFrames[f - 1].quaternions[c], nextKeyFrame.quaternions[c], c / frameDiff);
+								}
+
+								float frameTime = this.replayAnimationFrames[f - 1].realFrameTime + (i / frameDiff) * (nextKeyFrame.frameTime - this.replayAnimationFrames[f - 1].realFrameTime);
+
+								this.recordedFrames.Add(new ReplayRecordedFrame(CreateInfoArray(interpolatedVectors, interpolatedQuaternions), frameTime));
+
+								previousFrame = this.recordedFrames.Last();
+							}
+						}
+					}
+
 					Vector3[] vectors = new Vector3[frame.vectors.Length];
 					Quaternion[] quaternions = new Quaternion[frame.vectors.Length];
-					for(int i = 0; i < frame.vectors.Length; i++) {
+					for (int i = 0; i < frame.vectors.Length; i++) {
 						vectors[i] = previousFrame.transformInfos[i].position + frame.vectors[i];
 						quaternions[i].eulerAngles = previousFrame.transformInfos[i].rotation.eulerAngles + frame.quaternions[i].eulerAngles;
 					}
 
 					transforms = CreateInfoArray(vectors, quaternions);
-				}else if (frame.key) {
+				}else if (frame.key && (f != 0 && frame.animFrame != this.replayAnimationFrames[f - 1].animFrame)) {
 					transforms = BufferToInfo(frame);
 				}
 
-				if(frame.realFrameTime == -1f && f > 0) {
+				if (frame.realFrameTime == -1f && f > 0) {
 					frame.realFrameTime = this.replayAnimationFrames[f - 1].realFrameTime + (frame.animFrame - this.replayAnimationFrames[f - 1].animFrame) * (1f / 30f);
 				}
 
-				if(transforms != null) {
+				if (transforms != null && frame.realFrameTime != -1f) {
 					this.recordedFrames.Add(new ReplayRecordedFrame(transforms, frame.realFrameTime));
 
 					previousFrame = this.recordedFrames.Last();

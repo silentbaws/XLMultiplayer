@@ -628,10 +628,12 @@ namespace XLMultiplayer {
 				Main.debugWriter.Close();
 			}
 
-			foreach (MultiplayerRemotePlayerController controller in Main.remoteReplayControllers) {
-				controller.Destroy();
+			if (Main.remoteReplayControllers != null) {
+				foreach (MultiplayerRemotePlayerController controller in Main.remoteReplayControllers) {
+					controller.Destroy();
+				}
+				Main.remoteReplayControllers.Clear();
 			}
-			Main.remoteReplayControllers.Clear();
 		}
 	}
 
@@ -917,7 +919,7 @@ namespace XLMultiplayer {
 	[HarmonyPatch(typeof(AudioSource), "PlayOneShot", new Type[] { typeof(AudioClip), typeof(float) })]
 	static class PlayOneShotPatch {
 		private static List<AudioSource> localAudioSources = new List<AudioSource>();
-		private static bool Prefix(AudioSource __instance, float volumeScale) {
+		private static bool Prefix(AudioSource __instance, ref float volumeScale) {
 			bool isLocal = false;
 
 			if (localAudioSources.Count < 1) {
@@ -964,6 +966,15 @@ namespace XLMultiplayer {
 	static class LevelSelectionControllerUpdatePatch {
 		static bool Prefix() {
 			return Main.multiplayerController == null || !Main.multiplayerController.isConnected;
+		}
+	}
+
+	[HarmonyPatch(typeof(PlayTime))]
+	[HarmonyPatch("time", MethodType.Getter)]
+	class PlayTime_timePatch {
+		public static bool Prefix(ref float __result) {
+			__result = Time.time;
+			return false;
 		}
 	}
 
