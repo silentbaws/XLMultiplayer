@@ -40,7 +40,7 @@ namespace XLMultiplayerServer {
 		Disconnect = 255
 	}
 
-	public delegate void LogMessage(string message, ConsoleColor textColor, params object[] objects);
+	public delegate void LogMessage(string message, ConsoleColor textColor);
 	public delegate void LogChatMessage(string message);
 	
 	public class Server {
@@ -111,9 +111,9 @@ namespace XLMultiplayerServer {
 
 		public List<Plugin> loadedPlugins { private set; get; } = new List<Plugin>();
 
-		public void DefaultMessageCallback(string message, ConsoleColor textColor, params object[] objects) {
+		public void DefaultMessageCallback(string message, ConsoleColor textColor) {
 			Console.ForegroundColor = textColor;
-			Console.WriteLine(message, objects);
+			Console.WriteLine(message);
 			Console.ForegroundColor = ConsoleColor.White;
 		}
 
@@ -198,7 +198,7 @@ namespace XLMultiplayerServer {
 					LogMessageCallback("Finished hashing maps", ConsoleColor.White);
 				}
 			} else {
-				LogMessageCallback("\nWARNING: FAILED TO FIND MAPS DIRECTORY \"{0}\" SO ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n", ConsoleColor.Yellow, mapsDir);
+				LogMessageCallback($"\nWARNING: FAILED TO FIND MAPS DIRECTORY \"{mapsDir}\" SO ONLY COURTHOUSE AND CALIFORNIA WILL BE USED\n", ConsoleColor.Yellow);
 			}
 
 			foreach (Plugin plugin in loadedPlugins) {
@@ -254,7 +254,7 @@ namespace XLMultiplayerServer {
 					int kickID = -1;
 					if (Int32.TryParse(kickIDString, out kickID)) {
 						if (players[kickID] != null) {
-							LogMessageCallback("Kicking player {0}", ConsoleColor.White, kickID);
+							LogMessageCallback($"Kicking player {kickID}", ConsoleColor.White);
 							RemovePlayer(players[kickID].connection, kickID, true);
 						}
 					} else {
@@ -549,7 +549,8 @@ namespace XLMultiplayerServer {
 							vote = mapList.ContainsKey(vote) && mapList[vote].Equals(currentMapHash) ? "current" : vote;
 							players[fromID].currentVote = vote;
 
-							LogMessageCallback("{0} voted for the map {1}", ConsoleColor.White, fromID, mapList.ContainsKey(vote) ? mapList[vote] : vote);
+							string secondArg = mapList.ContainsKey(vote) ? mapList[vote] : vote;
+							LogMessageCallback($"{fromID} voted for the map {secondArg}", ConsoleColor.White);
 						}
 					}
 					break;
@@ -622,7 +623,7 @@ namespace XLMultiplayerServer {
 						LogMessageCallback("connecting on game server", ConsoleColor.White);
 
 						if (bannedIPs.Contains(info.connectionInfo.address.GetIP())) {
-							LogMessageCallback("Ban player attempted to connect to the server, IP: {0}", ConsoleColor.White, info.connectionInfo.address.GetIP());
+							LogMessageCallback($"Ban player attempted to connect to the server, IP: {info.connectionInfo.address.GetIP()}", ConsoleColor.White);
 							server.CloseConnection(info.connection);
 						} else {
 							server.AcceptConnection(info.connection);
@@ -728,7 +729,7 @@ namespace XLMultiplayerServer {
 
 		public void BanPlayer(int banID) {
 			if (players[banID] != null) {
-				LogMessageCallback("Banning player {0} IP {1}", ConsoleColor.White, banID, players[banID].ipAddr.GetIP());
+				LogMessageCallback($"Banning player {banID} IP {players[banID].ipAddr.GetIP()}", ConsoleColor.White);
 				bannedIPs.Add(players[banID].ipAddr.GetIP());
 				RemovePlayer(players[banID].connection, banID, true);
 
@@ -742,7 +743,7 @@ namespace XLMultiplayerServer {
 		}
 
 		public void RemoveBan(string ip) {
-			LogMessageCallback("Removing ban for IP {0}", ConsoleColor.White, ip);
+			LogMessageCallback($"Removing ban for IP {ip}", ConsoleColor.White);
 			bannedIPs.Remove(ip);
 
 			string ipBanString = "";
@@ -962,7 +963,7 @@ namespace XLMultiplayerServer {
 			NetworkingUtils utils = new NetworkingUtils();
 
 			utils.SetDebugCallback(DebugType.Important, (type, message) => {
-				LogMessageCallback("Valve Debug - Type: {0}, Message: {1}", ConsoleColor.White, type, message);
+				LogMessageCallback($"Valve Debug - Type: {type}, Message: {message}", ConsoleColor.White);
 			});
 			
 			address.SetAddress("::0", port);
@@ -1214,7 +1215,7 @@ namespace XLMultiplayerServer {
 				}
 			}
 
-			LogMessageCallback("Connection {0}'s username is {1}", ConsoleColor.White, fromID, RemoveMarkup(username));
+			LogMessageCallback($"Connection {fromID}'s username is {RemoveMarkup(username)}", ConsoleColor.White);
 
 			if (players[fromID] != null) {
 				players[fromID].username = username;

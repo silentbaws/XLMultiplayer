@@ -53,17 +53,15 @@ namespace XLMultiplayer {
 		}
 		
 		public byte[] GetSendData() {
-			if (this.bytes == null) return null;
-
-			// TODO: Update this to the full spec in MultiplayerTexture.cs
+			if (this.bytes == null && isCustom) return null;
 
 			List<byte> sendBuffer = new List<byte>();
 
-			//sendBuffer[0] = isCustom ? (byte)1 : (byte)0;
-			sendBuffer.Add(1);
+			sendBuffer.Add(isCustom ? (byte)1 : (byte)0);
+			//sendBuffer.Add(1);
 			sendBuffer.Add((byte)infoType);
 
-			if (isCustom || true) {
+			if (isCustom) {
 				byte[] typeString = Encoding.UTF8.GetBytes(this.textureType);
 				byte[] typeLen = BitConverter.GetBytes((ushort)typeString.Length);
 				byte[] dataLen = BitConverter.GetBytes(this.bytes.Length);
@@ -72,6 +70,16 @@ namespace XLMultiplayer {
 				sendBuffer.AddRange(dataLen);
 				sendBuffer.AddRange(typeString);
 				sendBuffer.AddRange(this.bytes);
+			} else {
+				byte[] typeString = Encoding.UTF8.GetBytes(this.textureType);
+				byte[] gearPath = Encoding.UTF8.GetBytes(this.path);
+				byte[] typeLen = BitConverter.GetBytes((ushort)typeString.Length);
+				byte[] dataLen = BitConverter.GetBytes(gearPath.Length);
+
+				sendBuffer.AddRange(typeLen);
+				sendBuffer.AddRange(dataLen);
+				sendBuffer.AddRange(typeString);
+				sendBuffer.AddRange(gearPath);
 			}
 
 			return sendBuffer.ToArray();

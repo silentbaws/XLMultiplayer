@@ -242,30 +242,61 @@ namespace XLMultiplayer {
 			UnityModManagerNet.UnityModManager.Logger.Log($"Attempting to equip body with name length {bodyTypeLen} and name: {bodyType}!");
 
 			int readBytes = 2 + bodyTypeLen;
+
+			GearInfo[][][] allInfos = Traverse.Create(GearDatabase.Instance).Field("gearListSource").GetValue<GearInfo[][][]>();
+
 			while (readBytes < textureStream.Length - 1) {
 				UnityModManagerNet.UnityModManager.Logger.Log($"Read {readBytes} bytes of {textureStream.Length}");
 				bool customTex = textureStream[readBytes] == 1 ? true : false;
 				GearInfoType texInfotype = (GearInfoType)textureStream[readBytes + 1];
 
 				readBytes += 2;
+				ushort typeLen = BitConverter.ToUInt16(textureStream, readBytes);
+				int dataLen = BitConverter.ToInt32(textureStream, readBytes + 2);
+
+				string texType = Encoding.UTF8.GetString(textureStream, readBytes + 6, typeLen);
+				readBytes += 6 + typeLen;
+				string gearPath = "";
+				byte[] texData = null;
+				MultiplayerRemoteTexture newTexture = null;
 				if (customTex) {
-					ushort typeLen = BitConverter.ToUInt16(textureStream, readBytes);
-					int dataLen = BitConverter.ToInt32(textureStream, readBytes + 2);
-
-					string texType = Encoding.UTF8.GetString(textureStream, readBytes + 6, typeLen);
-					readBytes += 6 + typeLen;
-
-					byte[] texData = new byte[dataLen];
+					texData = new byte[dataLen];
 					Array.Copy(textureStream, readBytes, texData, 0, dataLen);
 					readBytes += dataLen;
 
-					MultiplayerRemoteTexture newTexture = new MultiplayerRemoteTexture(customTex, "", texType, texInfotype, this.debugWriter);
-					multiplayerTextures.Add(newTexture);
-					newTexture.SaveTexture(this.playerID, texData);
+					newTexture = new MultiplayerRemoteTexture(customTex, gearPath, texType, texInfotype, this.debugWriter);
+				} else {
+					gearPath = Encoding.UTF8.GetString(textureStream, readBytes, dataLen);
+					readBytes += dataLen;
+
+
+					newTexture = new MultiplayerRemoteTexture(GetGearInfoFromPath(gearPath, allInfos), customTex, this.debugWriter);
+					newTexture.textureType = texType;
+					newTexture.infoType = texInfotype;
 				}
+
+				multiplayerTextures.Add(newTexture);
+				newTexture.SaveTexture(this.playerID, texData);
 			}
 
 			receivedTextures = true;
+		}
+
+		public GearInfo GetGearInfoFromPath(string path, GearInfo[][][] allInfos) {
+			for (int i = 0; i < allInfos.Length; i++) {
+				for (int j = 0; j < allInfos[i].Length; j++) {
+					foreach (GearInfo info in allInfos[i][j]) {
+						foreach (MaterialChange change in info.GetMaterialChanges()) {
+							foreach (TextureChange texChange in change.textureChanges) {
+								if (texChange.texturePath.Equals(path, StringComparison.CurrentCultureIgnoreCase)) {
+									return info;
+								}
+							}
+						}
+					}
+				}
+			}
+			return null;
 		}
 
 		public void ApplyTextures() {
@@ -289,53 +320,61 @@ namespace XLMultiplayer {
 					}
 				}
 
-				bool loadedBodyInfo = false;
-
 				foreach (MultiplayerRemoteTexture mpTex in multiplayerTextures) {
 					if (mpTex.saved && !mpTex.loaded && !(mpTex.infoType == GearInfoType.Body)) {
 						mpTex.LoadFromFileMainThread(this);
 					} else if (mpTex.saved && !mpTex.loaded && mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase)) {
 						MultiplayerRemoteTexture bodyTex = multiplayerTextures.Find((t) => t.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase));
-						if (bodyTex != null) {
+						if (bodyTex != null || !mpTex.isCustom) {
 							UnityModManagerNet.UnityModManager.Logger.Log($"Updating body textures for {this.bodyType} id: {this.playerID}");
 
 							bodyTex.loaded = true;
 							mpTex.loaded = true;
 
-							TextureChange[] headChange = { new TextureChange("albedo", mpTex.fileLocation) };
-							TextureChange[] bodyChange = { new TextureChange("albedo", bodyTex.fileLocation) };
+							if (mpTex.isCustom) {
+								TextureChange[] headChange = { new TextureChange("albedo", mpTex.path) };
+								TextureChange[] bodyChange = { new TextureChange("albedo", bodyTex.path) };
 
-							List<MaterialChange> materialChanges = new List<MaterialChange>();
-							materialChanges.Add(new MaterialChange("body", bodyChange));
-							materialChanges.Add(new MaterialChange("head", headChange));
+								List<MaterialChange> materialChanges = new List<MaterialChange>();
+								materialChanges.Add(new MaterialChange("body", bodyChange));
+								materialChanges.Add(new MaterialChange("head", headChange));
 
-							CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, true, materialChanges, new string[0]);
+								CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, mpTex.isCustom, materialChanges, new string[0]);
 
-							characterCustomizer.EquipGear(bodyInfo);
-
-							loadedBodyInfo = true;
+								characterCustomizer.EquipGear(bodyInfo);
+							} else {
+								characterCustomizer.EquipGear(mpTex.info as CharacterBodyInfo);
+							}
 						}
 					}
-				}
-
-				if (!loadedBodyInfo) {
-					CharacterBodyInfo baseBodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, false, null, new string[0]);
-					characterCustomizer.EquipGear(baseBodyInfo);
 				}
 
 				loadedTextures = true;
 			}
 		}
 
-		public void SetPlayerTexture(string path, string texType, GearInfoType infoType, bool useFull) {
-			TextureChange texChange = new TextureChange("albedo", path);
-			GearInfo newInfo;
-			
-			if(infoType == GearInfoType.Board) {
-				newInfo = new BoardGearInfo("MP Temp " + texType.ToString(), texType, true, new TextureChange[] { texChange }, new string[0]);
-			} else {
-				newInfo = new CharacterGearInfo("MP Temp " + texType.ToString(), texType, true, new TextureChange[] { texChange }, new string[0]);
+		public void SetPlayerTexture(string path, string texType, GearInfoType infoType, bool custom, GearInfo info = null) {
+			GearInfo newInfo = null;
+			TextureChange texChange = null;
+			if (custom) {
+				texChange = new TextureChange("albedo", path);
 			}
+
+			if (infoType == GearInfoType.Board) {
+				if (custom) {
+					newInfo = new BoardGearInfo("MP Temp " + texType.ToString(), texType, custom, new TextureChange[] { texChange }, new string[0]);
+				} else {
+					newInfo = info as BoardGearInfo;
+				}
+
+			} else {
+				if (custom) {
+					newInfo = new CharacterGearInfo("MP Temp " + texType.ToString(), texType, custom, new TextureChange[] { texChange }, new string[0]);
+				} else {
+					newInfo = info as CharacterGearInfo;
+				}
+			}
+			
 			
 			characterCustomizer.EquipGear(newInfo);
 		}
@@ -366,15 +405,19 @@ namespace XLMultiplayer {
 
 			float[] floatValues = null;
 			ushort[] halfValues = null;
+			float[] precisePosition = null;
 			SystemHalf.Half[] halfArray = null;
 
 			if (currentBufferObject.key) {
-				halfValues = new ushort[77 * 6];
-				halfArray = new SystemHalf.Half[77 * 6];
+				halfValues = new ushort[77 * 6 + 12];
+				halfArray = new SystemHalf.Half[77 * 6 + 12];
 
-				Buffer.BlockCopy(recBuffer, 5, halfValues, 0, 77 * 6 * sizeof(ushort));
+				Buffer.BlockCopy(recBuffer, 5, halfValues, 0, halfValues.Length * sizeof(ushort));
+				precisePosition = new float[12];
+				Buffer.BlockCopy(recBuffer, 5, precisePosition, 0, 24);
+				Buffer.BlockCopy(recBuffer, 5 + 96, precisePosition, 24, 24);
 
-				for(int i = 0; i < halfValues.Length; i++) {
+				for (int i = 0; i < halfValues.Length; i++) {
 					halfArray[i] = new SystemHalf.Half();
 					halfArray[i].Value = halfValues[i];
 				}
@@ -386,13 +429,14 @@ namespace XLMultiplayer {
 			
 			for (int i = 0; i < 77; i++) {
 				if (currentBufferObject.key) {
-					vectors[i].x = SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6]);
-					vectors[i].y = SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 1]);
-					vectors[i].z = SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 2]);
+					int offset = i > 7 ? 6 : 0;
+					vectors[i].x = SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 6 + offset]);
+					vectors[i].y = SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 7 + offset]);
+					vectors[i].z = SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 8 + offset]);
 
-					quaternions[i].eulerAngles = new Vector3(SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 3]),
-																 SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 4]),
-																 SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 5]));
+					quaternions[i].eulerAngles = new Vector3(SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 9 + offset]),
+																	SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 10 + offset]),
+																	SystemHalf.HalfHelper.HalfToSingle(halfArray[i * 6 + 11 + offset]));
 				} else {
 					vectors[i].x = floatValues[i * 6];
 					vectors[i].y = floatValues[i * 6 + 1];
@@ -400,6 +444,19 @@ namespace XLMultiplayer {
 
 					quaternions[i].eulerAngles = new Vector3(floatValues[i * 6 + 3], floatValues[i * 6 + 4], floatValues[i * 6 + 5]);
 				}
+			}
+
+			if (currentBufferObject.key) {
+				vectors[0].x = precisePosition[0];
+				vectors[0].y = precisePosition[1]; 
+				vectors[0].z = precisePosition[2];
+
+				quaternions[0].eulerAngles = new Vector3(precisePosition[3], precisePosition[4], precisePosition[5]);
+
+				vectors[7].x = precisePosition[6];
+				vectors[7].y = precisePosition[7];
+				vectors[7].z = precisePosition[8];
+				quaternions[7].eulerAngles = new Vector3(precisePosition[9], precisePosition[10], precisePosition[11]);
 			}
 
 			currentBufferObject.vectors = vectors;
@@ -564,7 +621,7 @@ namespace XLMultiplayer {
 			if (!startedAnimating && animationFrames.Count > 5) {
 				if (currentAnimationFrame.vectors == null || !currentAnimationFrame.key) {
 					this.animationFrames.RemoveAt(0);
-					LerpNextFrame(inReplay, true, Time.unscaledDeltaTime, recursionLevel + 1);
+					LerpNextFrame(inReplay, true, Time.unscaledDeltaTime, 0);
 					return;
 				}
 
@@ -670,9 +727,9 @@ namespace XLMultiplayer {
 				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(currentAnimationFrame), this.startAnimTime + currentAnimationFrame.frameTime - this.firstFrameTime));
 				//	}
 				//}
-				previousFinishedFrame = currentAnimationFrame;
-				if (currentAnimationFrame.replayFrameBufferObject == currentAnimationFrame) {
-					previousFinishedFrame.replayFrameBufferObject = this.replayAnimationFrames.Find(f => f.animFrame == currentAnimationFrame.animFrame);
+				previousFinishedFrame = this.animationFrames[0];
+				if (previousFinishedFrame.replayFrameBufferObject == previousFinishedFrame) {
+					previousFinishedFrame.replayFrameBufferObject = this.replayAnimationFrames.Find(f => f.animFrame == previousFinishedFrame.animFrame);
 				}
 				previousFinishedFrame.replayFrameBufferObject.realFrameTime = PlayTime.time;
 
@@ -702,21 +759,21 @@ namespace XLMultiplayer {
 
 				for (int i = 0; i < 77; i++) {
 					if (!inReplay) {
-						bones[i].localPosition = currentAnimationFrame.vectors[i];
-						bones[i].localRotation = currentAnimationFrame.quaternions[i];
+						bones[i].localPosition = previousFinishedFrame.vectors[i];
+						bones[i].localRotation = previousFinishedFrame.quaternions[i];
 					}
 
 					if (!this.animationFrames[1].key) {
-						this.animationFrames[1].vectors[i] = currentAnimationFrame.vectors[i] + this.animationFrames[1].vectors[i];
-						this.animationFrames[1].quaternions[i].eulerAngles += currentAnimationFrame.quaternions[i].eulerAngles;
+						this.animationFrames[1].vectors[i] += previousFinishedFrame.vectors[i];
+						this.animationFrames[1].quaternions[i].eulerAngles = this.animationFrames[1].quaternions[i].eulerAngles + previousFinishedFrame.quaternions[i].eulerAngles;
 					}
 				}
 				replayController.ClipEndTime = PlayTime.time + 0.5f;
 
-				float oldTime = currentAnimationFrame.timeSinceStart;
-				float oldDelta = currentAnimationFrame.deltaTime;
+				float oldTime = previousFinishedFrame.timeSinceStart;
+				float oldDelta = previousFinishedFrame.deltaTime;
 
-				this.previousFrameTime = currentAnimationFrame.frameTime;
+				this.previousFrameTime = previousFinishedFrame.frameTime;
 				this.animationFrames.RemoveAt(0);
 
 				if (oldTime - oldDelta > 0f && recursionLevel < 2) {

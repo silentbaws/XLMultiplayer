@@ -1,5 +1,6 @@
 ﻿#define VALVESOCKETS_SPAN
 
+using BFS.AnimationCombiner;
 using GameManagement;
 using HarmonyLib;
 using Newtonsoft.Json;
@@ -281,6 +282,16 @@ namespace XLMultiplayer {
 
 		public void ConnectToServer(string ip, ushort port, string user) {
 			// Create a debug log file
+
+			Type skaterSpawner = AccessTools.TypeByName("SkaterSpawner");
+
+			if (skaterSpawner != null) {
+				object spawnerInstance = Traverse.Create(skaterSpawner).Property("Instance").GetValue();
+				if (spawnerInstance != null) {
+					Traverse.Create(spawnerInstance).Method("RemoveModelCoroutine").GetValue();
+				}
+			}
+
 			int i = 0;
 			while (this.debugWriter == null) {
 				string filename = "Multiplayer Debug Client" + (i == 0 ? "" : " " + i.ToString()) + ".txt";

@@ -16,11 +16,8 @@ namespace XLMultiplayerGUIApp {
 		private readonly ContextMenuStrip banListMenu;
 		Server multiplayerServer;
 
-		public void LogMessageCallbackHandler(string message, ConsoleColor color, params object[] objects) {
-			if (objects != null && objects.Length > 0)
-				newLogQueue.Add(Tuple.Create(String.Format(message, objects) + "\n", color));
-			else
-				newLogQueue.Add(Tuple.Create(message + "\n", color));
+		public void LogMessageCallbackHandler(string message, ConsoleColor color) {
+			newLogQueue.Add(Tuple.Create(message + "\n", color));
 		}
 
 		public void LogChatMessageCallback(string message) {
