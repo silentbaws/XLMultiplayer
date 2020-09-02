@@ -1269,6 +1269,7 @@ namespace XLMultiplayerServer {
 					var response = await client.PostAsync("https://davisellwood-site.herokuapp.com/api/sendserverinfo/", content);
 					if (response.StatusCode != HttpStatusCode.OK) {
 						LogMessageCallback($"Error announcing: {response.StatusCode}", ConsoleColor.White);
+						await Task.Delay(120000);
 					}
 				} catch (Exception e) {
 					client = new HttpClient();
