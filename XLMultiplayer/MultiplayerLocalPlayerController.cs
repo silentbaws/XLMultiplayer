@@ -66,7 +66,9 @@ namespace XLMultiplayer {
 
 				List<byte> textureData = new List<byte>();
 
-				string currentBodyString = currentBody.gearInfo.type;
+				string currentBodyString = currentBody.gearInfo.ToString();
+
+				UnityModManagerNet.UnityModManager.Logger.Log(currentBodyString);
 
 				byte[] bodyID = Encoding.UTF8.GetBytes(currentBodyString);
 				textureData.AddRange(BitConverter.GetBytes((ushort)bodyID.Length));

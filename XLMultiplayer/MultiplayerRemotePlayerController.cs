@@ -8,6 +8,7 @@ using System.Linq;
 using System.Runtime.Remoting.Messaging;
 using System.Text;
 using UnityEngine;
+using UnityModManagerNet;
 
 namespace XLMultiplayer {
 	public class MultiplayerFrameBufferObject {
@@ -245,6 +246,9 @@ namespace XLMultiplayer {
 
 			GearInfo[][][] allInfos = Traverse.Create(GearDatabase.Instance).Field("gearListSource").GetValue<GearInfo[][][]>();
 
+			receivedBody = GetGearInfoFromPath(bodyType, allInfos, true);
+
+
 			while (readBytes < textureStream.Length - 1) {
 				UnityModManagerNet.UnityModManager.Logger.Log($"Read {readBytes} bytes of {textureStream.Length}");
 				bool customTex = textureStream[readBytes] == 1 ? true : false;
@@ -269,7 +273,6 @@ namespace XLMultiplayer {
 					gearPath = Encoding.UTF8.GetString(textureStream, readBytes, dataLen);
 					readBytes += dataLen;
 
-
 					newTexture = new MultiplayerRemoteTexture(GetGearInfoFromPath(gearPath, allInfos), customTex, this.debugWriter);
 					newTexture.textureType = texType;
 					newTexture.infoType = texInfotype;
@@ -282,7 +285,9 @@ namespace XLMultiplayer {
 			receivedTextures = true;
 		}
 
-		public GearInfo GetGearInfoFromPath(string path, GearInfo[][][] allInfos) {
+		GearInfo receivedBody = null;
+
+		public GearInfo GetGearInfoFromPath(string path, GearInfo[][][] allInfos, bool body = false) {
 			for (int i = 0; i < allInfos.Length; i++) {
 				for (int j = 0; j < allInfos[i].Length; j++) {
 					foreach (GearInfo info in allInfos[i][j]) {
@@ -291,6 +296,14 @@ namespace XLMultiplayer {
 								if (texChange.texturePath.Equals(path, StringComparison.CurrentCultureIgnoreCase)) {
 									return info;
 								}
+							}
+						}
+
+						if (body) {
+							CharacterBodyInfo currentComp = info as CharacterBodyInfo;
+							if (currentComp != null && path.Equals(currentComp.ToString(), StringComparison.CurrentCultureIgnoreCase)) {
+								UnityModManagerNet.UnityModManager.Logger.Log($"Found matching body {path}");
+								return info;
 							}
 						}
 					}
@@ -320,34 +333,45 @@ namespace XLMultiplayer {
 					}
 				}
 
+				if (receivedBody != null) {
+					characterCustomizer.EquipGear(receivedBody);
+				} else {
+					UnityModManagerNet.UnityModManager.Logger.Log($"Attempting to find skater with body ID {bodyType.Replace("Body ", "").Split('_')[0]}");
+					SkaterInfo skaterInfo = GearDatabase.Instance.skaters.FirstOrDefault((SkaterInfo s) => s.bodyID.ToLower().Equals(bodyType.Replace("Body ", "").Split('_')[0], StringComparison.CurrentCultureIgnoreCase));
+					if (skaterInfo != null) {
+						UnityModManager.Logger.Log("Found it");
+						characterCustomizer.LoadCustomizations(skaterInfo.customizations);
+					}
+				}
+
 				foreach (MultiplayerRemoteTexture mpTex in multiplayerTextures) {
 					if (mpTex.saved && !mpTex.loaded && !(mpTex.infoType == GearInfoType.Body)) {
 						mpTex.LoadFromFileMainThread(this);
-					} else if (mpTex.saved && !mpTex.loaded && mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase)) {
-						MultiplayerRemoteTexture bodyTex = multiplayerTextures.Find((t) => t.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase));
-						if (bodyTex != null || !mpTex.isCustom) {
-							UnityModManagerNet.UnityModManager.Logger.Log($"Updating body textures for {this.bodyType} id: {this.playerID}");
+					}  else if (mpTex.saved && !mpTex.loaded && mpTex.textureType.Equals("head", StringComparison.InvariantCultureIgnoreCase)) {
+					MultiplayerRemoteTexture bodyTex = multiplayerTextures.Find((t) => t.textureType.Equals("body", StringComparison.InvariantCultureIgnoreCase));
+					if (bodyTex != null || !mpTex.isCustom) {
+						UnityModManagerNet.UnityModManager.Logger.Log($"Updating body textures for {this.bodyType} id: {this.playerID}");
 
-							bodyTex.loaded = true;
-							mpTex.loaded = true;
+						bodyTex.loaded = true;
+						mpTex.loaded = true;
 
-							if (mpTex.isCustom) {
-								TextureChange[] headChange = { new TextureChange("albedo", mpTex.path) };
-								TextureChange[] bodyChange = { new TextureChange("albedo", bodyTex.path) };
+						if (mpTex.isCustom) {
+							TextureChange[] headChange = { new TextureChange("albedo", mpTex.path) };
+							TextureChange[] bodyChange = { new TextureChange("albedo", bodyTex.path) };
 
-								List<MaterialChange> materialChanges = new List<MaterialChange>();
-								materialChanges.Add(new MaterialChange("body", bodyChange));
-								materialChanges.Add(new MaterialChange("head", headChange));
+							List<MaterialChange> materialChanges = new List<MaterialChange>();
+							materialChanges.Add(new MaterialChange("body", bodyChange));
+							materialChanges.Add(new MaterialChange("head", headChange));
 
-								CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, mpTex.isCustom, materialChanges, new string[0]);
+							CharacterBodyInfo bodyInfo = new CharacterBodyInfo("MP Temp body", this.bodyType, mpTex.isCustom, materialChanges, new string[0]);
 
-								characterCustomizer.EquipGear(bodyInfo);
-							} else {
-								characterCustomizer.EquipGear(mpTex.info as CharacterBodyInfo);
-							}
+							characterCustomizer.EquipGear(bodyInfo);
+						} else {
+							characterCustomizer.EquipGear(mpTex.info as CharacterBodyInfo);
 						}
 					}
 				}
+			}
 
 				loadedTextures = true;
 			}
