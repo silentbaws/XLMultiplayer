@@ -666,6 +666,7 @@ namespace XLMultiplayer {
 						controllerToRemove.Add(controller);
 					}
 
+					// TODO: Perform calculations on seperate thread and then apply transformations on main thread
 					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
 				}
 				recentTimeSinceStartup = Time.realtimeSinceStartup;
