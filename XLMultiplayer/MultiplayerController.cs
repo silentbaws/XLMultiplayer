@@ -667,14 +667,18 @@ namespace XLMultiplayer {
 					}
 
 					// TODO: Perform calculations on seperate thread and then apply transformations on main thread
-					controller.LerpNextFrame(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState));
+					controller.StartFrameLerp();
 				}
 				recentTimeSinceStartup = Time.realtimeSinceStartup;
 			}
-			SoundAndAnimationTime = FrameWatch.Elapsed.TotalMilliseconds - MessageQueueTime;
 
 			foreach (MultiplayerRemotePlayerController player in controllerToRemove)
 				RemovePlayer(player);
+
+			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
+				controller.EndLerpFrame();
+			}
+			SoundAndAnimationTime = FrameWatch.Elapsed.TotalMilliseconds - MessageQueueTime;
 
 			//private double StateManagementTime = 0;
 			//private double NetworkDiagnosticTime = 0;

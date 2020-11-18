@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.Remoting.Messaging;
 using System.Text;
+using System.Threading;
 using UnityEngine;
 using UnityModManagerNet;
 
@@ -139,6 +140,8 @@ namespace XLMultiplayer {
 
 		private bool waitingForDelay = false;
 		private bool speedDelay = false;
+
+		private Thread lerpFrameThread = null;
 
 		private List<byte> gearStream = new List<byte>();
 
@@ -635,178 +638,233 @@ namespace XLMultiplayer {
 			} catch (Exception) { }
 		}
 
+		public void StartFrameLerp() {
+			currentlyLerping = true;
+
+			deltaTime = Time.unscaledDeltaTime;
+			playTime = PlayTime.time;
+
+			if (lerpFrameThread == null) {
+				lerpFrameThread = new Thread(LerpNextFrame);
+				lerpFrameThread.IsBackground = true;
+				lerpFrameThread.Start(new LerpFrameParameters(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)));
+			}
+		}
+
 		MultiplayerFrameBufferObject previousFinishedFrame = null;
 		MultiplayerFrameBufferObject currentAnimationFrame = null;
+
+		Vector3[] targetBonePosition = new Vector3[77];
+		Quaternion[] targetBoneRotation = new Quaternion[77];
+
+		bool runThread = true;
+		bool currentlyLerping = false;
+
+		float playTime = 0f;
+		float deltaTime = 0f;
+
 		// TODO: refactor all this shit, I'm sure there's a better way
-		public void LerpNextFrame(bool inReplay, bool recursive = false, float offset = 0, int recursionLevel = 0) {
-			if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) return;
-			int animationFramesCount = this.animationFrames.Count;
-			currentAnimationFrame = this.animationFrames[0];
-			if (!startedAnimating && animationFrames.Count > 5) {
-				if (currentAnimationFrame.vectors == null || !currentAnimationFrame.key) {
-					this.animationFrames.RemoveAt(0);
-					LerpNextFrame(inReplay, true, Time.unscaledDeltaTime, 0);
-					return;
-				}
+		private void LerpNextFrame(object paramatersUntyped) {
+			LerpFrameParameters paramaters = (LerpFrameParameters)paramatersUntyped;
+			do {
+				if (!paramaters.recursive)
+					paramaters.inReplay = GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState);
 
-				startedAnimating = true;
+				if (paramaters.recursive == false) UnityModManager.Logger.Log("1");
 
-				for (int i = 0; i < 77; i++) {
-					bones[i].localPosition = currentAnimationFrame.vectors[i];
-					bones[i].localRotation = currentAnimationFrame.quaternions[i];
-				}
+				if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) goto EndThread;
+				int animationFramesCount = this.animationFrames.Count;
+				currentAnimationFrame = this.animationFrames[0];
 
-				this.previousFrameTime = currentAnimationFrame.frameTime;
-				this.previousFinishedFrame = currentAnimationFrame;
-				//this.firstFrameTime = currentAnimationFrame.frameTime;
-				//this.startAnimTime = Time.time;
+				if (paramaters.recursive == false) UnityModManager.Logger.Log("2");
 
-				this.animationFrames.RemoveAt(0);
-			}
-
-			if (!startedAnimating) return;
-
-			int frameDelay = 0;
-
-			if (this.animationFrames.Count < 2) return;
-
-			if (this.animationFrames.Count < 4 || this.waitingForDelay) {
-				this.waitingForDelay = !(this.animationFrames.Count > 5);
-			}
-
-			if (this.animationFrames.Count >= 10 || this.speedDelay) {
-				if (this.animationFrames.Count > 50) {
-					this.animationFrames.RemoveRange(0, this.animationFrames.Count - 20);
-				}
-
-				this.speedDelay = !(this.animationFrames.Count < 7);
-			}
-
-			if (this.waitingForDelay || this.speedDelay) {
-				frameDelay = this.animationFrames.Count - 6;
-			}
-
-			if (currentAnimationFrame.vectors == null) {
-				this.animationFrames.RemoveAt(0);
-
-				LerpNextFrame(inReplay, true, Time.unscaledDeltaTime, recursionLevel + 1);
-				return;
-			}
-
-			if (currentAnimationFrame.deltaTime == 0) {
-				currentAnimationFrame.deltaTime = currentAnimationFrame.frameTime - this.previousFrameTime;
-
-				if (currentAnimationFrame.deltaTime == 0.0f) {
-					currentAnimationFrame.deltaTime = 1f / 30f;
-				}
-
-				if (frameDelay != 0) {
-					//debugWriter.Write("Adjusting current animation frame time from: " + currentAnimationFrame.deltaTime);
-					currentAnimationFrame.deltaTime = frameDelay < 0 ? currentAnimationFrame.deltaTime * Mathf.Max(Mathf.Abs(frameDelay), 2) : currentAnimationFrame.deltaTime / Mathf.Min(Mathf.Max(frameDelay, 2), 6);
-					//debugWriter.WriteLine("  To: " + currentAnimationFrame.deltaTime);
-
-					if (currentAnimationFrame.deltaTime > 0.14f) {
-						debugWriter.WriteLine("Capping current frame to 140ms");
-						currentAnimationFrame.deltaTime = 0.14f;
+				if (!startedAnimating && animationFrames.Count > 5) {
+					if (currentAnimationFrame.vectors == null || !currentAnimationFrame.key) {
+						this.animationFrames.RemoveAt(0);
+						LerpNextFrame(new LerpFrameParameters(paramaters.inReplay, true, deltaTime, 0));
+						goto EndThread;
 					}
-				}
-			}
 
-			if (!recursive) currentAnimationFrame.timeSinceStart += Time.unscaledDeltaTime;
-			else currentAnimationFrame.timeSinceStart = offset;
+					startedAnimating = true;
 
-			// TODO: figure out why this occassionally spikes frames
-			if (!inReplay) {
-				if (currentAnimationFrame.timeSinceStart < currentAnimationFrame.deltaTime) {
 					for (int i = 0; i < 77; i++) {
-						bones[i].localPosition = Vector3.Lerp(previousFinishedFrame.vectors[i], currentAnimationFrame.vectors[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
-						bones[i].localRotation = Quaternion.Slerp(previousFinishedFrame.quaternions[i], currentAnimationFrame.quaternions[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
+						targetBonePosition[i] = currentAnimationFrame.vectors[i];
+						targetBoneRotation[i] = currentAnimationFrame.quaternions[i];
+					}
+
+					this.previousFrameTime = currentAnimationFrame.frameTime;
+					this.previousFinishedFrame = currentAnimationFrame;
+					//this.firstFrameTime = currentAnimationFrame.frameTime;
+					//this.startAnimTime = Time.time;
+
+					this.animationFrames.RemoveAt(0);
+				}
+				if (paramaters.recursive == false) UnityModManager.Logger.Log("3");
+
+				if (!startedAnimating) goto EndThread;
+
+				int frameDelay = 0;
+
+				if (this.animationFrames.Count < 2) goto EndThread;
+
+				if (this.animationFrames.Count < 4 || this.waitingForDelay) {
+					this.waitingForDelay = !(this.animationFrames.Count > 5);
+				}
+
+				if (this.animationFrames.Count >= 10 || this.speedDelay) {
+					if (this.animationFrames.Count > 50) {
+						this.animationFrames.RemoveRange(0, this.animationFrames.Count - 20);
+					}
+
+					this.speedDelay = !(this.animationFrames.Count < 7);
+				}
+
+				if (this.waitingForDelay || this.speedDelay) {
+					frameDelay = this.animationFrames.Count - 6;
+				}
+
+				if (currentAnimationFrame.vectors == null) {
+					this.animationFrames.RemoveAt(0);
+
+					LerpNextFrame(new LerpFrameParameters(paramaters.inReplay, true, deltaTime, paramaters.recursionLevel + 1));
+					goto EndThread;
+				}
+
+				if (paramaters.recursive == false) UnityModManager.Logger.Log("4");
+
+				if (currentAnimationFrame.deltaTime == 0) {
+					currentAnimationFrame.deltaTime = currentAnimationFrame.frameTime - this.previousFrameTime;
+
+					if (currentAnimationFrame.deltaTime == 0.0f) {
+						currentAnimationFrame.deltaTime = 1f / 30f;
+					}
+
+					if (frameDelay != 0) {
+						//debugWriter.Write("Adjusting current animation frame time from: " + currentAnimationFrame.deltaTime);
+						currentAnimationFrame.deltaTime = frameDelay < 0 ? currentAnimationFrame.deltaTime * Mathf.Max(Mathf.Abs(frameDelay), 2) : currentAnimationFrame.deltaTime / Mathf.Min(Mathf.Max(frameDelay, 2), 6);
+						//debugWriter.WriteLine("  To: " + currentAnimationFrame.deltaTime);
+
+						if (currentAnimationFrame.deltaTime > 0.14f) {
+							debugWriter.WriteLine("Capping current frame to 140ms");
+							currentAnimationFrame.deltaTime = 0.14f;
+						}
 					}
 				}
 
-				replayController.ClipEndTime = PlayTime.time + 0.5f;
+				if (!paramaters.recursive) currentAnimationFrame.timeSinceStart += deltaTime;
+				else currentAnimationFrame.timeSinceStart = paramaters.offset;
 
-				if (!recursive) {
-					foreach (ReplayAudioEventPlayer replayAudioEventPlayer in replayController.AudioEventPlayers) {
-						if (replayAudioEventPlayer != null && !replayAudioEventPlayer.enabled) replayAudioEventPlayer.enabled = true;
-						if (replayAudioEventPlayer != null) replayAudioEventPlayer.SetPlaybackTime(PlayTime.time, 1.0f);
+				// TODO: figure out why this occassionally spikes frames
+				// Lol jk just bandaid it by threading so it's not as noticable
+				if (!paramaters.inReplay) {
+					if (currentAnimationFrame.timeSinceStart < currentAnimationFrame.deltaTime) {
+						for (int i = 0; i < 77; i++) {
+							targetBonePosition[i] = Vector3.Lerp(previousFinishedFrame.vectors[i], currentAnimationFrame.vectors[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
+							targetBoneRotation[i] = Quaternion.Slerp(previousFinishedFrame.quaternions[i], currentAnimationFrame.quaternions[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
+						}
+					}
+
+					replayController.ClipEndTime = playTime;
+				}
+				if (paramaters.recursive == false) UnityModManager.Logger.Log("5");
+
+				if (currentAnimationFrame.timeSinceStart >= currentAnimationFrame.deltaTime) {
+					// 30FPS 120Seconds
+					//if (!currentAnimationFrame.key) {
+					//	if (this.recordedFrames.Count > 30 * 120) {
+					//		this.recordedFrames.RemoveAt(0);
+					//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(currentAnimationFrame), this.startAnimTime + currentAnimationFrame.frameTime - this.firstFrameTime));
+					//	} else {
+					//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(currentAnimationFrame), this.startAnimTime + currentAnimationFrame.frameTime - this.firstFrameTime));
+					//	}
+					//}
+					previousFinishedFrame = this.animationFrames[0];
+					if (previousFinishedFrame.replayFrameBufferObject == previousFinishedFrame) {
+						previousFinishedFrame.replayFrameBufferObject = this.replayAnimationFrames.Find(f => f.animFrame == previousFinishedFrame.animFrame);
+					}
+					previousFinishedFrame.replayFrameBufferObject.realFrameTime = playTime;
+
+					if (!paramaters.recursive) {
+						int soundsToRemove = 0;
+						int soundQueueCount = soundQueue.Count;
+						for (soundsToRemove = 0; soundsToRemove < soundQueueCount; soundsToRemove++) {
+							if (previousFinishedFrame.replayFrameBufferObject.frameTime + 1 / 15f < soundQueue[0].playTime) {
+								break;
+							}
+
+							if (soundsToRemove == soundQueueCount - 1) {
+								soundsToRemove++;
+								break;
+							}
+						}
+
+						if (soundsToRemove > 0) {
+							for (int i = 0; i < soundsToRemove; i++) {
+								soundQueue[i].AdjustRealTimeToAnimation(previousFinishedFrame.replayFrameBufferObject);
+								soundQueue[i].AddSoundsToPlayers(this.replayController, this.replayEventPlayerForName);
+							}
+
+							soundQueue.RemoveRange(0, soundsToRemove);
+						}
+					}
+
+					for (int i = 0; i < 77; i++) {
+						if (!paramaters.inReplay) {
+							targetBonePosition[i] = previousFinishedFrame.vectors[i];
+							targetBoneRotation[i] = previousFinishedFrame.quaternions[i];
+						}
+
+						if (!this.animationFrames[1].key) {
+							this.animationFrames[1].vectors[i] += previousFinishedFrame.vectors[i];
+							this.animationFrames[1].quaternions[i].eulerAngles = this.animationFrames[1].quaternions[i].eulerAngles + previousFinishedFrame.quaternions[i].eulerAngles;
+						}
+					}
+					replayController.ClipEndTime = playTime + 0.5f;
+
+					float oldTime = previousFinishedFrame.timeSinceStart;
+					float oldDelta = previousFinishedFrame.deltaTime;
+
+					this.previousFrameTime = previousFinishedFrame.frameTime;
+					this.animationFrames.RemoveAt(0);
+
+					if (oldTime - oldDelta > 0f && paramaters.recursionLevel < 2) {
+						this.LerpNextFrame(new LerpFrameParameters(paramaters.inReplay, true, oldTime - oldDelta, paramaters.recursionLevel + 1));
+						goto EndThread;
 					}
 				}
-			}
+				if (paramaters.recursive == false) UnityModManager.Logger.Log("6");
+
+				EndThread:
+				if (paramaters.recursive == false) UnityModManager.Logger.Log("7");
+				if (!paramaters.recursive) {
+					currentlyLerping = false;
+					SpinWait.SpinUntil(() => currentlyLerping == true || runThread == false);
+				}
+			} while (runThread && !paramaters.recursive);
+		}
+		
+		public void EndLerpFrame() {
+			SpinWait.SpinUntil(() => currentlyLerping == false);
 
 			if (this.currentlySetUsername != this.username) {
 				this.usernameText.text = this.username;
 				this.currentlySetUsername = this.username;
 			}
+
+			for (int i = 0; i < 77; i++) {
+				bones[i].localPosition = targetBonePosition[i];
+				bones[i].localRotation = targetBoneRotation[i];
+			}
+
 			this.usernameObject.transform.position = this.skater.transform.position + this.skater.transform.up;
 			this.usernameObject.transform.LookAt(mainCameraTransform);
 
-			if (currentAnimationFrame.timeSinceStart >= currentAnimationFrame.deltaTime) {
-				// 30FPS 120Seconds
-				//if (!currentAnimationFrame.key) {
-				//	if (this.recordedFrames.Count > 30 * 120) {
-				//		this.recordedFrames.RemoveAt(0);
-				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(currentAnimationFrame), this.startAnimTime + currentAnimationFrame.frameTime - this.firstFrameTime));
-				//	} else {
-				//		this.recordedFrames.Add(new ReplayRecordedFrame(BufferToInfo(currentAnimationFrame), this.startAnimTime + currentAnimationFrame.frameTime - this.firstFrameTime));
-				//	}
-				//}
-				previousFinishedFrame = this.animationFrames[0];
-				if (previousFinishedFrame.replayFrameBufferObject == previousFinishedFrame) {
-					previousFinishedFrame.replayFrameBufferObject = this.replayAnimationFrames.Find(f => f.animFrame == previousFinishedFrame.animFrame);
-				}
-				previousFinishedFrame.replayFrameBufferObject.realFrameTime = PlayTime.time;
-
-				if (!recursive) {
-					int soundsToRemove = 0;
-					int soundQueueCount = soundQueue.Count;
-					for (soundsToRemove = 0; soundsToRemove < soundQueueCount; soundsToRemove++) {
-						if (previousFinishedFrame.replayFrameBufferObject.frameTime + 1 / 15f < soundQueue[0].playTime) {
-							break;
-						}
-
-						if (soundsToRemove == soundQueueCount - 1) {
-							soundsToRemove++;
-							break;
-						}
-					}
-
-					if (soundsToRemove > 0) {
-						for (int i = 0; i < soundsToRemove; i++) {
-							soundQueue[i].AdjustRealTimeToAnimation(previousFinishedFrame.replayFrameBufferObject);
-							soundQueue[i].AddSoundsToPlayers(this.replayController, this.replayEventPlayerForName);
-						}
-
-						soundQueue.RemoveRange(0, soundsToRemove);
-					}
-				}
-
-				for (int i = 0; i < 77; i++) {
-					if (!inReplay) {
-						bones[i].localPosition = previousFinishedFrame.vectors[i];
-						bones[i].localRotation = previousFinishedFrame.quaternions[i];
-					}
-
-					if (!this.animationFrames[1].key) {
-						this.animationFrames[1].vectors[i] += previousFinishedFrame.vectors[i];
-						this.animationFrames[1].quaternions[i].eulerAngles = this.animationFrames[1].quaternions[i].eulerAngles + previousFinishedFrame.quaternions[i].eulerAngles;
-					}
-				}
-				replayController.ClipEndTime = PlayTime.time + 0.5f;
-
-				float oldTime = previousFinishedFrame.timeSinceStart;
-				float oldDelta = previousFinishedFrame.deltaTime;
-
-				this.previousFrameTime = previousFinishedFrame.frameTime;
-				this.animationFrames.RemoveAt(0);
-
-				if (oldTime - oldDelta > 0f && recursionLevel < 2) {
-					this.LerpNextFrame(inReplay, true, oldTime - oldDelta, recursionLevel + 1);
-					return;
-				}
+			foreach (ReplayAudioEventPlayer replayAudioEventPlayer in replayController.AudioEventPlayers) {
+				if (replayAudioEventPlayer != null && !replayAudioEventPlayer.enabled) replayAudioEventPlayer.enabled = true;
+				if (replayAudioEventPlayer != null) replayAudioEventPlayer.SetPlaybackTime(PlayTime.time, 1.0f);
 			}
 		}
-		
+
 		TransformInfo[] BufferToInfo(MultiplayerFrameBufferObject frame) {
 			return CreateInfoArray(frame.vectors, frame.quaternions);
 		}
@@ -961,10 +1019,27 @@ namespace XLMultiplayer {
 		}
 
 		public void Destroy() {
+			runThread = false;
+			lerpFrameThread.Join();
+
 			GameObject.Destroy(skater);
 			GameObject.Destroy(board);
 			GameObject.Destroy(usernameObject);
 			GameObject.Destroy(player);
+		}
+	}
+
+	public class LerpFrameParameters {
+		public bool inReplay = false;
+		public bool recursive = false;
+		public float offset = 0;
+		public int recursionLevel = 0;
+
+		public LerpFrameParameters(bool inReplay, bool recursive = false, float offset = 0, int recursionLevel = 0) {
+			this.inReplay = inReplay;
+			this.recursive = recursive;
+			this.offset = offset;
+			this.recursionLevel = recursionLevel;
 		}
 	}
 }

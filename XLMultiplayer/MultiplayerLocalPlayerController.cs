@@ -39,7 +39,7 @@ namespace XLMultiplayer {
 					if (localTexture.isCustom) {
 						string texType = localTexture.textureType.ToLower();
 						if (texType.Contains("hat") || texType.Contains("truck") || texType.Contains("wheel") || texType.Contains("hair")) {
-							localTexture.ConvertTexture(512, texType.Contains("hair"));
+							localTexture.ConvertTexture(512, texType.Contains("hair") || texType.Contains("hat"));
 						} else if (texType.Contains("head") || texType.Contains("body")) {
 							localTexture.ConvertTexture(2048);
 						} else {
