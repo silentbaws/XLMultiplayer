@@ -203,9 +203,9 @@ namespace XLMultiplayer {
 
 			foreach (string folder in Directory.GetDirectories(pluginDirectory)) {
 				if(!Main.pluginList.Where(p => p.path == folder).Any()) {
-				string infoFile = Path.Combine(folder, "Info.json");
-				if (File.Exists(infoFile)) {
-					Plugin newPlugin = JsonConvert.DeserializeObject<Plugin>(File.ReadAllText(infoFile));
+					string infoFile = Path.Combine(folder, "Info.json");
+					if (File.Exists(infoFile)) {
+						Plugin newPlugin = JsonConvert.DeserializeObject<Plugin>(File.ReadAllText(infoFile));
 						UnityModManager.Logger.Log(newPlugin.path);
 						pluginList.Add(new Plugin(newPlugin.dllName, newPlugin.startMethod, folder, SendMessageFromPlugin));
 
@@ -223,7 +223,8 @@ namespace XLMultiplayer {
 					// TODO: Add log statements
 					string targetDLLFile = Path.Combine(plugin.path, plugin.dllName);
 					if (!File.Exists(targetDLLFile)) continue;
-					var loadedDLL = Assembly.LoadFile(targetDLLFile);
+					byte[] dllContents = File.ReadAllBytes(targetDLLFile);
+					var loadedDLL = Assembly.Load(dllContents);
 
 					Traverse.Create(plugin).Property("loadedDLL").SetValue(loadedDLL);
 
