@@ -118,19 +118,6 @@ namespace XLMultiplayer {
 		private int receivedAlive10Seconds = 0;
 		private int sentAlive10Seconds = 0;
 
-		private GUIStyle modMenuStyle = null;
-
-		private string playerListText = "Player List Test";
-
-		private string[] usernameColumnText = new string[3];
-		private List<string> column1Usernames = new List<string>();
-		private List<string> column2Usernames = new List<string>();
-		private List<string> column3Usernames = new List<string>();
-
-		private string networkStatsText = "Network Stats Will update after 10 seconds of connection";
-
-		private string playerListLocalUser = "";
-
 		private Thread usernameThread;
 
 		private byte[] usernameMessage = null;
@@ -172,82 +159,7 @@ namespace XLMultiplayer {
 			}
 		}
 
-		private void InitializeStyle() {
-			modMenuStyle = new GUIStyle();
-			modMenuStyle.alignment = TextAnchor.UpperCenter;
-			modMenuStyle.wordWrap = true;
-			modMenuStyle.normal.textColor = Color.yellow;
-			modMenuStyle.fontSize = 12;
-			modMenuStyle.richText = true;
-		}
-
-		private void PlayerListOnGUI() {
-			if (modMenuStyle == null) InitializeStyle();
-
-			int desiredHeight = (int)modMenuStyle.CalcHeight(new GUIContent("Player List"), 1000);
-			desiredHeight = (int)Math.Ceiling(desiredHeight * 1.5f);
-			playerListText = $"<b><size={desiredHeight}>Player List</size></b>\n";
-
-			if (playerController == null) return;
-			if (column1Usernames.Count + column2Usernames.Count + column3Usernames.Count != remoteControllers.Count + 1 || playerListLocalUser != playerController.username) {
-				int column = 0;
-
-				column1Usernames.Clear();
-				column2Usernames.Clear();
-				column3Usernames.Clear();
-
-				column2Usernames.Add(playerController.username + "(YOU)");
-				playerListLocalUser = playerController.username;
-
-				foreach (MultiplayerRemotePlayerController controller in remoteControllers) {
-					if (controller.playerID == 255) continue;
-
-					switch (column) {
-						case 0:
-							column1Usernames.Add(controller.username + $"({controller.playerID})");
-							break;
-						case 1:
-							column2Usernames.Add(controller.username + $"({controller.playerID})");
-							break;
-						case 2:
-							column3Usernames.Add(controller.username + $"({controller.playerID})");
-							column = -1;
-							break;
-					}
-
-					column++;
-				}
-
-				// Move usernames in columns to prioritize middle and then left/right balance
-				if (column1Usernames.Count > column3Usernames.Count && column1Usernames.Count > column2Usernames.Count) {
-					column2Usernames.Add(column1Usernames[column1Usernames.Count - 1]);
-					column1Usernames.RemoveAt(column1Usernames.Count - 1);
-				} else if (column1Usernames.Count > column3Usernames.Count && column1Usernames.Count == column2Usernames.Count) {
-					column3Usernames.Add(column2Usernames[column2Usernames.Count - 1]);
-					column2Usernames.RemoveAt(column2Usernames.Count - 1);
-				}
-
-				for (int i = 0; i < 3; i++) {
-					usernameColumnText[i] = "";
-				}
-
-				foreach (string username in column1Usernames) {
-					usernameColumnText[0] += username + "\n";
-				}
-				foreach (string username in column2Usernames) {
-					usernameColumnText[1] += username + "\n";
-				}
-				foreach (string username in column3Usernames) {
-					usernameColumnText[2] += username + "\n";
-				}
-			}
-		}
-
-		private void NetworkStatsOnGUI() {
-			if (modMenuStyle == null) InitializeStyle();
-
-			GUILayout.Label(networkStatsText, modMenuStyle, null);
-		}
+		
 
 		// Turn off replay editor as soon as it's instance is not null
 		private IEnumerator TurnOffReplay() {
@@ -488,15 +400,20 @@ namespace XLMultiplayer {
 			if (GameStateMachine.Instance.CurrentState.GetType().Equals(typeof(PauseState))) {
 				if (GameStateMachine.Instance.CurrentState.CanDoTransitionTo(typeof(ChallengeSelectionState))) {
 					Type[] allowedTransitions = null;
+					Type objectDropperState = AccessTools.TypeByName("ObjectDropperState");
+
 					if (MultiplayerUtils.serverMapDictionary.Count == 0) {
-						allowedTransitions = new Type[4];
+						allowedTransitions = objectDropperState == null ? new Type[4] : new Type[5];
 						allowedTransitions[3] = typeof(LevelSelectionState);
 					} else {
-						allowedTransitions = new Type[3];
+						allowedTransitions = objectDropperState == null ? new Type[3] : new Type[4];
 					}
 					allowedTransitions[0] = typeof(PlayState);
 					allowedTransitions[1] = typeof(ReplayMenuState);
 					allowedTransitions[2] = typeof(SettingsState);
+
+					if (objectDropperState != null) allowedTransitions[allowedTransitions.Length - 1] = objectDropperState;
+
 					Traverse.Create(GameStateMachine.Instance.CurrentState).Field("availableTransitions").SetValue( allowedTransitions );
 				}
 			}
@@ -600,7 +517,6 @@ namespace XLMultiplayer {
 				string netstats = $"Ping: {realPing}ms           Packet Loss: {lossPercent.ToString("N2")}%";
 
 				this.debugWriter.WriteLine(netstats);
-				networkStatsText = netstats;
 
 				statisticsResetTime = Time.time;
 				sentAlive10Seconds = 0;
@@ -645,7 +561,8 @@ namespace XLMultiplayer {
 					}
 
 					// TODO: Perform calculations on seperate thread and then apply transformations on main thread
-					controller.StartFrameLerp();
+					if (controller.playerID != 255)
+						controller.StartFrameLerp();
 				}
 				recentTimeSinceStartup = Time.realtimeSinceStartup;
 			}
@@ -654,7 +571,8 @@ namespace XLMultiplayer {
 				RemovePlayer(player);
 
 			foreach (MultiplayerRemotePlayerController controller in this.remoteControllers) {
-				controller.EndLerpFrame();
+				if (controller.playerID != 255)
+					controller.EndLerpFrame();
 			}
 			SoundAndAnimationTime = FrameWatch.Elapsed.TotalMilliseconds - MessageQueueTime;
 
@@ -784,9 +702,9 @@ namespace XLMultiplayer {
 						player.skater.SetActive(false);
 						player.board.SetActive(false);
 						player.usernameObject.SetActive(false);
-						if (column2Usernames.Count > 0) column2Usernames.RemoveAt(0);
-						else if (column1Usernames.Count > 0) column1Usernames.RemoveAt(0);
-						else if (column3Usernames.Count > 0) column3Usernames.RemoveAt(0);
+						player.runThread = false;
+						if (player.lerpFrameThread != null)
+							player.lerpFrameThread.Join();
 					} else {
 						RemovePlayer(player);
 					}
@@ -827,9 +745,6 @@ namespace XLMultiplayer {
 						} else {
 							chatMessages.Add("Player " + remotePlayer.username + "{" + remotePlayer.playerID + "} <b><color=\"green\">CONNECTED</color></b>");
 						}
-						if (column2Usernames.Count > 0) column2Usernames.RemoveAt(0);
-						else if (column1Usernames.Count > 0) column1Usernames.RemoveAt(0);
-						else if (column3Usernames.Count > 0) column3Usernames.RemoveAt(0);
 					}
 					break;
 				case OpCode.UsernameAdjustment:

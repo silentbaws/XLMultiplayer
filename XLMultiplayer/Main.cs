@@ -35,7 +35,7 @@ namespace XLMultiplayer {
 	[Serializable]
 	public class MultiplayerSettings : UnityModManager.ModSettings {
 		public float volumeMultiplier = 1.0f;
-
+		
 		public override void Save(UnityModManager.ModEntry modEntry) {
 			Save(this, modEntry);
 		}

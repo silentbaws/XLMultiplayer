@@ -141,7 +141,7 @@ namespace XLMultiplayer {
 		private bool waitingForDelay = false;
 		private bool speedDelay = false;
 
-		private Thread lerpFrameThread = null;
+		public Thread lerpFrameThread = null;
 
 		private List<byte> gearStream = new List<byte>();
 
@@ -657,7 +657,7 @@ namespace XLMultiplayer {
 		Vector3[] targetBonePosition = new Vector3[77];
 		Quaternion[] targetBoneRotation = new Quaternion[77];
 
-		bool runThread = true;
+		public bool runThread = true;
 		bool currentlyLerping = false;
 
 		float playTime = 0f;
@@ -670,13 +670,9 @@ namespace XLMultiplayer {
 				if (!paramaters.recursive)
 					paramaters.inReplay = GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState);
 
-				if (paramaters.recursive == false) UnityModManager.Logger.Log("1");
-
 				if (this.animationFrames.Count == 0 || this.animationFrames[0] == null) goto EndThread;
 				int animationFramesCount = this.animationFrames.Count;
 				currentAnimationFrame = this.animationFrames[0];
-
-				if (paramaters.recursive == false) UnityModManager.Logger.Log("2");
 
 				if (!startedAnimating && animationFrames.Count > 5) {
 					if (currentAnimationFrame.vectors == null || !currentAnimationFrame.key) {
@@ -699,7 +695,6 @@ namespace XLMultiplayer {
 
 					this.animationFrames.RemoveAt(0);
 				}
-				if (paramaters.recursive == false) UnityModManager.Logger.Log("3");
 
 				if (!startedAnimating) goto EndThread;
 
@@ -730,8 +725,6 @@ namespace XLMultiplayer {
 					goto EndThread;
 				}
 
-				if (paramaters.recursive == false) UnityModManager.Logger.Log("4");
-
 				if (currentAnimationFrame.deltaTime == 0) {
 					currentAnimationFrame.deltaTime = currentAnimationFrame.frameTime - this.previousFrameTime;
 
@@ -745,7 +738,6 @@ namespace XLMultiplayer {
 						//debugWriter.WriteLine("  To: " + currentAnimationFrame.deltaTime);
 
 						if (currentAnimationFrame.deltaTime > 0.14f) {
-							debugWriter.WriteLine("Capping current frame to 140ms");
 							currentAnimationFrame.deltaTime = 0.14f;
 						}
 					}
@@ -766,7 +758,6 @@ namespace XLMultiplayer {
 
 					replayController.ClipEndTime = playTime;
 				}
-				if (paramaters.recursive == false) UnityModManager.Logger.Log("5");
 
 				if (currentAnimationFrame.timeSinceStart >= currentAnimationFrame.deltaTime) {
 					// 30FPS 120Seconds
@@ -808,13 +799,12 @@ namespace XLMultiplayer {
 						}
 					}
 
-					for (int i = 0; i < 77; i++) {
-						if (!paramaters.inReplay) {
-							targetBonePosition[i] = previousFinishedFrame.vectors[i];
-							targetBoneRotation[i] = previousFinishedFrame.quaternions[i];
-						}
-
-						if (!this.animationFrames[1].key) {
+					if (!paramaters.inReplay) {
+						previousFinishedFrame.vectors.CopyTo(targetBonePosition, 0);
+						previousFinishedFrame.quaternions.CopyTo(targetBoneRotation, 0);
+					}
+					if (!this.animationFrames[1].key) {
+						for (int i = 0; i < 77; i++) {
 							this.animationFrames[1].vectors[i] += previousFinishedFrame.vectors[i];
 							this.animationFrames[1].quaternions[i].eulerAngles = this.animationFrames[1].quaternions[i].eulerAngles + previousFinishedFrame.quaternions[i].eulerAngles;
 						}
@@ -832,10 +822,8 @@ namespace XLMultiplayer {
 						goto EndThread;
 					}
 				}
-				if (paramaters.recursive == false) UnityModManager.Logger.Log("6");
 
 				EndThread:
-				if (paramaters.recursive == false) UnityModManager.Logger.Log("7");
 				if (!paramaters.recursive) {
 					currentlyLerping = false;
 					SpinWait.SpinUntil(() => currentlyLerping == true || runThread == false);
