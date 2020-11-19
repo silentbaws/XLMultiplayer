@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -6,6 +7,7 @@ namespace XLMultiplayerUI {
 	public delegate void OnClickDisconnectDelegate();
 	public delegate void OnClickConnectDelegate();
 	public delegate void MenuUpdateDelegate();
+	public delegate void OnSaveVolume(float newVolume);
 
 	public class NewMultiplayerMenu : MonoBehaviour{
 		public GameObject serverListItem;
@@ -20,6 +22,9 @@ namespace XLMultiplayerUI {
 
 		public GameObject disconnectButton;
 
+		public TMP_InputField VolumeInput;
+		public Slider VolumeSlider;
+
 		public InputField[] usernameFields;
 
 		public InputField[] textFields;
@@ -31,6 +36,8 @@ namespace XLMultiplayerUI {
 		public OnClickConnectDelegate OnClickConnectCallback;
 		public OnClickDisconnectDelegate OnClickDisconnectCallback;
 		public MenuUpdateDelegate UpdateCallback;
+		public OnSaveVolume SaveVolume;
+
 
 		public GameObject mainMenuObject;
 
@@ -88,6 +95,29 @@ namespace XLMultiplayerUI {
 
 		public void Update() {
 			if (this.UpdateCallback != null) UpdateCallback();
+		}
+
+		public void OnClickPatreon() {
+			Application.OpenURL("https://www.patreon.com/silentbaws");
+		}
+
+		public void OnChangeVolumeSlider() {
+			if (!VolumeInput.isFocused) {
+				VolumeInput.text = VolumeSlider.value.ToString("0.000");
+				SaveVolume(float.Parse(VolumeInput.text));
+			}
+		}
+
+		public void OnChangeVolumeText() {
+			float newVolume = 0;
+			if (float.TryParse(VolumeInput.text, out newVolume)) {
+				VolumeSlider.value = newVolume;
+			}
+		}
+
+		public void OnEndEditVolume() {
+			VolumeInput.text = VolumeSlider.value.ToString("0.000");
+			SaveVolume(float.Parse(VolumeInput.text));
 		}
 
 		public void AddServerItem(string ip, string port, string name, string map, string version, string players, OnClickDelegate clickFunction) {

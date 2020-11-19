@@ -32,110 +32,6 @@ namespace XLMultiplayer {
 		public string username = "Username";
 	}
 
-	struct CustomUI {
-		public Func<bool> isEnabled;
-		public Action OnGUI;
-	}
-	
-	// TODO: Redo this UI in unity
-	public class OldUIBox : MonoBehaviour {
-		public static OldUIBox Instance { get; private set; } = null;
-
-		private bool renderWindow = false;
-		private List<CustomUI> customs = new List<CustomUI>();
-
-		public GUIStyle columnLeftStyle;
-		GUIStyle windowStyle;
-
-		private static readonly int window_margin_sides = 10;
-
-		private static readonly int window_width = 600;
-		private static readonly int spacing = 14;
-
-		private Rect windowRect = new Rect(0f, 0f, 600f, 0f);
-
-		public readonly int label_column_width = (window_width - (window_margin_sides * 2) - (spacing * 3)) / 2;
-
-		float lastPatchTime = 0f;
-
-		public void AddCustom(Func<bool> enabled, Action render) {
-			customs.Add(new CustomUI() {
-				isEnabled = enabled,
-				OnGUI = render
-			});
-		}
-
-		private void Awake() {
-			if (Instance == null) {
-				Instance = this;
-			} else if (Instance != this) {
-				GameObject.Destroy(this.gameObject);
-			}
-		}
-
-		private void Update() {
-			if (Input.GetKeyDown(KeyCode.F2)) {
-				renderWindow = !renderWindow;
-				if (!renderWindow) Cursor.visible = false;
-				else Cursor.lockState = CursorLockMode.None;
-			}
-
-			if (renderWindow) Cursor.visible = true;
-
-			if (Time.realtimeSinceStartup - lastPatchTime > 10f) {
-				lastPatchTime = Time.realtimeSinceStartup;
-			}
-		}
-
-		private void OnGUI() {
-			if (windowStyle == null) {
-				windowStyle = new GUIStyle(GUI.skin.window) {
-					padding = new RectOffset(10, 10, 25, 10),
-					contentOffset = new Vector2(0, -23.0f)
-				};
-			}
-
-			if (renderWindow) windowRect = GUILayout.Window(GUIUtility.GetControlID(FocusType.Passive), windowRect, RenderWindow, "XLMultiplayer Menu", windowStyle, GUILayout.Width(600));
-		}
-
-		private void RenderWindow(int ID) {
-			GUI.DragWindow(new Rect(0, 0, 10000, 20));
-			GUILayout.BeginVertical();
-			RenderBoxes();
-			GUILayout.EndVertical();
-		}
-
-		private void RenderBoxes() {
-			GUIStyle boxStyle = new GUIStyle(GUI.skin.box) {
-				padding = new RectOffset(14, 14, 24, 9),
-				contentOffset = new Vector2(0, -20f)
-			};
-
-			columnLeftStyle = new GUIStyle();
-			columnLeftStyle.margin.right = spacing;
-
-			GUILayout.BeginVertical(boxStyle);
-			{
-				GUILayout.BeginHorizontal();
-				{
-
-					GUILayout.BeginVertical();
-					{
-
-						foreach (CustomUI uiCustom in customs) {
-							if (uiCustom.isEnabled != null && uiCustom.isEnabled()) uiCustom.OnGUI();
-						}
-
-					}
-					GUILayout.EndVertical();
-
-				}
-				GUILayout.EndHorizontal();
-			}
-			GUILayout.EndVertical();
-		}
-	}
-
 	[Serializable]
 	public class MultiplayerSettings : UnityModManager.ModSettings {
 		public float volumeMultiplier = 1.0f;
@@ -166,8 +62,6 @@ namespace XLMultiplayer {
 		public static StreamWriter debugWriter;
 
 		public static AssetBundle uiBundle;
-
-		public static OldUIBox oldBox;
 
 		public static MultiplayerSettings settings;
 
@@ -201,6 +95,7 @@ namespace XLMultiplayer {
 				foreach(string subdir in Directory.GetDirectories(pluginDirectory))
 					ClearDirectory(subdir);
 			}
+			settings = MultiplayerSettings.Load<MultiplayerSettings>(modEntry);
 
 			LoadPlugins();
 		}
@@ -224,12 +119,6 @@ namespace XLMultiplayer {
 				utilityMenu = new GameObject().AddComponent<MultiplayerUtilityMenu>();
 				GameObject.DontDestroyOnLoad(utilityMenu.gameObject);
 
-				oldBox = new GameObject().AddComponent<OldUIBox>();
-				GameObject.DontDestroyOnLoad(oldBox.gameObject);
-
-				oldBox.AddCustom(() => enabled, DisplayPatreon);
-				oldBox.AddCustom(() => enabled, DisplayVolume);
-
 				if (NewMultiplayerMenu.Instance == null) {
 					if (uiBundle == null) uiBundle = AssetBundle.LoadFromFile(modEntry.Path + "multiplayerui");
 
@@ -237,6 +126,9 @@ namespace XLMultiplayer {
 					NewMultiplayerMenu.Instance.UpdateCallback = MenuUpdate;
 					NewMultiplayerMenu.Instance.OnClickConnectCallback = Main.OnClickConnect;
 					NewMultiplayerMenu.Instance.OnClickDisconnectCallback = Main.OnClickDisconnect;
+					NewMultiplayerMenu.Instance.SaveVolume = Main.SaveSettings;
+
+
 
 					GameObject.DontDestroyOnLoad(newMenuObject);
 
@@ -244,7 +136,9 @@ namespace XLMultiplayer {
 				}
 
 				MultiplayerUtils.StartMapLoading();
-				settings = MultiplayerSettings.Load<MultiplayerSettings>(modEntry);
+
+				NewMultiplayerMenu.Instance.VolumeInput.text = settings.volumeMultiplier.ToString("0.000");
+				NewMultiplayerMenu.Instance.VolumeSlider.value = settings.volumeMultiplier;
 			} else {
 				//Unpatch the replay editor
 				harmonyInstance.UnpatchAll(harmonyInstance.Id);
@@ -259,7 +153,6 @@ namespace XLMultiplayer {
 
 				if (multiplayerController != null) multiplayerController.DisconnectFromServer();
 
-				GameObject.Destroy(OldUIBox.Instance.gameObject);
 				GameObject.Destroy(NewMultiplayerMenu.Instance.gameObject);
 				UnityEngine.Object.Destroy(utilityMenu.gameObject);
 			}
@@ -535,6 +428,7 @@ namespace XLMultiplayer {
 									usernameField.text = previousUsername.username;
 								}
 							}
+
 						}
 					} else {
 						Cursor.visible = false;
@@ -543,72 +437,9 @@ namespace XLMultiplayer {
 			}
 		}
 
-		static GUIStyle patreonStyle = null;
-		static Texture2D patreonButton = null;
-		static GUILayoutOption[] patreonOptions = null;
-
-		private static void DisplayPatreon() {
-			if (patreonStyle == null) {
-				patreonStyle = new GUIStyle();
-				patreonStyle.richText = true;
-				patreonStyle.normal.textColor = Color.yellow;
-				patreonStyle.alignment = TextAnchor.UpperCenter;
-			}
-			if (patreonButton == null) {
-				patreonButton = new Texture2D(0, 0, TextureFormat.RGBA32, false);
-				patreonButton.LoadImage(File.ReadAllBytes(Directory.GetCurrentDirectory() + "\\Mods\\XLMultiplayer\\patreon_button.png"));
-				patreonButton.filterMode = FilterMode.Trilinear;
-			}
-			if (patreonOptions == null) {
-				patreonOptions = new GUILayoutOption[] { GUILayout.Width(233), GUILayout.Height(54) };
-			}
-
-			patreonStyle.padding.bottom = -20;
-
-			GUILayout.Label("Reserve your username and <b><i><color=#f00>a</color><color=#ff7f00>d</color><color=#ff0>d</color> <color=#0f0>s</color><color=#0ff>o</color><color=#00f>m</color><color=#8b00ff>e</color> <color=#f00>f</color><color=#ff7f00>l</color><color=#ff0>a</color><color=#0f0>i</color><color=#0ff>r</color></i></b> by supporting me on patreon\n\n", patreonStyle);
-
-			patreonStyle.padding.bottom = 20;
-
-			GUILayout.FlexibleSpace();
-			GUILayout.BeginHorizontal();
-			GUILayout.FlexibleSpace();
-
-			if (GUILayout.Button(patreonButton, patreonStyle, patreonOptions)) {
-				Application.OpenURL("https://www.patreon.com/silentbaws");
-			}
-
-			GUILayout.FlexibleSpace();
-			GUILayout.EndHorizontal();
-			GUILayout.FlexibleSpace();
-		}
-
-		static float LastSaveTime = 0f;
-		static float LastSavedVolume = 1f;
-
-		private static void DisplayVolume() {
-			patreonStyle.padding.bottom = 0;
-
-			GUILayout.Label("Multiplayer Remote Volume Multiplier", patreonStyle);
-
-			GUILayout.FlexibleSpace();
-			GUILayout.BeginHorizontal();
-			GUILayout.FlexibleSpace();
-
-			GUILayoutOption[] options = { GUILayout.MaxWidth(40f), GUILayout.MinWidth(40f) };
-
-			float newVolume = float.Parse(GUILayout.TextField(Main.settings.volumeMultiplier.ToString(), options));
-			newVolume = GUILayout.HorizontalSlider(newVolume, 0f, 3f, patreonOptions);
-
-			Main.settings.volumeMultiplier = newVolume;
-
-			if (Main.settings.volumeMultiplier != LastSavedVolume && Time.realtimeSinceStartup - LastSaveTime > 10f) {
-				Main.settings.Save(Main.modEntry);
-				LastSaveTime = Time.realtimeSinceStartup;
-			}
-
-			GUILayout.FlexibleSpace();
-			GUILayout.EndHorizontal();
-			GUILayout.FlexibleSpace();
+		private static void SaveSettings(float volumeMultiplier) {
+			Main.settings.volumeMultiplier = volumeMultiplier;
+			Main.settings.Save(Main.modEntry);
 		}
 	}
 

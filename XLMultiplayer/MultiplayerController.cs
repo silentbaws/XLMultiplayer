@@ -161,9 +161,6 @@ namespace XLMultiplayer {
 				GameManagement.GameStateMachine.Instance.ReplayObject.SetActive(true);
 				StartCoroutine(TurnOffReplay());
 			}
-			
-			Main.oldBox.AddCustom(() => isConnected, PlayerListOnGUI);
-			Main.oldBox.AddCustom(() => isConnected, NetworkStatsOnGUI);
 
 			var clipDict = Traverse.Create(SoundManager.Instance).Field("clipForName").GetValue<Dictionary<string, AudioClip>>();
 			MultiplayerUtils.InitializeClipToArrayByteDict(clipDict);
@@ -244,25 +241,6 @@ namespace XLMultiplayer {
 					usernameColumnText[2] += username + "\n";
 				}
 			}
-
-			GUILayout.Label(playerListText, modMenuStyle, null);
-
-			GUILayout.BeginHorizontal();
-
-			// Split usernames into 3 rows
-			GUILayout.BeginVertical(OldUIBox.Instance.columnLeftStyle, GUILayout.Width(OldUIBox.Instance.label_column_width * 2 / 3));
-			GUILayout.Label(usernameColumnText[0], modMenuStyle, null);
-			GUILayout.EndVertical();
-
-			GUILayout.BeginVertical(modMenuStyle, GUILayout.Width(OldUIBox.Instance.label_column_width * 2 / 3));
-			GUILayout.Label(usernameColumnText[1], modMenuStyle, null);
-			GUILayout.EndVertical();
-
-			GUILayout.BeginVertical(GUILayout.Width(OldUIBox.Instance.label_column_width * 2 / 3));
-			GUILayout.Label(usernameColumnText[2], modMenuStyle, null);
-			GUILayout.EndVertical();
-
-			GUILayout.EndHorizontal();
 		}
 
 		private void NetworkStatsOnGUI() {
