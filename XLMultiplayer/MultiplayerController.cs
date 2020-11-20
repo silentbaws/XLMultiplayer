@@ -702,9 +702,9 @@ namespace XLMultiplayer {
 						player.skater.SetActive(false);
 						player.board.SetActive(false);
 						player.usernameObject.SetActive(false);
-						player.runThread = false;
-						if (player.lerpFrameThread != null)
-							player.lerpFrameThread.Join();
+						//player.runThread = false;
+						//if (player.lerpFrameThread != null)
+						//	player.lerpFrameThread.Join();
 					} else {
 						RemovePlayer(player);
 					}

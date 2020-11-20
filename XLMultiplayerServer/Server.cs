@@ -45,7 +45,7 @@ namespace XLMultiplayerServer {
 	
 	public class Server {
 		// TODO: Update version number with versions
-		private string VERSION_NUMBER = "0.11.1";
+		private string VERSION_NUMBER = "0.11.2";
 
 		public LogMessage LogMessageCallback;
 		public LogChatMessage LogChatMessageCallback;

@@ -481,9 +481,6 @@
     <Content Include="libprotobuf.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <None Include="patreon_button.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\XLMultiplayerUI\XLMultiplayerUI.csproj">

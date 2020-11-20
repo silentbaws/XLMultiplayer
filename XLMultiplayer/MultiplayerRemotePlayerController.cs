@@ -141,7 +141,7 @@ namespace XLMultiplayer {
 		private bool waitingForDelay = false;
 		private bool speedDelay = false;
 
-		public Thread lerpFrameThread = null;
+		//public Thread lerpFrameThread = null;
 
 		private List<byte> gearStream = new List<byte>();
 
@@ -639,26 +639,27 @@ namespace XLMultiplayer {
 		}
 
 		public void StartFrameLerp() {
-			currentlyLerping = true;
+			//currentlyLerping = true;
 
 			deltaTime = Time.unscaledDeltaTime;
 			playTime = PlayTime.time;
 
-			if (lerpFrameThread == null) {
-				lerpFrameThread = new Thread(LerpNextFrame);
-				lerpFrameThread.IsBackground = true;
-				lerpFrameThread.Start(new LerpFrameParameters(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)));
-			}
+			//if (lerpFrameThread == null) {
+			//	lerpFrameThread = new Thread(LerpNextFrame);
+			//	lerpFrameThread.IsBackground = true;
+			//	lerpFrameThread.Start(new LerpFrameParameters(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)));
+			//}
+			LerpNextFrame(new LerpFrameParameters(GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState)));
 		}
 
 		MultiplayerFrameBufferObject previousFinishedFrame = null;
 		MultiplayerFrameBufferObject currentAnimationFrame = null;
 
-		Vector3[] targetBonePosition = new Vector3[77];
-		Quaternion[] targetBoneRotation = new Quaternion[77];
+		//Vector3[] targetBonePosition = new Vector3[77];
+		//Quaternion[] targetBoneRotation = new Quaternion[77];
 
-		public bool runThread = true;
-		bool currentlyLerping = false;
+		//public bool runThread = true;
+		//bool currentlyLerping = false;
 
 		float playTime = 0f;
 		float deltaTime = 0f;
@@ -666,7 +667,7 @@ namespace XLMultiplayer {
 		// TODO: refactor all this shit, I'm sure there's a better way
 		private void LerpNextFrame(object paramatersUntyped) {
 			LerpFrameParameters paramaters = (LerpFrameParameters)paramatersUntyped;
-			do {
+			//do {
 				if (!paramaters.recursive)
 					paramaters.inReplay = GameManagement.GameStateMachine.Instance.CurrentState.GetType() == typeof(GameManagement.ReplayState);
 
@@ -684,8 +685,8 @@ namespace XLMultiplayer {
 					startedAnimating = true;
 
 					for (int i = 0; i < 77; i++) {
-						targetBonePosition[i] = currentAnimationFrame.vectors[i];
-						targetBoneRotation[i] = currentAnimationFrame.quaternions[i];
+						bones[i].localPosition = currentAnimationFrame.vectors[i];
+						bones[i].localRotation = currentAnimationFrame.quaternions[i];
 					}
 
 					this.previousFrameTime = currentAnimationFrame.frameTime;
@@ -751,8 +752,8 @@ namespace XLMultiplayer {
 				if (!paramaters.inReplay) {
 					if (currentAnimationFrame.timeSinceStart < currentAnimationFrame.deltaTime) {
 						for (int i = 0; i < 77; i++) {
-							targetBonePosition[i] = Vector3.Lerp(previousFinishedFrame.vectors[i], currentAnimationFrame.vectors[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
-							targetBoneRotation[i] = Quaternion.Slerp(previousFinishedFrame.quaternions[i], currentAnimationFrame.quaternions[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
+							bones[i].localPosition = Vector3.Lerp(previousFinishedFrame.vectors[i], currentAnimationFrame.vectors[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
+							bones[i].localRotation = Quaternion.Slerp(previousFinishedFrame.quaternions[i], currentAnimationFrame.quaternions[i], currentAnimationFrame.timeSinceStart / currentAnimationFrame.deltaTime);
 						}
 					}
 
@@ -799,12 +800,17 @@ namespace XLMultiplayer {
 						}
 					}
 
-					if (!paramaters.inReplay) {
-						previousFinishedFrame.vectors.CopyTo(targetBonePosition, 0);
-						previousFinishedFrame.quaternions.CopyTo(targetBoneRotation, 0);
-					}
-					if (!this.animationFrames[1].key) {
-						for (int i = 0; i < 77; i++) {
+					//if (!paramaters.inReplay) {
+					//	previousFinishedFrame.vectors.CopyTo(targetBonePosition, 0);
+					//	previousFinishedFrame.quaternions.CopyTo(targetBoneRotation, 0);
+					//}
+					for (int i = 0; i < 77; i++) {
+						if (!paramaters.inReplay) {
+							bones[i].localPosition = previousFinishedFrame.vectors[i];
+							bones[i].localRotation = previousFinishedFrame.quaternions[i];
+						}
+
+						if (!this.animationFrames[1].key) {
 							this.animationFrames[1].vectors[i] += previousFinishedFrame.vectors[i];
 							this.animationFrames[1].quaternions[i].eulerAngles = this.animationFrames[1].quaternions[i].eulerAngles + previousFinishedFrame.quaternions[i].eulerAngles;
 						}
@@ -825,24 +831,24 @@ namespace XLMultiplayer {
 
 				EndThread:
 				if (!paramaters.recursive) {
-					currentlyLerping = false;
-					SpinWait.SpinUntil(() => currentlyLerping == true || runThread == false);
+					//currentlyLerping = false;
+					//SpinWait.SpinUntil(() => currentlyLerping == true || runThread == false);
 				}
-			} while (runThread && !paramaters.recursive);
+			//} while (runThread && !paramaters.recursive);
 		}
 		
 		public void EndLerpFrame() {
-			SpinWait.SpinUntil(() => currentlyLerping == false);
+			//SpinWait.SpinUntil(() => currentlyLerping == false, 30);
 
 			if (this.currentlySetUsername != this.username) {
 				this.usernameText.text = this.username;
 				this.currentlySetUsername = this.username;
 			}
 
-			for (int i = 0; i < 77; i++) {
-				bones[i].localPosition = targetBonePosition[i];
-				bones[i].localRotation = targetBoneRotation[i];
-			}
+			//for (int i = 0; i < 77; i++) {
+			//	bones[i].localPosition = targetBonePosition[i];
+			//	bones[i].localRotation = targetBoneRotation[i];
+			//}
 
 			this.usernameObject.transform.position = this.skater.transform.position + this.skater.transform.up;
 			this.usernameObject.transform.LookAt(mainCameraTransform);
@@ -1007,8 +1013,8 @@ namespace XLMultiplayer {
 		}
 
 		public void Destroy() {
-			runThread = false;
-			lerpFrameThread.Join();
+			//runThread = false;
+			//lerpFrameThread.Join();
 
 			GameObject.Destroy(skater);
 			GameObject.Destroy(board);
