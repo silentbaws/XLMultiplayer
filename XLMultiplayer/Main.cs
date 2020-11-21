@@ -80,15 +80,17 @@ namespace XLMultiplayer {
 			modEntry.OnToggle = OnToggle;
 
 			string directory = Directory.GetCurrentDirectory();
-			try {
-				File.Copy(modEntry.Path + "GameNetworkingSockets.dll", directory + "\\GameNetworkingSockets.dll", true);
-				File.Copy(modEntry.Path + "libprotobuf.dll", directory + "\\libprotobuf.dll", true);
-				File.Copy(modEntry.Path + "libcrypto-1_1-x64.dll", directory + "\\libcrypto-1_1-x64.dll", true);
-				File.Copy(modEntry.Path + "System.Buffers.dll", directory + "\\System.Buffers.dll", true);
-				File.Copy(modEntry.Path + "System.Memory.dll", directory + "\\System.Memory.dll", true);
-				File.Copy(modEntry.Path + "System.Numerics.Vectors.dll", directory + "\\System.Numerics.Vectors.dll", true);
-				File.Copy(modEntry.Path + "System.Runtime.CompilerServices.Unsafe.dll", directory + "\\System.Runtime.CompilerServices.Unsafe.dll", true);
-			} catch (Exception) { }
+			if (!File.Exists(directory + "\\GameNetworkingSockets.dll")) {
+				try {
+					File.Copy(modEntry.Path + "GameNetworkingSockets.dll", directory + "\\GameNetworkingSockets.dll", true);
+					File.Copy(modEntry.Path + "libprotobuf.dll", directory + "\\libprotobuf.dll", true);
+					File.Copy(modEntry.Path + "libcrypto-1_1-x64.dll", directory + "\\libcrypto-1_1-x64.dll", true);
+					File.Copy(modEntry.Path + "System.Buffers.dll", directory + "\\System.Buffers.dll", true);
+					File.Copy(modEntry.Path + "System.Memory.dll", directory + "\\System.Memory.dll", true);
+					File.Copy(modEntry.Path + "System.Numerics.Vectors.dll", directory + "\\System.Numerics.Vectors.dll", true);
+					File.Copy(modEntry.Path + "System.Runtime.CompilerServices.Unsafe.dll", directory + "\\System.Runtime.CompilerServices.Unsafe.dll", true);
+				} catch (Exception) { }
+			}
 
 			string pluginDirectory = Path.Combine(modEntry.Path, "Plugins");
 			if (Directory.Exists(pluginDirectory)) {
@@ -127,8 +129,6 @@ namespace XLMultiplayer {
 					NewMultiplayerMenu.Instance.OnClickConnectCallback = Main.OnClickConnect;
 					NewMultiplayerMenu.Instance.OnClickDisconnectCallback = Main.OnClickDisconnect;
 					NewMultiplayerMenu.Instance.SaveVolume = Main.SaveSettings;
-
-
 
 					GameObject.DontDestroyOnLoad(newMenuObject);
 
@@ -362,7 +362,7 @@ namespace XLMultiplayer {
 		}
 
 		private static void OnClickConnect() {
-			JoinServer(NewMultiplayerMenu.Instance.connectMenu.transform.Find("IP Address").GetComponent<InputField>().text, NewMultiplayerMenu.Instance.connectMenu.transform.Find("Port").GetComponent<InputField>().text, NewMultiplayerMenu.Instance.usernameFields[1].text);
+			JoinServer(NewMultiplayerMenu.Instance.connectMenu.transform.Find("IP Address").GetComponent<TMPro.TMP_InputField>().text, NewMultiplayerMenu.Instance.connectMenu.transform.Find("Port").GetComponent<TMPro.TMP_InputField>().text, NewMultiplayerMenu.Instance.usernameFields[1].text);
 		}
 
 		private static void JoinServer(string ip, string port, string username) {
@@ -399,6 +399,10 @@ namespace XLMultiplayer {
 		private static void MenuUpdate() {
 			if (NewMultiplayerMenu.Instance != null) {
 				if (Input.GetKeyDown(KeyCode.P)) {
+					if (NewMultiplayerMenu.Instance.GameBlurQuad != null) {
+						GameObject.Destroy(NewMultiplayerMenu.Instance.GameBlurQuad);
+					}
+
 					NewMultiplayerMenu.Instance.serverBrowserMenu.SetActive(false);
 					NewMultiplayerMenu.Instance.connectMenu.SetActive(false);
 					
@@ -425,7 +429,7 @@ namespace XLMultiplayer {
 							}
 
 							if (previousUsername.username != "") {
-								foreach (InputField usernameField in NewMultiplayerMenu.Instance.usernameFields) {
+								foreach (TMPro.TMP_InputField usernameField in NewMultiplayerMenu.Instance.usernameFields) {
 									usernameField.text = previousUsername.username;
 								}
 							}
@@ -812,8 +816,8 @@ namespace XLMultiplayer {
 
 	[HarmonyPatch(typeof(Input), "GetKeyDown", typeof(KeyCode))]
 	static class InputKeyDownPatch {
-		static void Postfix(ref bool __result) {
-			if (NewMultiplayerMenu.Instance != null && NewMultiplayerMenu.Instance.IsFocusedInput()) __result = false;
+		static void Postfix(KeyCode key, ref bool __result) {
+			if (NewMultiplayerMenu.Instance != null && NewMultiplayerMenu.Instance.IsFocusedInput() && key != KeyCode.Tab) __result = false;
 		}
 	}
 

@@ -435,7 +435,7 @@
     </Reference>
     <Reference Include="ValveSockets">
       <HintPath>..\ValveSockets\ValveSockets.dll</HintPath>
-      <Private>False</Private>
+      <Private>True</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -487,7 +487,6 @@
       <Project>{e13deedc-57ac-4d7f-a656-321a553ad1cf}</Project>
       <Name>XLMultiplayerUI</Name>
       <Private>True</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

@@ -21,6 +21,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using UnityEngine;
 using Valve.Sockets;
+using XLMultiplayerUI;
 
 // TODO: game of skate.... maybe?
 
@@ -157,6 +158,8 @@ namespace XLMultiplayer {
 				AudioSource newSource = Traverse.Create(audioPlayer).Property("audioSource").GetValue<AudioSource>();
 				if (newSource != null) MultiplayerUtils.audioPlayerNames.Add(newSource.name);
 			}
+
+			NewMultiplayerMenu.Instance.SendChatMessage = SendChatMessage;
 		}
 
 		
@@ -284,8 +287,7 @@ namespace XLMultiplayer {
 
 			utils.SetDebugCallback(DebugType.Important, debugCallbackDelegate);
 			
-			Main.utilityMenu.chat = "";
-			Main.utilityMenu.previousMessageCount = 0;
+			NewMultiplayerMenu.Instance.MessageBox.text = "";
 
 			unsafe {
 #if DEBUG
@@ -696,7 +698,7 @@ namespace XLMultiplayer {
 					break;
 				case OpCode.Disconnect:
 					MultiplayerRemotePlayerController player = remoteControllers.Find(c => c.playerID == playerID);
-					chatMessages.Add("Player <color=\"yellow\">" + player.username + "{" + player.playerID + "}</color> <b><color=\"red\">DISCONNECTED</color></b>");
+					chatMessages.Add("Player " + player.username + "{" + player.playerID + "} <b><color=\"red\">DISCONNECTED</color></b>");
 					if(player.replayAnimationFrames.Count > 5) {
 						player.playerID = 255;
 						player.skater.SetActive(false);
@@ -732,7 +734,7 @@ namespace XLMultiplayer {
 						}
 					} else {
 						this.debugWriter.WriteLine("server version {0} does not match client version {1}", serverVersion, Main.modEntry.Version.ToString());
-						Main.utilityMenu.SendImportantChat("<color=\"yellow\">server version <color=\"green\"><b>" + serverVersion + "</b></color> does not match client version <color=\"red\"><b>" + Main.modEntry.Version.ToString() + "</b></color></color>", 7500);
+						Main.utilityMenu.SendImportantChat("server version <color=#006400><b>" + serverVersion + "</b></color> does not match client version <color=\"red\"><b>" + Main.modEntry.Version.ToString() + "</b></color>", 7500);
 						DisconnectFromServer();
 					}
 					break;
@@ -741,15 +743,15 @@ namespace XLMultiplayer {
 					if (remotePlayer != null) {
 						remotePlayer.username = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 2);
 						if (!ContainsMarkup(remotePlayer.username)) {
-							chatMessages.Add("Player <color=\"yellow\">" + remotePlayer.username + "{" + remotePlayer.playerID + "}</color> <b><color=\"green\">CONNECTED</color></b>");
+							chatMessages.Add("Player " + remotePlayer.username + "{" + remotePlayer.playerID + "} <b><color=#006400>CONNECTED</color></b>");
 						} else {
-							chatMessages.Add("Player " + remotePlayer.username + "{" + remotePlayer.playerID + "} <b><color=\"green\">CONNECTED</color></b>");
+							chatMessages.Add("Player " + remotePlayer.username + "{" + remotePlayer.playerID + "} <b><color=#006400>CONNECTED</color></b>");
 						}
 					}
 					break;
 				case OpCode.UsernameAdjustment:
 					this.playerController.username = ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 1);
-					Main.utilityMenu.SendImportantChat($"<color=\"yellow\">Server adjusted your username to {this.playerController.username}</color>", 5000);
+					Main.utilityMenu.SendImportantChat($"<color=#9400D3>Server adjusted your username to {this.playerController.username}</color>", 5000);
 					break;
 				case OpCode.Texture:
 					MultiplayerRemotePlayerController remoteOwner = remoteControllers.Find((p) => { return p.playerID == playerID; });
@@ -777,7 +779,7 @@ namespace XLMultiplayer {
 					string cleanedMessage = RemoveMarkup(ASCIIEncoding.ASCII.GetString(buffer, 1, buffer.Length - 2));
 
 					if (remoteSender != null) {
-						cleanedMessage = "<b>" + remoteSender.username + "</b>{" + playerID + "}: " + cleanedMessage;
+						cleanedMessage = "" + remoteSender.username + "{" + playerID + "}: " + cleanedMessage;
 						chatMessages.Add(cleanedMessage);
 					}
 					break;

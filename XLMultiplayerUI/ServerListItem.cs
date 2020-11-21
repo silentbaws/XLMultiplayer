@@ -1,9 +1,9 @@
 ﻿using UnityEngine;
-using UnityEngine.UI;
+using TMPro;
 
 namespace XLMultiplayerUI {
 	public class ServerListItem : MonoBehaviour {
-		public Text ServerName, ServerMap, ServerVersion, ServerPlayers;
+		public TMP_Text ServerName, ServerMap, ServerVersion, ServerPlayers;
 
 		public string ipAddress, port;
 		

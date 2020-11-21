@@ -8,8 +8,9 @@ namespace XLMultiplayerUI {
 	public delegate void OnClickConnectDelegate();
 	public delegate void MenuUpdateDelegate();
 	public delegate void OnSaveVolume(float newVolume);
+	public delegate void OnSendChatMessage(string message);
 
-	public class NewMultiplayerMenu : MonoBehaviour{
+	public class NewMultiplayerMenu : MonoBehaviour {
 		public GameObject serverListItem;
 		public GameObject serverListBox;
 		public GameObject serverViewport;
@@ -25,9 +26,9 @@ namespace XLMultiplayerUI {
 		public TMP_InputField VolumeInput;
 		public Slider VolumeSlider;
 
-		public InputField[] usernameFields;
+		public TMP_InputField[] usernameFields;
 
-		public InputField[] textFields;
+		public TMP_InputField[] textFields;
 
 		private Vector2 itemRealSize;
 
@@ -37,9 +38,23 @@ namespace XLMultiplayerUI {
 		public OnClickDisconnectDelegate OnClickDisconnectCallback;
 		public MenuUpdateDelegate UpdateCallback;
 		public OnSaveVolume SaveVolume;
+		public OnSendChatMessage SendChatMessage;
 
+		public GameObject BlurQuad;
+		public GameObject GameBlurQuad;
 
 		public GameObject mainMenuObject;
+
+		public TMP_InputField MessageInput;
+		public TMP_Text MessageBox;
+
+		public ScrollRect messageScrollBar;
+
+		private float currentMessageBoxY = 0f;
+		private float oldScroll = 0f;
+		private Vector2 currentMessageBoxSize;
+
+		private Transform mainCamera;
 
 		private static NewMultiplayerMenu _instance;
 
@@ -58,11 +73,15 @@ namespace XLMultiplayerUI {
 			} else {
 				Instance = this;
 			}
+
+			mainCamera = Camera.main.transform;
+
+			currentMessageBoxSize = MessageBox.GetComponent<RectTransform>().sizeDelta;
 		}
 
 		public bool IsFocusedInput() {
 			bool result = false;
-			foreach (InputField f in textFields) {
+			foreach (TMP_InputField f in textFields) {
 				result |= (f != null && f.isFocused);
 			}
 			return result;
@@ -73,6 +92,10 @@ namespace XLMultiplayerUI {
 		}
 
 		public void OnClickServerBrowser() {
+			if (GameBlurQuad == null) {
+				GameBlurQuad = GameObject.Instantiate(BlurQuad);
+			}
+
 			if (!serverBrowserMenu.activeSelf && !connectMenu.activeSelf) serverBrowserMenu.SetActive(true);
 		}
 
@@ -81,6 +104,8 @@ namespace XLMultiplayerUI {
 		}
 
 		public void OnClickCloseServerBrowser() {
+			if (GameBlurQuad != null)
+				GameObject.Destroy(GameBlurQuad);
 			serverBrowserMenu.SetActive(false);
 		}
 
@@ -94,7 +119,42 @@ namespace XLMultiplayerUI {
 		}
 
 		public void Update() {
+			if (GameBlurQuad != null) {
+				if (mainCamera == null) {
+					mainCamera = Camera.main.transform;
+				}
+
+				GameBlurQuad.transform.rotation = mainCamera.rotation;
+				GameBlurQuad.transform.position = mainCamera.position;
+				GameBlurQuad.transform.position += mainCamera.forward * Camera.main.nearClipPlane * 1.1f;
+			}
+
+
+			Vector2 newSize = MessageBox.GetComponent<RectTransform>().sizeDelta;
+			if (newSize != currentMessageBoxSize) {
+				MessageBoxChange(newSize);
+			} else {
+				currentMessageBoxY = MessageBox.transform.localPosition.y;
+				oldScroll = messageScrollBar.verticalNormalizedPosition;
+			}
+
 			if (this.UpdateCallback != null) UpdateCallback();
+
+			if (Input.GetKeyDown(KeyCode.A)) {
+				AddServerItem("127.0.0.1", "7777", "WOW THIS IS A FUCKING COOL SERVER BUD", "THAT ONE SUPER POG MAP EVERYONE PLAYS NOW", "v0.11.3", "20/20", null);
+			}
+		}
+
+		public void LateUpdate() {
+			if (GameBlurQuad != null) {
+				if (mainCamera == null) {
+					mainCamera = Camera.main.transform;
+				}
+
+				GameBlurQuad.transform.rotation = mainCamera.rotation;
+				GameBlurQuad.transform.position = mainCamera.position;
+				GameBlurQuad.transform.position += mainCamera.forward * Camera.main.nearClipPlane * 1.1f;
+			}
 		}
 
 		public void OnClickPatreon() {
@@ -115,9 +175,23 @@ namespace XLMultiplayerUI {
 			}
 		}
 
-		public void OnEndEditVolume() {
-			VolumeInput.text = VolumeSlider.value.ToString("0.000");
-			SaveVolume(float.Parse(VolumeInput.text));
+		public void MessageBoxChange(Vector2 newSize) {
+			if (oldScroll <= 0.001f)
+				messageScrollBar.verticalNormalizedPosition = 0f;
+			else
+				MessageBox.transform.localPosition = new Vector3(MessageBox.transform.localPosition.x, -newSize.y/2 - (-currentMessageBoxSize.y/2 - currentMessageBoxY), MessageBox.transform.localPosition.z);
+
+			currentMessageBoxSize = newSize;
+		}
+
+		public void OnEndEdit() {
+			if (Input.GetKeyDown(KeyCode.Return)) {
+				SendChatMessage?.Invoke(MessageInput.text);
+
+				MessageInput.interactable = false;
+
+				MessageInput.text = "";
+			}
 		}
 
 		public void AddServerItem(string ip, string port, string name, string map, string version, string players, OnClickDelegate clickFunction) {
