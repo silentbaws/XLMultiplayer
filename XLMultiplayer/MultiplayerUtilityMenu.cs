@@ -47,10 +47,10 @@ namespace XLMultiplayer {
 
 		public void Update() {
 			if (Input.GetKeyDown(KeyCode.Tab) && !importantChatWatch.IsRunning) {
-				NewMultiplayerMenu.Instance.MessageInput.transform.parent.gameObject.SetActive(!NewMultiplayerMenu.Instance.MessageInput.transform.parent.gameObject.activeSelf);
+				NewMultiplayerMenu.Instance.chatCanvas.SetActive(!NewMultiplayerMenu.Instance.chatCanvas.activeSelf);
 
-				if (NewMultiplayerMenu.Instance.MessageInput.interactable) {
-					NewMultiplayerMenu.Instance.MessageInput.interactable = false;
+				if (NewMultiplayerMenu.Instance.messageInput.interactable) {
+					NewMultiplayerMenu.Instance.messageInput.interactable = false;
 				}
 			}
 
@@ -59,23 +59,23 @@ namespace XLMultiplayer {
 				if (Main.multiplayerController.chatMessages != null && Main.multiplayerController.chatMessages.Count > 0) {
 					int difference = Main.multiplayerController.chatMessages.Count - previousMessageCount;
 					for (int i = Main.multiplayerController.chatMessages.Count - difference; i < Main.multiplayerController.chatMessages.Count; i++) {
-						NewMultiplayerMenu.Instance.MessageBox.text += Main.multiplayerController.chatMessages[i] + "\n";
+						NewMultiplayerMenu.Instance.messageBox.text += Main.multiplayerController.chatMessages[i] + "\n";
 					}
 					previousMessageCount = Main.multiplayerController.chatMessages.Count;
 				}
 			}
 
 			if (importantChatWatch.IsRunning && importantChatWatch.ElapsedMilliseconds > importantChatDuration) {
-				NewMultiplayerMenu.Instance.MessageInput.transform.parent.gameObject.SetActive(wasOpenBeforeImportantChat);
+				NewMultiplayerMenu.Instance.chatCanvas.SetActive(wasOpenBeforeImportantChat);
 				importantChatWatch.Stop();
 			}
 
 
-			if (NewMultiplayerMenu.Instance.MessageInput.transform.parent.gameObject.activeSelf) {
+			if (NewMultiplayerMenu.Instance.chatCanvas.activeSelf) {
 				if (Input.GetKeyDown(KeyCode.T)) {
-					NewMultiplayerMenu.Instance.MessageInput.interactable = true;
-					NewMultiplayerMenu.Instance.MessageInput.Select();
-					NewMultiplayerMenu.Instance.MessageInput.ActivateInputField();
+					NewMultiplayerMenu.Instance.messageInput.interactable = true;
+					NewMultiplayerMenu.Instance.messageInput.Select();
+					NewMultiplayerMenu.Instance.messageInput.ActivateInputField();
 				}
 			}
 
@@ -124,11 +124,11 @@ namespace XLMultiplayer {
 		}
 
 		public void SendImportantChat(string message, int duration) {
-			NewMultiplayerMenu.Instance.MessageBox.text += message + "\n";
+			NewMultiplayerMenu.Instance.messageBox.text += message + "\n";
 			importantChatDuration = duration;
 
-			wasOpenBeforeImportantChat = NewMultiplayerMenu.Instance.MessageInput.transform.parent.gameObject.activeSelf;
-			NewMultiplayerMenu.Instance.MessageInput.transform.parent.gameObject.SetActive(true);
+			wasOpenBeforeImportantChat = NewMultiplayerMenu.Instance.chatCanvas.activeSelf;
+			NewMultiplayerMenu.Instance.chatCanvas.SetActive(true);
 
 			importantChatWatch.Restart();
 		}

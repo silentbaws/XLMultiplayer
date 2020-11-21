@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace XLMultiplayerUI {
@@ -40,13 +41,17 @@ namespace XLMultiplayerUI {
 		public OnSaveVolume SaveVolume;
 		public OnSendChatMessage SendChatMessage;
 
-		public GameObject BlurQuad;
-		public GameObject GameBlurQuad;
+		public GameObject blurQuad;
+		public GameObject gameBlurQuad;
 
 		public GameObject mainMenuObject;
 
-		public TMP_InputField MessageInput;
-		public TMP_Text MessageBox;
+		public GameObject chatCanvas;
+		public GameObject chatObject;
+		public GameObject chatMoveObject;
+
+		public TMP_InputField messageInput;
+		public TMP_Text messageBox;
 
 		public ScrollRect messageScrollBar;
 
@@ -57,6 +62,10 @@ namespace XLMultiplayerUI {
 		private Transform mainCamera;
 
 		private static NewMultiplayerMenu _instance;
+
+		private bool movingChat = false;
+		private Vector2 mouseStartPosition = Vector2.zero;
+		private Vector2 chatStartPosition = Vector2.zero;
 
 		public static NewMultiplayerMenu Instance {
 			get {
@@ -76,7 +85,7 @@ namespace XLMultiplayerUI {
 
 			mainCamera = Camera.main.transform;
 
-			currentMessageBoxSize = MessageBox.GetComponent<RectTransform>().sizeDelta;
+			currentMessageBoxSize = messageBox.GetComponent<RectTransform>().sizeDelta;
 		}
 
 		public bool IsFocusedInput() {
@@ -92,8 +101,8 @@ namespace XLMultiplayerUI {
 		}
 
 		public void OnClickServerBrowser() {
-			if (GameBlurQuad == null) {
-				GameBlurQuad = GameObject.Instantiate(BlurQuad);
+			if (gameBlurQuad == null) {
+				gameBlurQuad = GameObject.Instantiate(blurQuad);
 			}
 
 			if (!serverBrowserMenu.activeSelf && !connectMenu.activeSelf) serverBrowserMenu.SetActive(true);
@@ -104,8 +113,8 @@ namespace XLMultiplayerUI {
 		}
 
 		public void OnClickCloseServerBrowser() {
-			if (GameBlurQuad != null)
-				GameObject.Destroy(GameBlurQuad);
+			if (gameBlurQuad != null)
+				GameObject.Destroy(gameBlurQuad);
 			serverBrowserMenu.SetActive(false);
 		}
 
@@ -119,22 +128,39 @@ namespace XLMultiplayerUI {
 		}
 
 		public void Update() {
-			if (GameBlurQuad != null) {
+			if (gameBlurQuad != null) {
 				if (mainCamera == null) {
 					mainCamera = Camera.main.transform;
 				}
 
-				GameBlurQuad.transform.rotation = mainCamera.rotation;
-				GameBlurQuad.transform.position = mainCamera.position;
-				GameBlurQuad.transform.position += mainCamera.forward * Camera.main.nearClipPlane * 1.1f;
+				gameBlurQuad.transform.rotation = mainCamera.rotation;
+				gameBlurQuad.transform.position = mainCamera.position;
+				gameBlurQuad.transform.position += mainCamera.forward * Camera.main.nearClipPlane * 1.1f;
+			}
+
+			if (Input.GetKeyUp(KeyCode.Mouse0) && movingChat) {
+				movingChat = false;
+			} else if (Input.GetKeyDown(KeyCode.Mouse0) && EventSystem.current.currentSelectedGameObject == chatMoveObject) {
+				movingChat = true;
+
+				Debug.Log("Moving");
+
+				mouseStartPosition = Input.mousePosition;
+				chatStartPosition = chatObject.transform.localPosition;
+			}
+
+			if (movingChat) {
+				Debug.Log("Moving stuff");
+				Vector2 mousePos = Input.mousePosition;
+				chatObject.transform.localPosition = chatStartPosition - mouseStartPosition + mousePos;
 			}
 
 
-			Vector2 newSize = MessageBox.GetComponent<RectTransform>().sizeDelta;
+			Vector2 newSize = messageBox.GetComponent<RectTransform>().sizeDelta;
 			if (newSize != currentMessageBoxSize) {
 				MessageBoxChange(newSize);
 			} else {
-				currentMessageBoxY = MessageBox.transform.localPosition.y;
+				currentMessageBoxY = messageBox.transform.localPosition.y;
 				oldScroll = messageScrollBar.verticalNormalizedPosition;
 			}
 
@@ -146,14 +172,14 @@ namespace XLMultiplayerUI {
 		}
 
 		public void LateUpdate() {
-			if (GameBlurQuad != null) {
+			if (gameBlurQuad != null) {
 				if (mainCamera == null) {
 					mainCamera = Camera.main.transform;
 				}
 
-				GameBlurQuad.transform.rotation = mainCamera.rotation;
-				GameBlurQuad.transform.position = mainCamera.position;
-				GameBlurQuad.transform.position += mainCamera.forward * Camera.main.nearClipPlane * 1.1f;
+				gameBlurQuad.transform.rotation = mainCamera.rotation;
+				gameBlurQuad.transform.position = mainCamera.position;
+				gameBlurQuad.transform.position += mainCamera.forward * Camera.main.nearClipPlane * 1.1f;
 			}
 		}
 
@@ -179,18 +205,18 @@ namespace XLMultiplayerUI {
 			if (oldScroll <= 0.001f)
 				messageScrollBar.verticalNormalizedPosition = 0f;
 			else
-				MessageBox.transform.localPosition = new Vector3(MessageBox.transform.localPosition.x, -newSize.y/2 - (-currentMessageBoxSize.y/2 - currentMessageBoxY), MessageBox.transform.localPosition.z);
+				messageBox.transform.localPosition = new Vector3(messageBox.transform.localPosition.x, -newSize.y/2 - (-currentMessageBoxSize.y/2 - currentMessageBoxY), messageBox.transform.localPosition.z);
 
 			currentMessageBoxSize = newSize;
 		}
 
 		public void OnEndEdit() {
 			if (Input.GetKeyDown(KeyCode.Return)) {
-				SendChatMessage?.Invoke(MessageInput.text);
+				SendChatMessage?.Invoke(messageInput.text);
 
-				MessageInput.interactable = false;
+				messageInput.interactable = false;
 
-				MessageInput.text = "";
+				messageInput.text = "";
 			}
 		}
 

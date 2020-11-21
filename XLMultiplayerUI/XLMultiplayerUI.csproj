@@ -320,6 +320,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ChatDrag.cs" />
     <Compile Include="NewMultiplayerMenu.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ServerListItem.cs" />

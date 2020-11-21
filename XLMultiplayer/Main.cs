@@ -399,8 +399,8 @@ namespace XLMultiplayer {
 		private static void MenuUpdate() {
 			if (NewMultiplayerMenu.Instance != null) {
 				if (Input.GetKeyDown(KeyCode.P)) {
-					if (NewMultiplayerMenu.Instance.GameBlurQuad != null) {
-						GameObject.Destroy(NewMultiplayerMenu.Instance.GameBlurQuad);
+					if (NewMultiplayerMenu.Instance.gameBlurQuad != null) {
+						GameObject.Destroy(NewMultiplayerMenu.Instance.gameBlurQuad);
 					}
 
 					NewMultiplayerMenu.Instance.serverBrowserMenu.SetActive(false);

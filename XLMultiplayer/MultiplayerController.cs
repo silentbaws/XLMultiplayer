@@ -287,7 +287,7 @@ namespace XLMultiplayer {
 
 			utils.SetDebugCallback(DebugType.Important, debugCallbackDelegate);
 			
-			NewMultiplayerMenu.Instance.MessageBox.text = "";
+			NewMultiplayerMenu.Instance.messageBox.text = "";
 
 			unsafe {
 #if DEBUG
