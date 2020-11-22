@@ -10,6 +10,8 @@ namespace XLMultiplayerUI {
 	public delegate void MenuUpdateDelegate();
 	public delegate void OnSaveVolume(float newVolume);
 	public delegate void OnSendChatMessage(string message);
+	public delegate void LoadChatSettings();
+	public delegate void SaveChatSettings();
 
 	public class NewMultiplayerMenu : MonoBehaviour {
 		public GameObject serverListItem;
@@ -40,6 +42,8 @@ namespace XLMultiplayerUI {
 		public MenuUpdateDelegate UpdateCallback;
 		public OnSaveVolume SaveVolume;
 		public OnSendChatMessage SendChatMessage;
+		public LoadChatSettings LoadSettings;
+		public SaveChatSettings SaveSettings;
 
 		public GameObject blurQuad;
 		public GameObject gameBlurQuad;
@@ -54,6 +58,20 @@ namespace XLMultiplayerUI {
 		public TMP_Text messageBox;
 
 		public ScrollRect messageScrollBar;
+
+		public Image chatBGImage;
+		public Image chatDragImage;
+		public RectTransform chatScrollView;
+
+		public TMP_InputField chatScaleInput;
+		public TMP_InputField chatFontSizeInput;
+		public TMP_InputField chatFontColorInput;
+		public TMP_InputField chatBGColorInput;
+		public TMP_InputField chatDragColorInput;
+		public TMP_InputField chatDisabledColorInput;
+		public TMP_InputField chatSelectedColorInput;
+
+		public GameObject settingsMenuObject;
 
 		private float currentMessageBoxY = 0f;
 		private float oldScroll = 0f;
@@ -86,6 +104,17 @@ namespace XLMultiplayerUI {
 			mainCamera = Camera.main.transform;
 
 			currentMessageBoxSize = messageBox.GetComponent<RectTransform>().sizeDelta;
+			UpdateChatSettingInputs();
+		}
+
+		public void UpdateChatSettingInputs() {
+			chatScaleInput.text = chatScrollView.localScale.x.ToString();
+			chatFontSizeInput.text = messageBox.fontSize.ToString();
+			chatFontColorInput.text = "#" + ColorUtility.ToHtmlStringRGB(messageBox.color);
+			chatBGColorInput.text = "#" + ColorUtility.ToHtmlStringRGBA(chatBGImage.color);
+			chatDragColorInput.text = "#" + ColorUtility.ToHtmlStringRGBA(chatDragImage.color);
+			chatDisabledColorInput.text = "#" + ColorUtility.ToHtmlStringRGBA(messageInput.colors.disabledColor);
+			chatSelectedColorInput.text = "#" + ColorUtility.ToHtmlStringRGBA(messageInput.colors.normalColor);
 		}
 
 		public bool IsFocusedInput() {
@@ -97,15 +126,17 @@ namespace XLMultiplayerUI {
 		}
 
 		public void OnClickDirect() {
-			if (!serverBrowserMenu.activeSelf && !connectMenu.activeSelf) connectMenu.SetActive(true);
+			if (!serverBrowserMenu.activeSelf && !connectMenu.activeSelf && !settingsMenuObject.activeSelf) connectMenu.SetActive(true);
 		}
 
 		public void OnClickServerBrowser() {
-			if (gameBlurQuad == null) {
-				gameBlurQuad = GameObject.Instantiate(blurQuad);
-			}
+			if (!serverBrowserMenu.activeSelf && !connectMenu.activeSelf && !settingsMenuObject.activeSelf) {
+				if (gameBlurQuad == null) {
+					gameBlurQuad = GameObject.Instantiate(blurQuad);
+				}
 
-			if (!serverBrowserMenu.activeSelf && !connectMenu.activeSelf) serverBrowserMenu.SetActive(true);
+				serverBrowserMenu.SetActive(true);
+			}
 		}
 
 		public void OnClickCloseDirect() {
@@ -210,7 +241,7 @@ namespace XLMultiplayerUI {
 			currentMessageBoxSize = newSize;
 		}
 
-		public void OnEndEdit() {
+		public void OnEndEditChatMessage() {
 			if (Input.GetKeyDown(KeyCode.Return)) {
 				SendChatMessage?.Invoke(messageInput.text);
 
@@ -218,6 +249,109 @@ namespace XLMultiplayerUI {
 
 				messageInput.text = "";
 			}
+		}
+
+		public void ScaleValueChange() {
+			float newScale = 0f;
+			if (float.TryParse(chatScaleInput.text, out newScale)) {
+				newScale = Mathf.Clamp(newScale, 0.1f, 1.8f);
+				chatScrollView.localScale = new Vector3(newScale, newScale, chatScrollView.localScale.z);
+			}
+		}
+
+		public void ScaleEndEdit() {
+			chatScaleInput.text = chatScrollView.localScale.x.ToString("0.000");
+		}
+
+		public void FontValueChange() {
+			float newScale = 0f;
+			if (float.TryParse(chatFontSizeInput.text, out newScale)) {
+				messageInput.pointSize = newScale;
+				messageBox.fontSize = newScale;
+			}
+		}
+		public void FontEndEdit() {
+			chatFontSizeInput.text = messageInput.pointSize.ToString("0.000");
+		}
+
+		public void FontColorChange() {
+			// 206 alpha for placeholder
+			Color newColor;
+			if (ColorUtility.TryParseHtmlString(chatFontColorInput.text, out newColor)) {
+				newColor.a = 0.807f;
+				messageInput.placeholder.color = newColor;
+
+				newColor.a = 1f;
+				messageInput.textComponent.color = newColor;
+				messageBox.color = newColor;
+			}
+		}
+
+		public void FontColorEndEdit() {
+			chatFontColorInput.text = "#" + ColorUtility.ToHtmlStringRGB(messageBox.color);
+		}
+
+		public void BGColorChange() {
+			Color newColor;
+			if (ColorUtility.TryParseHtmlString(chatBGColorInput.text, out newColor)) {
+				chatBGImage.color = newColor;
+			}
+		}
+
+		public void BGColorEndEdit() {
+			chatBGColorInput.text = "#" + ColorUtility.ToHtmlStringRGBA(chatBGImage.color);
+		}
+
+		public void DragColorChange() {
+			Color newColor;
+			if (ColorUtility.TryParseHtmlString(chatDragColorInput.text, out newColor)) {
+				chatDragImage.color = newColor;
+			}
+		}
+
+		public void DragColorEndEdit() {
+			chatDragColorInput.text = "#" + ColorUtility.ToHtmlStringRGBA(chatDragImage.color);
+		}
+
+		public void InputDisabledColorChange() {
+			Color newColor;
+			if (ColorUtility.TryParseHtmlString(chatDisabledColorInput.text, out newColor)) {
+				ColorBlock inputColors = messageInput.colors;
+				inputColors.disabledColor = newColor;
+				messageInput.colors = inputColors;
+			}
+		}
+
+		public void InputDisabledColorEndEdit() {
+			chatDisabledColorInput.text = "#" + ColorUtility.ToHtmlStringRGBA(messageInput.colors.disabledColor);
+		}
+
+		public void InputSelectedColorChange() {
+			Color newColor;
+			if (ColorUtility.TryParseHtmlString(chatSelectedColorInput.text, out newColor)) {
+				ColorBlock inputColors = messageInput.colors;
+				inputColors.normalColor = newColor;
+				inputColors.highlightedColor = newColor;
+				inputColors.selectedColor = newColor;
+				messageInput.colors = inputColors;
+			}
+		}
+
+		public void InputSelectedColorEndEdit() {
+			chatSelectedColorInput.text = "#" + ColorUtility.ToHtmlStringRGBA(messageInput.colors.normalColor);
+		}
+
+		public void SettingsButtonOnClick() {
+			if (!connectMenu.activeSelf && !serverBrowserMenu.activeSelf)
+				settingsMenuObject.SetActive(!settingsMenuObject.activeSelf);
+		}
+
+		public void OnClickSaveSettings() {
+			SaveSettings?.Invoke();
+		}
+
+		public void OnClickLoadSettings() {
+			LoadSettings?.Invoke();
 		}
 
 		public void AddServerItem(string ip, string port, string name, string map, string version, string players, OnClickDelegate clickFunction) {

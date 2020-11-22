@@ -41,6 +41,29 @@ namespace XLMultiplayer {
 		}
 	}
 
+	public class MultiplayerChatSettings {
+		[JsonProperty]
+		public float chatScale;
+
+		[JsonProperty]
+		public float chatFontSize;
+
+		[JsonProperty]
+		public string chatFontColor;
+
+		[JsonProperty]
+		public string chatBGColor;
+
+		[JsonProperty]
+		public string chatDragColor;
+
+		[JsonProperty]
+		public string inputDisabledColor;
+
+		[JsonProperty]
+		public string inputSelectedColor;
+	}
+
 	static class ModMenuGUIPatch {
 		public static bool Prefix() {
 			return !Main.enabled;
@@ -129,6 +152,10 @@ namespace XLMultiplayer {
 					NewMultiplayerMenu.Instance.OnClickConnectCallback = Main.OnClickConnect;
 					NewMultiplayerMenu.Instance.OnClickDisconnectCallback = Main.OnClickDisconnect;
 					NewMultiplayerMenu.Instance.SaveVolume = Main.SaveSettings;
+					NewMultiplayerMenu.Instance.SaveSettings = SaveChatSettings;
+					NewMultiplayerMenu.Instance.LoadSettings = LoadChatSettings;
+					NewMultiplayerMenu.Instance.LoadSettings();
+					NewMultiplayerMenu.Instance.UpdateChatSettingInputs();
 
 					GameObject.DontDestroyOnLoad(newMenuObject);
 
@@ -395,6 +422,67 @@ namespace XLMultiplayer {
 			}
 		}
 
+		public static void SaveChatSettings() {
+			MultiplayerChatSettings settings = new MultiplayerChatSettings();
+
+			settings.chatScale = NewMultiplayerMenu.Instance.chatScrollView.localScale.x;
+			settings.chatFontSize = NewMultiplayerMenu.Instance.messageBox.fontSize;
+			settings.chatFontColor = "#" + ColorUtility.ToHtmlStringRGB(NewMultiplayerMenu.Instance.messageBox.color);
+			settings.chatBGColor = "#" + ColorUtility.ToHtmlStringRGBA(NewMultiplayerMenu.Instance.chatBGImage.color);
+			settings.chatDragColor = "#" + ColorUtility.ToHtmlStringRGBA(NewMultiplayerMenu.Instance.chatDragImage.color);
+			settings.inputDisabledColor = "#" + ColorUtility.ToHtmlStringRGBA(NewMultiplayerMenu.Instance.messageInput.colors.disabledColor);
+			settings.inputSelectedColor = "#" + ColorUtility.ToHtmlStringRGBA(NewMultiplayerMenu.Instance.messageInput.colors.normalColor);
+
+			File.WriteAllText(Path.Combine(modEntry.Path, "ChatSettings.json"), JsonConvert.SerializeObject(settings));
+		}
+
+		public static void LoadChatSettings() {
+			if (File.Exists(Path.Combine(modEntry.Path, "ChatSettings.json"))) {
+				MultiplayerChatSettings settings = JsonConvert.DeserializeObject<MultiplayerChatSettings>(File.ReadAllText(Path.Combine(modEntry.Path, "ChatSettings.json")));
+			
+				NewMultiplayerMenu.Instance.chatScrollView.localScale = new Vector3(settings.chatScale, settings.chatScale, NewMultiplayerMenu.Instance.chatScrollView.localScale.z);
+
+				NewMultiplayerMenu.Instance.messageInput.pointSize = settings.chatFontSize;
+				NewMultiplayerMenu.Instance.messageBox.fontSize = settings.chatFontSize;
+
+				// 206 alpha for placeholder
+				Color newColor;
+				if (ColorUtility.TryParseHtmlString(settings.chatFontColor, out newColor)) {
+					newColor.a = 0.807f;
+					NewMultiplayerMenu.Instance.messageInput.placeholder.color = newColor;
+
+					newColor.a = 1f;
+					NewMultiplayerMenu.Instance.messageInput.textComponent.color = newColor;
+					NewMultiplayerMenu.Instance.messageBox.color = newColor;
+				}
+
+				if (ColorUtility.TryParseHtmlString(settings.chatBGColor, out newColor)) {
+					NewMultiplayerMenu.Instance.chatBGImage.color = newColor;
+				}
+
+				if (ColorUtility.TryParseHtmlString(settings.chatDragColor, out newColor)) {
+					NewMultiplayerMenu.Instance.chatDragImage.color = newColor;
+				}
+
+				if (ColorUtility.TryParseHtmlString(settings.inputDisabledColor, out newColor)) {
+					ColorBlock inputColors = NewMultiplayerMenu.Instance.messageInput.colors;
+					inputColors.disabledColor = newColor;
+					NewMultiplayerMenu.Instance.messageInput.colors = inputColors;
+				}
+
+				if (ColorUtility.TryParseHtmlString(settings.inputSelectedColor, out newColor)) {
+					ColorBlock inputColors = NewMultiplayerMenu.Instance.messageInput.colors;
+					inputColors.normalColor = newColor;
+					inputColors.highlightedColor = newColor;
+					inputColors.selectedColor = newColor;
+					NewMultiplayerMenu.Instance.messageInput.colors = inputColors;
+				}
+			}
+			
+
+			NewMultiplayerMenu.Instance.UpdateChatSettingInputs();
+		}
+
 		// TODO: Move this to another file
 		private static void MenuUpdate() {
 			if (NewMultiplayerMenu.Instance != null) {
@@ -405,6 +493,7 @@ namespace XLMultiplayer {
 
 					NewMultiplayerMenu.Instance.serverBrowserMenu.SetActive(false);
 					NewMultiplayerMenu.Instance.connectMenu.SetActive(false);
+					NewMultiplayerMenu.Instance.settingsMenuObject.SetActive(false);
 					
 					NewMultiplayerMenu.Instance.mainMenuObject.SetActive(!NewMultiplayerMenu.Instance.mainMenuObject.activeSelf);
 
@@ -754,24 +843,30 @@ namespace XLMultiplayer {
 
 	[HarmonyPatch(typeof(AudioSource), "PlayOneShot", new Type[] { typeof(AudioClip), typeof(float) })]
 	static class PlayOneShotPatch {
-		private static List<AudioSource> localAudioSources = new List<AudioSource>();
+		public static List<AudioSource> localAudioSources = null;
 		private static bool Prefix(AudioSource __instance, ref float volumeScale) {
-			bool isLocal = false;
-
-			if (localAudioSources.Count < 1) {
+			if (localAudioSources == null && ReplayEditorController.Instance.playbackController != null) {
+				localAudioSources = new List<AudioSource>();
 				foreach (ReplayAudioEventPlayer player in ReplayEditorController.Instance.playbackController.AudioEventPlayers) {
-					localAudioSources.Add(Traverse.Create(player).Property("audioSource").GetValue<AudioSource>());
+					localAudioSources.Add(player.GetComponent<AudioSource>());
 				}
 			}
-			foreach(AudioSource audioSource in localAudioSources) {
-				if (__instance == audioSource) {
-					isLocal = true;
-					break;
-				}
+			if (localAudioSources.Contains(__instance)) {
+				return true;
 			}
 
-			if (!isLocal) volumeScale *= Main.settings.volumeMultiplier;
+			volumeScale *= Main.settings.volumeMultiplier;
 
+			return true;
+		}
+	}
+
+	[HarmonyPatch(typeof(ReplayRecorder), "OnPlayOneShot")]
+	static class ReplayRecorderPatch {
+		private static bool Prefix(ref AudioSource source) {
+			if (!PlayOneShotPatch.localAudioSources.Contains(source)) {
+				PlayOneShotPatch.localAudioSources.Add(source);
+			}
 			return true;
 		}
 	}
