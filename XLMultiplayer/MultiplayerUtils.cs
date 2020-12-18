@@ -7,6 +7,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace XLMultiplayer {
@@ -204,8 +205,16 @@ namespace XLMultiplayer {
 			if (!mapsDictionary.ContainsKey("7")) {
 				mapsDictionary.Add("7", "Assets/_Scenes/GrantSkateparkTest.unity");
 			}
-			
-			List<string> files = LevelManager.Instance.ModLevels.ConvertAll(levelInfo => (levelInfo.isAssetBundle ? levelInfo.path : null));
+
+			LevelManager.Instance.UpdateCustomMaps();
+
+			UnityModManagerNet.UnityModManager.Logger.Log(LevelManager.Instance.ModLevels.Count.ToString());
+			foreach (LevelInfo info in LevelManager.Instance.ModLevels) {
+				UnityModManagerNet.UnityModManager.Logger.Log(info.path);
+			}
+
+			List<string> files = LevelManager.Instance.ModLevels.ConvertAll<string>(levelInfo => (levelInfo.isAssetBundle ? levelInfo.path : null));
+			files.AddRange(LevelManager.Instance.CommunityLevels.ConvertAll<string>(levelinfo => (levelinfo.isAssetBundle ? levelinfo.path : null)));
 			int i = 0;
 
 			hashedMaps = files.Count;
@@ -244,6 +253,7 @@ namespace XLMultiplayer {
 		public static void StartMapLoading() {
 			if (loadingThread == null && !loadedMaps) {
 				UnityModManagerNet.UnityModManager.Logger.Log($"[XLMultiplayer] Starting thread to hash all maps");
+				LevelManager.Instance.UpdateCustomMaps();
 				loadingThread = new Thread(LoadMapHashes);
 				loadingThread.IsBackground = true;
 

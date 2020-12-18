@@ -341,7 +341,7 @@ namespace XLMultiplayer {
 				//Load map with path
 				LevelSelectionController levelSelectionController = GameStateMachine.Instance.LevelSelectionObject.GetComponentInChildren<LevelSelectionController>();
 
-				IndexPath targetIndex = GetIndexForLevel(target);
+				IndexPath targetIndex = Traverse.Create(levelSelectionController).Method("GetIndexForLevel", target).GetValue<IndexPath>();
 				Traverse.Create(levelSelectionController).Method("OnLevelHighlighted", targetIndex).GetValue();
 
 				string texturePath = Path.ChangeExtension(target.path, "png");
@@ -363,39 +363,6 @@ namespace XLMultiplayer {
 				PlayerController.Instance.respawn.ForceRespawn();
 			}
 			yield break;
-		}
-		
-		private IndexPath GetIndexForLevel(LevelInfo level) {
-			if (level == null) {
-				return new IndexPath(new int[2]);
-			}
-			int num = LevelManager.Instance.Levels.IndexOf(level);
-			if (num >= 0) {
-				return new IndexPath(new int[]
-				{
-				0,
-				num
-				});
-			}
-			num = LevelManager.Instance.ModLevels.IndexOf(level);
-			if (num >= 0)
-			{
-				return new IndexPath(new int[]
-				{
-				1,
-				num
-				});
-			}
-			num = LevelManager.Instance.CommunityLevels.IndexOf(level);
-			if (num >= 0)
-			{
-				return new IndexPath(new int[]
-				{
-				2,
-				num
-				});
-			}
-			return new IndexPath(new int[2]);
 		}
 
 		public void Update() {
