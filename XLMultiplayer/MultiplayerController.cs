@@ -330,7 +330,10 @@ namespace XLMultiplayer {
 
 			LevelInfo target = LevelManager.Instance.Levels.Find(level => level.path.Trim().Equals(path.Trim(), StringComparison.CurrentCultureIgnoreCase));
 			if (target == null) {
-				target = LevelManager.Instance.CustomLevels.Find(level => level.path.Trim().Equals(path.Trim(), StringComparison.CurrentCultureIgnoreCase));;
+				target = LevelManager.Instance.ModLevels.Find(level => level.path.Trim().Equals(path.Trim(), StringComparison.CurrentCultureIgnoreCase));;
+			}
+			if (target == null) {
+				target = LevelManager.Instance.CommunityLevels.Find(level => level.path.Trim().Equals(path.Trim(), StringComparison.CurrentCultureIgnoreCase)); ;
 			}
 
 			yield return new WaitWhile(() => GameStateMachine.Instance.IsLoading);
@@ -361,7 +364,6 @@ namespace XLMultiplayer {
 			}
 			yield break;
 		}
-
 		
 		private IndexPath GetIndexForLevel(LevelInfo level) {
 			if (level == null) {
@@ -375,11 +377,21 @@ namespace XLMultiplayer {
 				num
 				});
 			}
-			num = LevelManager.Instance.CustomLevels.IndexOf(level);
-			if (num >= 0) {
+			num = LevelManager.Instance.ModLevels.IndexOf(level);
+			if (num >= 0)
+			{
 				return new IndexPath(new int[]
 				{
 				1,
+				num
+				});
+			}
+			num = LevelManager.Instance.CommunityLevels.IndexOf(level);
+			if (num >= 0)
+			{
+				return new IndexPath(new int[]
+				{
+				2,
 				num
 				});
 			}
@@ -1170,7 +1182,7 @@ namespace XLMultiplayer {
 		}
 
 		public void OnApplicationFocus(bool focused) {
-			if (MultiplayerUtils.hashedMaps != LevelManager.Instance.CustomLevels.Count)
+			if (MultiplayerUtils.hashedMaps != LevelManager.Instance.ModLevels.Count)
 				MultiplayerUtils.StartMapLoading();
 		}
 

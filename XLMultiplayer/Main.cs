@@ -498,7 +498,7 @@ namespace XLMultiplayer {
 					NewMultiplayerMenu.Instance.mainMenuObject.SetActive(!NewMultiplayerMenu.Instance.mainMenuObject.activeSelf);
 
 					if (NewMultiplayerMenu.Instance.mainMenuObject.activeSelf) {
-						if (MultiplayerUtils.hashedMaps != LevelManager.Instance.CustomLevels.Count)
+						if (MultiplayerUtils.hashedMaps != LevelManager.Instance.ModLevels.Count)
 							MultiplayerUtils.StartMapLoading();
 						Cursor.visible = true;
 						Cursor.lockState = CursorLockMode.None;
@@ -584,6 +584,7 @@ namespace XLMultiplayer {
 		static void Prefix(string path) {
 			string multiplayerReplayFile = Path.GetDirectoryName(path) + "\\" + Path.GetFileNameWithoutExtension(path) + "\\";
 			if (Directory.Exists(multiplayerReplayFile)) {
+				if (!File.Exists(multiplayerReplayFile + "MultiplayerReplay.replay")) { return; }
 				if (Main.multiplayerController != null && Main.multiplayerController.debugWriter != null) Main.debugWriter = Main.multiplayerController.debugWriter;
 				else Main.debugWriter = new StreamWriter("Multiplayer Replay DebugWriter.txt");
 				using (MemoryStream ms = new MemoryStream(File.ReadAllBytes(multiplayerReplayFile + "MultiplayerReplay.replay"))) {

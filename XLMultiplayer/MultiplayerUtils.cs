@@ -175,6 +175,11 @@ namespace XLMultiplayer {
 		private static void LoadMapHashes() {
 			mapsDictionary.Clear();
 
+			foreach (LevelInfo info in LevelManager.Instance.CommunityLevels)
+				UnityModManagerNet.UnityModManager.Logger.Log(info.path);
+			foreach (LevelInfo info in LevelManager.Instance.Levels)
+				UnityModManagerNet.UnityModManager.Logger.Log(info.path);
+
 			if (!mapsDictionary.ContainsKey("0")) {
 				mapsDictionary.Add("0", "Assets/_Scenes/Prototyping testing courthouse 2.unity");
 			}
@@ -200,7 +205,7 @@ namespace XLMultiplayer {
 				mapsDictionary.Add("7", "Assets/_Scenes/GrantSkateparkTest.unity");
 			}
 			
-			List<string> files = LevelManager.Instance.CustomLevels.ConvertAll(levelInfo => (levelInfo.isAssetBundle ? levelInfo.path : null));
+			List<string> files = LevelManager.Instance.ModLevels.ConvertAll(levelInfo => (levelInfo.isAssetBundle ? levelInfo.path : null));
 			int i = 0;
 
 			hashedMaps = files.Count;
