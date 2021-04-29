@@ -1,6 +1,2 @@
 # XLMultiplayer
-Skater XL Multiplayer mod by silentbaws
-
-
-# How to install
-If you'd like to play multiplayer as a player you can download and install the mod from https://skaterxl.mod.io/xl-multiplayer
+Skater XL Multiplayer mod by silentbaws has reached end of life. With the release of official multiplayer there's no longer a space for the mod and will shutdown at the end of May 2021
